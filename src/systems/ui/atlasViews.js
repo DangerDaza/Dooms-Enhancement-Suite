@@ -295,6 +295,32 @@ function loreLine(lore) {
 }
 
 /**
+ * What the scene's record found the scene to contradict (D190): each
+ * with what the scene says, what was established and where. Shown on the
+ * End sheet before the scene is ended and after; nothing when it found
+ * none. `checked` says what the record was given to check against.
+ * @param {Array<{ scene: string, established: string, source: string }>} list
+ * @param {{ ledger: boolean, notes: string[], standing: boolean }|null} checked
+ */
+export function conflictsHtml(list, { done = false, checked = null } = {}) {
+    const found = Array.isArray(list) ? list.filter(c => c && c.scene && c.established) : [];
+    if (!found.length) return '';
+    const row = (c) => `<li class="dooms-atlas-conflict">
+            <p><span class="dooms-atlas-cont-tag">the scene</span> ${e(c.scene)}</p>
+            <p><span class="dooms-atlas-cont-tag">established</span> ${e(c.established)}${c.source ? ` <span class="dooms-atlas-conflict-source">(${e(c.source)})</span>` : ''}</p>
+        </li>`;
+    const k = checked && typeof checked === 'object' ? checked : null;
+    const against = k ? [k.ledger ? 'the ledger' : '', Array.isArray(k.notes) && k.notes.length ? `the lorebook ${k.notes.length === 1 ? 'entry' : 'entries'} of ${e(listOf(k.notes))}` : '', k.standing ? 'the story\'s standing notes' : '', 'where each person stood'].filter(Boolean) : [];
+    return `<fieldset class="dooms-atlas-scene-field dooms-atlas-conflicts" role="group">
+            <legend class="dooms-atlas-card-label"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Against what was established · ${found.length}</legend>
+            <ul class="dooms-atlas-cont-list">${found.map(row).join('')}</ul>
+            <p class="dooms-atlas-start-note">${done
+                ? 'These are kept with the scene. If one is a slip, Undo puts the End back, all of it: put it right in the chat or on the sheet and end again. If the story has moved on, change the lorebook entry or the ledger to match.'
+                : 'What was played stands unless you change it. If one is a slip: Keep playing and put it right in the chat, or correct the record or a line above. If the story has moved on: end the scene, and change the lorebook entry or the ledger to match. Ending keeps this list with the scene, and one Undo puts the End back.'}${against.length ? ` Checked against ${against.join(', ')}.` : ''}</p>
+        </fieldset>`;
+}
+
+/**
  * Where the people stand and the threads, on a record's sheet (D188):
  * what the record's request said of each person it spoke of, the threads
  * it opened and the ones it settled, each to be corrected or left out
@@ -349,7 +375,7 @@ export function continuityFieldsHtml(c, { locked = false, next = 'the next scene
  * @param {Object<string,string>} o.states  recap | canon | world | snapshot -> waiting | running | ok | failed | skipped | off | kept
  * @param {object|null} o.result   commitEnd()'s answer once it has run
  */
-export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, result = null, error = '', going = '' } = {}) {
+export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, result = null, error = '', going = '', canUndo = false, undoing = false } = {}) {
     const scene = prep && (prep.scene || prep.mark) ? (prep.scene || prep.mark) : null;
     const title = scene ? `scene ${e(sceneNoOf(scene.id || scene.scene))}${scene.title ? `: ${e(scene.title)}` : ''}` : 'this scene';
     const when = prep && (prep.from || prep.to) ? `From ${e(prep.from || '?')} to ${e(prep.to || 'now')}.` : '';
@@ -388,6 +414,7 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
             <textarea class="dooms-atlas-input dooms-atlas-setup-notes dooms-atlas-end-recap" maxlength="1500" placeholder="${busy ? 'The record of the scene is being written…' : 'What happened in this scene, in a few lines. The next scene is told this.'}"${done || busy ? ' readonly' : ''}>${prep && prep.recap ? e(prep.recap) : ''}</textarea></label>
         ${prep && prep.error ? `<p class="dooms-atlas-setup-error" role="alert">The record could not be written (${e(prep.error)}). Write it yourself, or end without one.</p>` : ''}
         ${continuityFieldsHtml(prep && prep.continuity, { locked: done || running || busy, book: prep && prep.book ? prep.book : '' })}
+        ${conflictsHtml(prep && prep.conflicts, { done, checked: prep && prep.checked })}
         ${stale}
         ${habits}
         <ul class="dooms-atlas-parts">
@@ -401,7 +428,8 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
         ${error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : ''}
         <div class="dooms-atlas-setup-actions">
             ${done
-                ? `<button type="button" class="dooms-atlas-btn is-primary" data-act="setup-close"${going ? ' disabled' : ''}><i class="fa-solid fa-map" aria-hidden="true"></i> <span>To the map</span></button>`
+                ? `<button type="button" class="dooms-atlas-btn is-primary" data-act="setup-close"${going || undoing ? ' disabled' : ''}><i class="fa-solid fa-map" aria-hidden="true"></i> <span>To the map</span></button>
+                   ${canUndo && !going ? `<button type="button" class="dooms-atlas-btn" data-act="end-undo"${undoing ? ' disabled' : ''} title="Put the End back, all of it: the scene is open again, and the record, the world, where people stand, the threads, the ledger and the continuity book are as they were before it"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> <span>${undoing ? 'Undoing…' : 'Undo this End'}</span></button>` : ''}`
                 : `<button type="button" class="dooms-atlas-btn is-primary" data-act="end-go"${busy || running || !prep ? ' disabled' : ''}><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> <span>${running ? 'Ending…' : 'End scene'}</span></button>
                    <button type="button" class="dooms-atlas-btn" data-act="end-continue"${busy || running || !prep || (prep && prep.stale) ? ' disabled' : ''} title="End it with this record and go straight on in a fresh chat: the same place, the same people, no time passed, so the world is not moved"><i class="fa-solid fa-forward-step" aria-hidden="true"></i> <span>End and continue here</span></button>
                    <button type="button" class="dooms-atlas-btn" data-act="setup-close"${running ? ' disabled' : ''}>Keep playing</button>`}
@@ -872,7 +900,7 @@ export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query =
  * the tab's body (`body` is the tab's HTML: Places from atlasPlacesHtml,
  * the others from Live World's own views), the foot.
  */
-export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', body = '', status = '', result = '', canAdvance = false, advancing = false, editLabel = 'Edit this world', scenes = false, between = null, ending = null } = {}) {
+export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', body = '', status = '', result = '', canAdvance = false, advancing = false, editLabel = 'Edit this world', scenes = false, between = null, ending = null, undoEnd = null } = {}) {
     const active = ATLAS_TABS.some(t => t.id === tab) ? tab : ATLAS_TABS[0].id;
     const when = [facts.date, facts.time].filter(Boolean).join(', ');
     const tabs = ATLAS_TABS.map(t => `<button type="button" class="dooms-atlas-tab${t.id === active ? ' is-active' : ''}" data-act="tab" data-tab="${t.id}" role="tab" aria-selected="${t.id === active ? 'true' : 'false'}" title="${attr(t.label)}"><i class="fa-solid ${t.icon}" aria-hidden="true"></i><span>${e(t.label)}</span></button>`).join('');
@@ -892,6 +920,7 @@ export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', 
                 <button type="button" class="dooms-atlas-btn" data-act="edit" title="Open this chat's world in the World Builder"><i class="fa-solid fa-pen" aria-hidden="true"></i> <span>${e(editLabel)}</span></button>
                 ${ending ? `<button type="button" class="dooms-atlas-btn" data-act="end-scene" title="Write the record of this scene and remember it; the next one starts from the map"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> <span>End scene ${e(ending.number || '')}</span></button>` : ''}
                 ${scenes ? '<button type="button" class="dooms-atlas-btn" data-act="scenes" title="Play this story as many short chats that each start fresh and know what happened before"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> <span>Play as scenes</span></button>' : ''}
+                ${undoEnd ? `<button type="button" class="dooms-atlas-btn" data-act="end-undo" title="Put the End of scene ${attr(undoEnd.number || '')} back, all of it: the scene is open again, and the record, the world, where people stand, the threads, the ledger and the continuity book are as they were before it. Offered until the next scene starts."><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> <span>Undo End of scene ${e(undoEnd.number || '')}${undoEnd.conflicts ? ` · ${undoEnd.conflicts} against canon` : ''}</span></button>` : ''}
             </div>
         </footer>`;
 }

@@ -773,3 +773,42 @@ run in a real SillyTavern: every lorebook in the tests is a stand-in in
 memory, so the one thing untested is SillyTavern's own World Info calls
 (`createNewWorldInfo`, `createWorldInfoEntry`, `saveWorldInfo`) and the
 campaign's switching of a book made while it is on.
+
+## 30. End, step 3: what a scene contradicts, and one Undo of End (2026-11-11, D190)
+
+Asked what a contradiction should be checked against and what the Undo
+should put back, the owner: "also read my lorebook entries", "everything",
+"go". The last of the three things End lacked against his own run (§16):
+"contradictions put to the player instead of the later one winning
+unseen". Built in "Atlas 30".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D190 | The record's request also says what the scene contradicts; the player sees it before the scene is ended; one Undo puts back everything End changed | **No request of its own.** The request that writes the record (D122, D188) is given what was established before the scene: the chat's ledger (Canon's block), the scene's people's own lorebook entries and the campaign's standing notes (read as the openings read them, D177: so the owner's hand-made Continuity book is among them, and DES's own continuity book is not, being told by itself as where people stood); and returns `"conflicts": [{ scene, established, source }]`: only where the scene plainly contradicts something established (two things that cannot both be true), not a change the scene itself brings about, not something the notes do not speak of; six at the most, none being the usual case. A record written in passes finds them a page at a time. The request is larger for it: up to some sixteen thousand characters of lore beside the scene's text. **Seen before it is kept.** The End sheet lists them, with what each was checked against, between where people stand and what ending does: what was played stands unless the player changes it (Keep playing and put it right in the chat; correct the record or a standing on the sheet; or, the story having moved on, change the lorebook entry or the ledger to match). Continue fresh has no sheet, so when its record finds one it stops, with nothing ended, and says so on the strip; End scene then shows that same record (nothing is asked again). The command `/endscene` ends the scene and says how many it found. **Kept with the scene** (`scene.conflicts`, for the last twenty scenes), so the list is still there after End. **One Undo.** `undoEnd()` puts back all an End changed: the scene is open again with its mark as it was; the world's entry is as it was before the End (the record, the memory with the world as it stood before it moved, where people stand, the threads, the style law); the chat's ledger is as it was before Canon read the scene (so ending again reads it afresh); in the continuity book the texts End replaced are put back and the entries it made are taken out (a book that End itself made stays, empty of what End wrote, and is still the world's own). The chat's messages were never touched by End and are not touched. Offered on the End sheet once the scene is ended and at the foot of the Atlas's sidebar, from that scene's chat, until the next scene starts, another End runs or the page is loaded again (what End changed is held in memory, not stored). A scene put right and ended again keeps the new End's list |
+
+Pure: `normalizeConflicts`, `readConflicts`, `mergeConflicts` and the
+request in `src/utils/hub.js` (`tools/hub-test.mjs` §8f). The check's
+gathering (`establishedFor`), the record held for the sheet, what End
+changed remembered and `canUndoEnd` / `undoEnd`:
+`src/systems/features/hub.js` (`tools/hub-flow-test.mjs` §18). The list
+and the Undo on the sheet and the sidebar: `atlasViews.js`
+(`conflictsHtml`), `atlas.js`; `tools/atlas-browser-test.mjs` §5i. The
+End sheet's buttons now stay in view at its foot when the sheet is long.
+
+What it is not: the finding is the model's, so it will miss some and
+raise some that are not (the sheet says what was played stands; nothing
+is changed for a contradiction by itself); a contradiction has no "this
+is right, change the lorebook for me" button (the lorebook entry and the
+ledger are changed by hand); the Undo does not survive a reload, and is
+not offered once the next scene has started (so not after Continue
+fresh, which is why that stops on a contradiction instead); a map edited
+between an End and its Undo keeps the edit only in the world's memory
+that the Undo replaces. Not run in a real SillyTavern.
+
+With this the three things End lacked against the owner's run are in
+(D188, D189, D190). Still open from the list: retiring the old Hub and
+Map windows (the scenes list, starting from a person, a rumour, news or
+a hook, and the world picker have to move into the Atlas first); hooks
+and the hand-drawn place picture waiting for the player's own message;
+rivers and climates for the world gen; the form the phrase count should
+take (the owner's to say).

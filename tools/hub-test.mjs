@@ -357,6 +357,39 @@ console.log('\n§8e where the people stand and the open threads (D188): the reco
     check('End says what it kept of them, when it kept any', /1 person's standing kept, 2 threads opened, 1 settled/.test(describeEndResult({ ok: true, recap: 'kept', continuity: { people: 1, opened: 2, closed: 1 } })) && /3 people's standing kept/.test(describeEndResult({ ok: true, recap: 'kept', continuity: { people: 3, opened: 0, closed: 0 } })) && !/standing/.test(describeEndResult({ ok: true, recap: 'kept', continuity: { people: 0, opened: 0, closed: 0 } })) && !/standing/.test(describeEndResult({ ok: true, recap: 'kept' })));
 }
 
+console.log('\n§8f what a scene contradicts (D190): the record\'s request, the scene\'s record');
+{
+    const H = await import('../src/utils/hub.js');
+    const { normalizeConflicts, readConflicts, mergeConflicts, MAX_CONFLICTS } = H;
+    const raw = [{ scene: ' Dagger still holds the key. ', established: 'The key was returned to the Factor.', source: 'the ledger' }, { says: 'Kiyoha has never met Solveig.', against: 'Kiyoha and Solveig came up the stair together.', where: 'Kiyoha\'s notes' }, { scene: 'dagger still holds the key.', established: 'the key was returned to the factor.' }, { scene: 'only half' }, null, 'junk'];
+    const list = normalizeConflicts(raw);
+    check('made safe: what the scene says, what was established, where; each once; one with half of it missing dropped', list.length === 2 && same(list[0], { scene: 'Dagger still holds the key.', established: 'The key was returned to the Factor.', source: 'the ledger' }) && list[1].source === 'Kiyoha\'s notes' && same(normalizeConflicts(null), []) && same(normalizeConflicts(list), list));
+    check(`no more than ${MAX_CONFLICTS} are kept`, normalizeConflicts(Array.from({ length: 20 }, (_, i) => ({ scene: `s${i}`, established: `e${i}` }))).length === MAX_CONFLICTS);
+    check('read from a record\'s reply; none from prose or from a reply that says nothing of them', readConflicts({ recap: 'x', conflicts: raw }).length === 2 && same(readConflicts(null), []) && same(readConflicts({ recap: 'x' }), []) && same(readConflicts({ conflicts: 'none' }), []));
+    check('two passes\' findings are one list, none twice', mergeConflicts(list, [list[1], { scene: 'New.', established: 'Old.' }]).length === 3 && same(mergeConflicts(null, null), []));
+    // The request.
+    const plain = buildRecapPrompt({ transcript: 't', player: 'Jordan' });
+    check('asked without anything to check against, the record says nothing of contradictions', !plain.system.includes('conflicts') && !plain.user.includes('established'));
+    const p = buildRecapPrompt({ transcript: 'the scene', brief: '[SCENE BRIEF: W.]', player: 'Jordan', check: { canon: 'The key was returned to the Factor.', lore: [{ name: 'Kiyoha', text: 'KIYOHA: an oni of the Redward. She and Solveig came up the stair together.' }], standing: 'RULING: the tests are over.' } });
+    check('asked with what was established, the same request says what the scene contradicts', p.system.includes('"conflicts": [{"scene": "<what the scene says or shows>", "established": "<what was established that it contradicts>", "source": "<where that was established>"}]') && /two things that cannot both be true/.test(p.system) && /A change the scene itself brings about is not a contradiction/.test(p.system) && /an empty list when there are none, which is the usual case/.test(p.system) && /in what the story has established, in a person's own notes, in the story's standing notes/.test(p.system));
+    check('it is given the ledger, the people\'s own notes and the standing notes, before the scene\'s text', p.user.includes('What the story has established (the ledger):\nThe key was returned to the Factor.') && p.user.includes('The people\'s own notes:\n[Kiyoha] KIYOHA: an oni of the Redward.') && p.user.includes('The story\'s standing notes:\nRULING: the tests are over.') && p.user.indexOf('standing notes') < p.user.indexOf('The scene:') && p.user.indexOf('the ledger') > p.user.indexOf('[SCENE BRIEF'));
+    const some = buildRecapPrompt({ transcript: 't', player: 'Jordan', check: { canon: '', lore: [], standing: '' } });
+    check('with nothing established it still asks, against nothing in particular, and gives no empty headings', some.system.includes('"conflicts"') && !some.user.includes('the ledger') && !some.user.includes('own notes') && !/in what the story has established/.test(some.system));
+    // The scene's record.
+    let entry = normalizeWorldEntry({ card: 'N.png' });
+    entry = openScene(entry, { title: 'The stair', chat: 'c1', card: 'N.png', startedAt: 5 }).entry;
+    const ended = endSceneRecord(entry, 's1', { endedAt: 9, endDate: 'Day 2', recap: 'They went down.', conflicts: raw });
+    check('ended with them, the scene\'s record keeps them', ended.scene.conflicts.length === 2 && ended.scene.conflicts[0].source === 'the ledger' && same(normalizeWorldEntry(JSON.parse(JSON.stringify(ended.entry))), ended.entry));
+    check('a scene that contradicted nothing says nothing of it', !('conflicts' in endSceneRecord(entry, 's1', { endedAt: 9, recap: 'x' }).scene) && !('conflicts' in normalizeScene({ id: 's1' })));
+    check('ended again (reopened, put right), the list is the new End\'s', !('conflicts' in endSceneRecord(ended.entry, 's1', { endedAt: 12, recap: 'x', conflicts: [] }).scene));
+    {
+        let many = normalizeWorldEntry({});
+        for (let i = 0; i < RECENT_RECAPS + 3; i++) { many = openScene(many, { title: `t${i}`, chat: `c${i}`, startedAt: i + 1 }).entry; many = endSceneRecord(many, `s${i + 1}`, { endedAt: i + 2, recap: 'short', conflicts: [{ scene: 'a', established: 'b' }] }).entry; }
+        check('only the last scenes keep theirs: an old scene\'s list goes when its record is cut short', !('conflicts' in many.scenes[0]) && many.scenes[many.scenes.length - 1].conflicts.length === 1);
+    }
+    check('End says how many it found, and that one Undo puts it back', /Two things|2 things in it contradict what was established: the Atlas lists them, and one Undo puts the End back\./.test(describeEndResult({ ok: true, recap: 'kept', conflicts: 2 })) && /One thing in it contradicts what was established: the Atlas lists it/.test(describeEndResult({ ok: true, recap: 'kept', conflicts: 1 })) && !/contradict/.test(describeEndResult({ ok: true, recap: 'kept' })));
+}
+
 console.log('\n§9 the lines');
 {
     const entry = normalizeWorldEntry({ card: 'Mara.png', memory: { stores: { dooms_world: {} }, facts: { date: 'Day 14', time: 'noon' } }, scenes: [{ id: 's1', status: 'ended', recap: 'r' }, { id: 's2', status: 'aside' }, { id: 's3', status: 'open', place: { label: 'The quay' }, startDate: 'Day 14' }] });

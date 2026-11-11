@@ -128,6 +128,15 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-setup[hidden] { display: none; }
 .dooms-atlas-setup-card { width: min(640px, 100%); max-height: 100%; overflow: auto; padding: 22px 24px; border-radius: calc(var(--atlas-radius) + 4px); background: var(--atlas-panel); color: var(--atlas-text); border: 1px solid var(--atlas-line); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 12px; }
 .dooms-atlas-setup-card.is-review { width: min(860px, 100%); }
+/* A long End sheet scrolls inside itself; its buttons stay in view at its foot (D190: Undo is one of them). */
+.dooms-atlas-setup-card.is-end .dooms-atlas-setup-actions { position: sticky; bottom: -22px; z-index: 2; margin: 0 -24px -22px; padding: 12px 24px 22px; background: var(--atlas-panel); border-top: 1px solid var(--atlas-line); }
+/* What the scene's record found against what was established (D190). */
+.dooms-atlas-conflicts { border: 1px solid color-mix(in srgb, #d9a441 60%, var(--atlas-line)); border-radius: var(--atlas-radius); padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; background: color-mix(in srgb, #d9a441 8%, transparent); min-width: 0; }
+.dooms-atlas-conflicts legend { padding: 0 6px; color: #d9a441; }
+.dooms-atlas-conflict { display: flex; flex-direction: column; gap: 3px; padding: 6px 0; border-bottom: 1px solid var(--atlas-line); }
+.dooms-atlas-conflict:last-child { border-bottom: 0; }
+.dooms-atlas-setup-card .dooms-atlas-conflict p { font-size: 0.88em; line-height: 1.45; overflow-wrap: anywhere; }
+.dooms-atlas-conflict-source { color: var(--atlas-muted); font-style: italic; }
 /* Where the people stand and the threads, on a record's sheet (D188). */
 .dooms-atlas-cont { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .dooms-atlas-cont-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }

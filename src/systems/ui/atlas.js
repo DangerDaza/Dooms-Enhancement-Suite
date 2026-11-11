@@ -26,7 +26,7 @@ import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHAN
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
 import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml } from './atlasViews.js';
-import { scenesPlan, prepareAdopt, commitAdopt, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene } from '../features/hub.js';
+import { scenesPlan, prepareAdopt, commitAdopt, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd } from '../features/hub.js';
 import { describeStartResult, describeEndResult, gapOf, hubConfig } from '../../utils/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
@@ -322,6 +322,8 @@ function renderSide(ctx) {
         scenes: !empty && isHubOn() && !isScene(),    // a chat that is no scene can be taken as where a world's scenes begin (D172)
         ending: (() => { try { const cur = currentScene(); return cur && !cur.ended ? { number: sceneNumber(cur.mark.scene) } : null; } catch (e) { return null; } })(),
         between: between() ? { open: source.open ? { id: source.open.id, number: sceneNumber(source.open.id), title: source.open.title || '' } : null } : null,
+        // The last End can be put back, all of it, until the next scene starts (D190).
+        undoEnd: (() => { try { const c = canUndoEnd(); if (!c.ok) return null; const cur = currentScene(); const found = cur && cur.scene && Array.isArray(cur.scene.conflicts) ? cur.scene.conflicts.length : 0; return { number: sceneNumber(c.scene), conflicts: found }; } catch (e) { return null; } })(),
     }));
     // Between scenes (D173) there is no chat for the AI to read or to act in: what needs one waits for a scene.
     if (between()) $(`${root()} .dooms-atlas-side`).find('[data-act="setup"], [data-act="fill"], [data-act="tidy"], [data-act="names"], [data-act="hooks-propose"], [data-act="hook-take"], [data-act="hook-cut"], [data-act="hook-aside"]').prop('disabled', true).attr('title', 'Between scenes: this needs a scene being played');
@@ -575,6 +577,22 @@ function applyNamesNow() {
     commit(applyNames(theBook(), names), `${names.length} ${names.length === 1 ? 'land is' : 'lands are'} named. They are still not canon (a dashed border): open one by its badge to rename it, make it canon or delete it.`);
 }
 
+// ─── One Undo of the last End (D190) ────────────────────────────────────────
+
+/** The last End put back, all of it: from the End sheet once the scene is ended, or from the sidebar's foot until the next scene starts. */
+async function undoEndNow() {
+    const can = canUndoEnd();
+    if (!can.ok) { result = 'There is no End to undo: the next scene has started, or this is not that scene\'s chat.'; if (setup && setup.end) { setup = null; renderSetup(); } render(); return; }
+    if (setup && setup.end) { setup = { ...setup, undoing: true }; renderSetup(); }
+    const r = await undoEnd();
+    setup = setup && setup.end ? null : setup;
+    renderSetup();
+    result = r.ok
+        ? `The End of scene ${sceneNumber(r.scene)} is undone: the scene is open again, and the record, the world, where people stand, the threads and the ledger are as they were before it.${r.book === 'failed' ? ' The continuity book could not be put back: look it over in the Lore Library.' : ''}`
+        : r.reason === 'busy' ? 'A reply is still being written. Try again when it is done.' : `The End could not be undone (${r.error || r.reason || 'unknown'}).`;
+    render();
+}
+
 // ─── Where the people stand and the threads, on a record's sheet (D188) ────
 
 /**
@@ -720,11 +738,12 @@ async function endSceneGo({ thenContinue = false } = {}) {
     setup = { ...setup, prep: { ...setup.prep, recap, continuity: continuityShown(setup.prep.continuity, cont), ...(counted ? { style: { ...setup.prep.style, phrases: counted.map(h => ({ ...h, ticked: chosen.has(h.phrase) })) } } : {}) }, states, error: '' };
     renderSetup();
     const onStep = (name, state) => { if (setup && setup.end) { setup = { ...setup, states: { ...setup.states, [name]: state } }; renderSetup(); } };
-    const r = await commitEnd({ recap, skipRecap: !recap, skipCanon, skipWorld, replaceMemory, onStep, bans, continuity: continuityChange(cont) });
+    const r = await commitEnd({ recap, skipRecap: !recap, skipCanon, skipWorld, replaceMemory, onStep, bans, continuity: continuityChange(cont), conflicts: Array.isArray(setup.prep.conflicts) ? setup.prep.conflicts : undefined });
     if (!setup || !setup.end) return;
     if (!r.ok) { setup = { ...setup, states: { ...setup.states, snapshot: 'failed' }, error: describeEndResult(r) }; renderSetup(); return; }
     setup = { ...setup, result: r, states: { ...setup.states, canon: r.canon === 'ok' ? 'ok' : r.canon === 'failed' ? 'failed' : setup.states.canon, world: ['ok', 'failed', 'kept', 'skipped'].includes(r.world) ? r.world : setup.states.world, snapshot: r.snapshot === 'kept' ? 'kept' : 'ok', book: r.book === 'ok' ? 'ok' : r.book === 'failed' ? 'failed' : 'off' }, prep: { ...setup.prep, book: r.bookResult && r.bookResult.name ? r.bookResult.name : setup.prep.book } };
     result = describeEndResult(r);
+    setup = { ...setup, canUndo: !thenContinue && canUndoEnd().ok };    // one Undo puts the End back, all of it (D190)
     render();    // the chat in front is an ended scene now: the map shows the world as it stands
     renderSetup();
     if (!thenContinue) return;
@@ -984,6 +1003,7 @@ function build() {
             if (act === 'setup-close') { if (endRunning()) return; if (setup && setup.start) cancelStart(); setup = null; renderSetup(); render(); return; }
             if (act === 'end-scene') { await openEndScene(); return; }
             if (act === 'end-go') { await endSceneGo(); return; }
+            if (act === 'end-undo') { await undoEndNow(); return; }
             if (act === 'end-continue') { await endSceneGo({ thenContinue: true }); return; }
             if (act === 'scene-start') { ev.stopPropagation(); openSceneStart(this.getAttribute('data-id') || ''); return; }
             if (act === 'scene-write') { await writeOpenings(); return; }

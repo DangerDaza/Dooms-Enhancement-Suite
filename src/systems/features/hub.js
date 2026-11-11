@@ -37,6 +37,7 @@ import {
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, isStaleScene, markIsOfFile, sceneTranscriptPages, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
+    readConflicts, mergeConflicts, normalizeConflicts,
 } from '../../utils/hub.js';
 import { normalizeBook } from '../../utils/atlas.js';
 import { narratorTexts, countStyle, applyStyle } from '../../utils/styleLaw.js';
@@ -46,7 +47,7 @@ import { continuityBookName, readBook, planBook, trackWritten, forgetBook, renam
 export const BRIEF_SLOT = 'dooms-scene-brief';
 import { ensureCss } from '../../core/cssLoader.js';
 import { isLiveWorldOn, loadPack, getWorldState, getActivePack, saveWorld, adoptWorld, presentNamesFromTracker } from './liveWorld.js';
-import { isCanonOn, updateCanon } from './canon.js';
+import { isCanonOn, updateCanon, onCanonChatChanged } from './canon.js';
 import { resolvePersonaName } from './diceRolls.js';
 
 export const HUB_CHANGED_EVENT = 'dooms:hub-changed';
@@ -336,6 +337,7 @@ export function currentScene() {
 export function onHubChatChanged() {
     pending = null;
     stripNote = '';
+    if (lastEnd && chatId() !== lastEnd.chat) lastEnd = null;    // the last End is put back from its own scene's chat only (D190)
     const mark = extensionSettings.enabled ? readMark(meta()) : null;
     current = mark ? { worldId: mark.world, mark } : null;
     if (!current) setBriefSlot('');
@@ -481,6 +483,7 @@ function defaultBookApi() {
         create: async (name) => (await lib()).createNewWorld(name),
         entry: async (name, data) => (await lib()).createEntry(name, data),
         active: async (name) => (await lib()).isWorldActive(name),
+        remove: async (name, data, uid) => { await (await lib()).deleteEntry(data, uid); if (data && data.entries) delete data.entries[uid]; },
         // Filed with the world's campaign, so it is switched on with the campaign's other books; a world with no campaign has it switched on by itself.
         file: async (campaignId, name) => {
             const lb = extensionSettings.lorebook;
@@ -582,13 +585,16 @@ async function writeBook(worldId) {
         if (!data.entries || typeof data.entries !== 'object') data.entries = {};
         const plan = planBook(cont, data);
         const written = [];
+        const undo = { name, made, created: [], texts: [] };    // what this writing changed in the book: the entries it made, and the texts it replaced
         for (const op of plan.ops) {
             if (op.op === 'create') {
                 const made1 = await api.entry(name, data);
                 if (!made1 || !Number.isInteger(made1.uid)) continue;
                 Object.assign(made1, { ...op.fields, key: op.fields.key.slice(), addMemo: true });
                 written.push({ who: op.who, uid: made1.uid, content: op.fields.content });
+                undo.created.push(made1.uid);
             } else if (data.entries[op.uid]) {
+                undo.texts.push({ uid: op.uid, content: String(data.entries[op.uid].content ?? '') });
                 data.entries[op.uid].content = op.content;
                 written.push({ who: op.who, uid: op.uid, content: op.content });
             }
@@ -596,7 +602,7 @@ async function writeBook(worldId) {
         if (written.length) await api.save(name, data);
         putEntry(worldId, { ...entryOf(worldId), continuity: trackWritten(cont, name, written) }, { source: 'book', world: worldId });
         log(`the continuity book "${name}" ${made ? 'made and ' : ''}written`, { entries: written.length });
-        return { state: 'ok', name, made, written: written.length };
+        return { state: 'ok', name, made, written: written.length, undo };
     }
 }
 
@@ -961,6 +967,7 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     }
     putEntry(p.worldId, memoryOut ? { ...opened.entry, memory: memoryOut } : opened.entry, { source: 'start', world: p.worldId });
     pending = null;
+    lastEnd = null;    // the world has gone on: the last End is not put back from here (D190)
     log(`scene ${n} written: "${fileName}"`);
     if (!(await flushChat())) log('the chat in front could not be flushed before the switch; its last edits may be lost');
     try {
@@ -1045,6 +1052,8 @@ export async function prepareEnd() {
     if (!g.ok) return g;
     const idle = await whenIdle();
     if (!idle) return { ok: false, reason: 'busy' };
+    // A record the handover wrote and held back for its contradictions (D190) is the one the sheet shows: nothing is asked again.
+    if (prepared && prepared.held && prepared.id === chatId() && prepared.reply === lastReplyId() && prepared.result) { prepared.held = false; return prepared.result; }
     const token = { meta: meta(), id: chatId() };
     const players = playerNames();
     // The scene's brief is kept on the mark (D120: it rides the brief slot, the chat has no scenario of its own).
@@ -1057,11 +1066,16 @@ export async function prepareEnd() {
     await syncFromBook(g.cur.worldId);    // what the player changed in the continuity book is how things stood (D189)
     if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
     let draft = continuityDraft(entryOf(g.cur.worldId).continuity, people.cast);
+    // What was established before the scene, for the record to check the scene against (D190): the chat's ledger, the
+    // scene's people's own lorebook entries and the campaign's standing notes (the continuity book aside: that is the draft).
+    const check = await establishedFor(g.cur.worldId, people.cast, players);
+    if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
+    let conflicts = [];
     let recap = '';
     let error = '';
     try {
         for (let i = 0; i < Math.max(1, pages.length); i++) {
-            const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1, continuity: draft });
+            const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1, continuity: draft, check });
             const r = await request(prompt, { transport: recapTransport, label: 'recap' });
             if (r.busy) { error = 'Another request holds the line.'; break; }
             const p = parseRecapReply(r.text, { maxChars: cfg().recapChars });
@@ -1069,6 +1083,7 @@ export async function prepareEnd() {
             recap = p.recap;
             error = '';
             draft = stepDraft(draft, readContinuity(p.reply, draft, { players, known: people.known, text: pages.slice(0, i + 1).join('\n') }));
+            conflicts = mergeConflicts(conflicts, readConflicts(p.reply));
         }
     } catch (e) { error = String(e && e.message || e); }
     if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
@@ -1077,8 +1092,24 @@ export async function prepareEnd() {
     const canonDone = !!(g.cur.mark.end && g.cur.mark.end.canonAt && g.cur.mark.end.canonAt === lastReplyId());
     const continuity = draftChanges(draft);
     // Kept for an End that has no sheet to hand it back (the command, the handover): this chat's, for this last reply.
-    prepared = { id: token.id, reply: lastReplyId(), change: { people: continuity.people.map(x => ({ name: x.name, now: x.now })), opened: continuity.opened.map(t => t.text), closed: continuity.closed.map(t => t.id) } };
-    return { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, stale, canonDone, steps: { canon: isCanonOn() && !canonDone, world: isLiveWorldOn() && !!getWorldState() }, pages: pages.length, style: isStyleLawOn() ? sceneStyle() : null, continuity, book: continuityBookOf(g.cur.worldId) };
+    const result = { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, stale, canonDone, steps: { canon: isCanonOn() && !canonDone, world: isLiveWorldOn() && !!getWorldState() }, pages: pages.length, style: isStyleLawOn() ? sceneStyle() : null, continuity, book: continuityBookOf(g.cur.worldId), conflicts, checked: { ledger: !!check.canon, notes: check.lore.map(l => l.name), standing: !!check.standing } };
+    prepared = { id: token.id, reply: lastReplyId(), change: { people: continuity.people.map(x => ({ name: x.name, now: x.now })), opened: continuity.opened.map(t => t.text), closed: continuity.closed.map(t => t.id) }, conflicts, result, held: false };
+    return result;
+}
+
+/**
+ * What was established before a scene, for its record to check the scene
+ * against (D190): the chat's own ledger as Canon's block, the scene's
+ * people's own lorebook entries and the campaign's standing notes (read
+ * as a scene's openings read them, D177). Whatever cannot be read is
+ * left out; with nothing at all the record is still asked whether the
+ * scene contradicts where its people stood.
+ */
+async function establishedFor(worldId, cast, players) {
+    const out = { canon: '', lore: [], standing: '' };
+    try { const m = meta(); if (isCanonOn() && m && m.dooms_canon) out.canon = buildCanonBlock(normalizeCanon(m.dooms_canon), { maxChars: 2400 }) || ''; } catch (e) { log('the ledger could not be read for the record', String(e && e.message || e)); }
+    try { const notes = await sceneLore(worldId, cast, players); out.lore = notes.lore; out.standing = notes.standing; } catch (e) { log('the lorebooks could not be read for the record', String(e && e.message || e)); }
+    return out;
 }
 
 /**
@@ -1088,7 +1119,7 @@ export async function prepareEnd() {
  * Each step says how it went; a chat that changes under End stops it
  * before anything of the world is touched.
  */
-export async function commitEnd({ recap = '', skipRecap = false, skipCanon = false, skipWorld = false, replaceMemory = false, onStep = null, bans = null, continuity = undefined } = {}) {
+export async function commitEnd({ recap = '', skipRecap = false, skipCanon = false, skipWorld = false, replaceMemory = false, onStep = null, bans = null, continuity = undefined, conflicts = undefined } = {}) {
     const step = (name, state) => { if (typeof onStep === 'function') { try { onStep(name, state); } catch (e) { /* the sheet's own */ } } };
     if (ending) return { ok: false, reason: 'running' };
     const g = guardEnd();
@@ -1103,6 +1134,10 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         if (!idle) return { ...out, reason: 'busy' };
         const m = token.meta;
         const replyId = lastReplyId();
+        // What this End is about to change, for one Undo (D190): the chat's mark and its ledger as they are now; the
+        // world's entry and the book follow below, each just before it is written.
+        const undo = { worldId: g.cur.worldId, chat: token.id, scene: g.cur.scene ? g.cur.scene.id : g.cur.mark.scene, mark: JSON.parse(JSON.stringify(m[HUB_META_KEY] || g.cur.mark)), hadCanon: 'dooms_canon' in m, canon: m.dooms_canon === undefined ? null : JSON.parse(JSON.stringify(m.dooms_canon)), entry: null, book: null, endedAt: 0 };
+        lastEnd = null;
         // Canon over the whole scene, into the chat: the scene's own knowledge, read once per last reply (End again skips a step already run).
         const canonDone = !!(g.cur.mark.end && g.cur.mark.end.canonAt && g.cur.mark.end.canonAt === replyId);
         if (isCanonOn() && !skipCanon && !canonDone) {
@@ -1126,6 +1161,7 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         let memory = takeSnapshot(m, { scene: sceneId, takenAt: now, player: players[0] || '' });
         await syncFromBook(g.cur.worldId);    // what the player changed in the continuity book since is taken in before anything is written (D189)
         let entry = entryOf(g.cur.worldId);
+        undo.entry = JSON.parse(JSON.stringify(entry));
         if (!g.cur.scene) entry = reconcileScenesWithChats(entry, [{ file: token.id || '', meta: m }], g.cur.worldId).entry;    // a record the settings lost: remade from the mark
         const record = entry.scenes.find(x => x.id === sceneId) || null;
         // A stale scene (begun before the memory was last written) keeps the world's memory unless told to replace it (D123).
@@ -1146,7 +1182,10 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
             if (changed()) return { ...out, reason: 'changed' };
         } else if (isLiveWorldOn() && memory.stores.dooms_world) out.world = keep ? 'kept' : 'skipped';
         const recapText = skipRecap ? '' : String(recap || '').trim();
-        const ended = endSceneRecord(entry, sceneId, { endedAt: now, endDate: facts.date, recap: recapText, noRecap: !recapText });
+        // What the record found the scene to contradict (D190) is kept with the scene: as the sheet had it, else as the record said.
+        const found = normalizeConflicts(conflicts !== undefined ? conflicts : (prepared && prepared.id === token.id && prepared.reply === replyId ? prepared.conflicts : []));
+        const ended = endSceneRecord(entry, sceneId, { endedAt: now, endDate: facts.date, recap: recapText, noRecap: !recapText, conflicts: found });
+        if (found.length) out.conflicts = found.length;
         // The style law (D179): the phrases the narrator leaned on in this scene are held against the next ones. The ones
         // chosen on the End sheet; with no sheet (/endscene), the ones the count chose by itself. It is the narrator's
         // habit, not the world's memory, so it is kept whatever becomes of the memory.
@@ -1181,6 +1220,10 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         out.book = mirrored.state;
         out.bookResult = mirrored;
         step('book', out.book);
+        undo.book = mirrored.undo || null;
+        undo.endedAt = now;
+        lastEnd = undo;
+        out.undo = true;
         mountStrip();
         log(`scene ${sceneId} ended and remembered`, { canon: out.canon, world: out.world, snapshot: out.snapshot, stale });
         return { ...out, ok: true, stale, scene: ended.scene, memory: { takenAt: memory.takenAt, facts: memory.facts } };
@@ -1203,6 +1246,84 @@ export async function endScene(opts = {}) {
 
 export function isEnding() {
     return ending;
+}
+
+// ─── One Undo of the last End (D190) ────────────────────────────────────
+
+let lastEnd = null;    // what the last End changed, kept until another scene starts, another End runs or the chat changes; never stored
+
+/**
+ * Whether the last End can still be put back: its scene's chat is in
+ * front, the scene is ended as that End left it, and the world has not
+ * gone on to another scene since.
+ * @returns {{ ok: boolean, scene?: string, reason?: string }}
+ */
+export function canUndoEnd() {
+    if (!lastEnd || !lastEnd.entry) return { ok: false, reason: 'none' };
+    if (ending || continuing) return { ok: false, reason: 'running' };
+    if (chatId() !== lastEnd.chat) return { ok: false, reason: 'wrong-chat' };
+    const entry = store().worlds[lastEnd.worldId];
+    const record = entry ? entry.scenes.find(x => x.id === lastEnd.scene) : null;
+    if (!record || record.status !== 'ended' || record.endedAt !== lastEnd.endedAt) return { ok: false, reason: 'moved-on' };
+    if (entry.seq !== lastEnd.entry.seq || openSceneOf(entry)) return { ok: false, reason: 'moved-on' };
+    return { ok: true, scene: lastEnd.scene };
+}
+
+/**
+ * The last End put back, all of it (D190): the scene is open again with
+ * its mark as it was; the world's entry is as it was before the End (the
+ * record, the memory with the world as it stood, where people stand, the
+ * threads, the style law); the chat's ledger is as it was before Canon
+ * read the scene; and in the continuity book the entries that End made
+ * are taken out and the texts it replaced are put back. The chat's
+ * messages were never touched by End and are not touched here.
+ * @returns {Promise<{ ok: boolean, reason?: string, scene?: string, book?: string, error?: string }>}
+ */
+export async function undoEnd() {
+    const can = canUndoEnd();
+    if (!can.ok) return can;
+    if (ST.is_send_press === true) return { ok: false, reason: 'busy' };
+    const u = lastEnd;
+    const m = meta();
+    if (!m) return { ok: false, reason: 'wrong-chat' };
+    ending = true;
+    try {
+        // The book first: it is the one thing outside DES's own stores, and the least sure to answer.
+        let book = 'off';
+        if (u.book && u.book.name) {
+            try {
+                await bookStep((async () => {
+                    const api = books();
+                    const data = await api.load(u.book.name);
+                    if (!data || !data.entries) throw new Error('the book could not be read');
+                    for (const t of u.book.texts) if (data.entries[t.uid]) data.entries[t.uid].content = t.content;
+                    for (const uid of u.book.created) { if (typeof api.remove === 'function') await api.remove(u.book.name, data, uid); else delete data.entries[uid]; }
+                    await api.save(u.book.name, data);
+                })());
+                book = 'ok';
+            } catch (e) { book = 'failed'; log('the continuity book could not be put back', String(e && e.message || e)); }
+        }
+        // The world's entry as it was. A book this End made stays (emptied of what End wrote): the world goes on knowing it is its own.
+        const before = normalizeWorldEntry(u.entry);
+        if (u.book && u.book.made && book === 'ok') before.continuity = trackWritten(before.continuity, u.book.name, []);
+        putEntry(u.worldId, before, { source: 'undo-end', world: u.worldId });
+        // The chat: the scene's mark and the ledger as they were before End.
+        m[HUB_META_KEY] = u.mark;
+        if (u.hadCanon) m.dooms_canon = u.canon; else delete m.dooms_canon;
+        try { onCanonChatChanged(); } catch (e) { log('the ledger could not be read again', String(e && e.message || e)); }
+        try { await bridge().saveChat(); } catch (e) { log('the chat could not be saved after the Undo', String(e && e.message || e)); }
+        current = { worldId: u.worldId, mark: m[HUB_META_KEY] };
+        lastEnd = null;
+        prepared = null;
+        mountStrip();
+        log(`the End of scene ${u.scene} is undone`, { book });
+        return { ok: true, scene: u.scene, book };
+    } catch (e) {
+        return { ok: false, reason: 'error', error: String(e && e.message || e) };
+    } finally {
+        ending = false;
+        notify({ source: 'undo-end' });
+    }
 }
 
 // ─── Starting from the Atlas (D174) ─────────────────────────────────────
@@ -1541,6 +1662,9 @@ export async function continueScene({ onStep = null } = {}) {
             if (!p.ok) return { ok: false, reason: p.reason, stage: 'end' };
             if (p.stale) return { ok: false, reason: 'stale', stage: 'end' };
             if (p.error || !p.recap) return { ok: false, reason: 'no-recap', stage: 'end', error: p.error || '' };
+            // What the scene contradicts is the player's to see before it is kept (D190): the handover stops, and the End
+            // sheet shows the record it wrote (the same one: nothing is asked again).
+            if (p.conflicts && p.conflicts.length) { if (prepared) prepared.held = true; return { ok: false, reason: 'conflicts', stage: 'end', conflicts: p.conflicts.length }; }
             say('Remembering the scene…');
             const e = await commitEnd({ recap: p.recap, skipWorld: true });
             if (!e.ok) return { ok: false, reason: e.reason, stage: 'end' };
@@ -1564,6 +1688,7 @@ export async function continueScene({ onStep = null } = {}) {
 function continueRefusal(r) {
     if (r.stage === 'start') return r.reason === 'openers' ? 'The scene is ended, but no opening came back for the next. Open the Atlas and start it from the map.' : `The scene is ended, but the next could not be opened (${describeStartWord(r)}). Open the Atlas and start it from the map.`;
     if (r.reason === 'no-recap') return 'The record of the scene could not be written. Use End scene to write it yourself.';
+    if (r.reason === 'conflicts') return `The record found ${r.conflicts === 1 ? 'one thing' : `${r.conflicts} things`} in this scene that ${r.conflicts === 1 ? 'contradicts' : 'contradict'} what was established. End scene shows ${r.conflicts === 1 ? 'it' : 'them'}, with the record already written.`;
     if (r.reason === 'stale') return 'A later scene has ended since this one began. Use End scene to choose what is kept.';
     if (r.reason === 'busy') return 'A reply is still being written. Try again when it is done.';
     if (r.reason === 'running') return 'This is already being done.';

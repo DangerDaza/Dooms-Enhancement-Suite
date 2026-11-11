@@ -1042,5 +1042,136 @@ console.log('\n§17 the continuity book: the world\'s own lorebook, written at E
     await openPlain('Mara Vane - plain six');
 }
 
+console.log('\n§18 what a scene contradicts, and one Undo of End (D190)');
+{
+    const W = 'first-descent';
+    const utils = await import(`${DES}/src/utils/hub.js`);
+    // A shelf again, and the campaign's books as the player has them: who people are, and the hand-made Continuity.
+    hub.__setBookApi({
+        names: async () => [...shelf.keys()], load: async (name) => shelf.get(name) || null, save: async (name, data) => { shelf.set(name, data); }, create: async (name) => { shelf.set(name, { entries: {} }); },
+        entry: async (name, data) => { const ids = Object.keys(data.entries).map(Number); const uid = ids.length ? Math.max(...ids) + 1 : 0; data.entries[uid] = { uid, key: [], comment: '', content: '', constant: false, disable: false }; return data.entries[uid]; },
+        active: async (name) => booksOn.has(name), remove: async (name, data, uid) => { delete data.entries[uid]; },
+        file: async (campaignId, name) => { filed.push([campaignId || '', name]); if (campaignId) extensionSettings.lorebook.campaigns[campaignId].books.push(name); },
+    });
+    const lore = {
+        'FD - Campaign Complete': { entries: { 11: { uid: 11, key: ['Kiyoha', 'oni'], comment: 'Kiyoha — who she is', content: 'KIYOHA — the company\'s front line. She and Solveig came up the stair together and she trusts her with the rope.', order: 90 } } },
+        'FD - Continuity': { entries: { 0: { uid: 0, key: [], comment: 'STORY CANON', content: 'RULING: the tests are over. LOOT LAW: the Factor\'s key was returned in run 2.', constant: true, order: 100 } } },
+    };
+    extensionSettings.lorebook.campaigns.camp1.books = ['FD - Campaign Complete', 'FD - Continuity', ...extensionSettings.lorebook.campaigns.camp1.books.filter(b => b.includes('Scenes Continuity'))];
+    hub.__setLoreReader(async (book) => lore[book] || null);
+    let openersAsked = null;
+    hub.__setOpenersTransport(async (p) => { openersAsked = p; return '{"when":{"date":"Day 80","time":"morning"},"openers":[{"title":"a","text":"The lane, again.","who":[]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}'; });
+    const recapsAsked = [];
+    let recapReply = () => '{"recap":"x"}';
+    hub.__setRecapTransport(async (p) => { recapsAsked.push(p); return recapReply(p); });
+    let gapRuns = 0;
+    hub.__setGapTransport(async () => { gapRuns++; return '{"elapsed":"a day","now":{"date":"Day 81","time":"dawn"},"clocks":{},"moved":[],"blurb":"A day went by.","heard":[]}'; });
+    const start = async (cast = ['Kiyoha']) => { const p = await hub.prepareScene({ worldId: W, place: { label: 'Hask' }, cast, gap: { id: 'now' } }); return p.ok ? { ...(await hub.commitScene(p.token, { choice: 0 })), prep: p } : p; };
+    const entry = () => hub.worldEntry(W);
+    const bookEntry = (title) => { const b = shelf.get(hub.continuityBookOf(W)); return b ? Object.values(b.entries).find(e => e.comment === title) : undefined; };
+    const clash = { scene: 'Dagger still holds the Factor\'s key.', established: 'The Factor\'s key was returned in run 2.', source: 'the standing notes' };
+
+    // A scene first, so the world has its continuity book with an entry for Kiyoha and one for the threads.
+    const s0 = await start();
+    chat.push(user('A day in Hask.'));
+    chat.push(ai('Kiyoha rests.'));
+    recapReply = () => JSON.stringify({ recap: 'A day in Hask.', people: [{ name: 'Kiyoha', now: 'In Hask, rested.' }], threads: { opened: ['The stair is still unmapped.'] }, conflicts: [] });
+    const e0 = await hub.endScene({ skipCanon: true, skipWorld: true });
+    check('a scene that contradicts nothing ends as before, and the world has its book', s0.ok && e0.ok && e0.conflicts === undefined && e0.book === 'ok' && !!bookEntry('Kiyoha: as things stand now') && !!bookEntry('Open threads'), JSON.stringify(e0.bookResult));
+
+    // A scene whose record finds a contradiction.
+    const s1 = await start();
+    chat.push(user('Where is the key?'));
+    chat.push(ai('Dagger turns the Factor\'s key over in his fingers. Kiyoha says she has never met Solveig.'));
+    cn.onCanonChatChanged();
+    const line = cn.addCanonLine({ kind: 'thing', name: 'The Factor\'s key', text: 'Returned to the Factor at the Counting Room.' });
+    await persistence.saveChatData({ immediate: true });
+    recapsAsked.length = 0;
+    recapReply = () => JSON.stringify({ recap: 'Dagger showed the key.', people: [{ name: 'Kiyoha', now: 'In Hask, puzzled by Dagger.' }], threads: { opened: ['Why does Dagger have the key?'] }, conflicts: [clash, { scene: 'Kiyoha says she has never met Solveig.', established: 'She and Solveig came up the stair together.', source: 'Kiyoha\'s notes' }, { scene: 'half' }] });
+    const before = JSON.parse(JSON.stringify(entry()));
+    const ledgerBefore = JSON.stringify(meta.dooms_canon);
+    const pe = await hub.prepareEnd();
+    check('the record\'s one request is given what was established: the chat\'s ledger, the people\'s own lorebook entries and the standing notes, and is asked what the scene contradicts', s1.ok && pe.ok && !!line && recapsAsked.length === 1 && recapsAsked[0].user.includes('What the story has established (the ledger):') && recapsAsked[0].user.includes('Returned to the Factor at the Counting Room.') && pe.checked.ledger === true && recapsAsked[0].user.includes('The people\'s own notes:\n[Kiyoha] KIYOHA — the company\'s front line.') && recapsAsked[0].user.includes('The story\'s standing notes:') && recapsAsked[0].user.includes('LOOT LAW: the Factor\'s key was returned in run 2.') && /"conflicts": \[\{"scene"/.test(recapsAsked[0].system), recapsAsked[0].user.slice(0, 900));
+    check('the continuity book is not given as a person\'s own notes: where they stood is told by itself', !recapsAsked[0].user.includes('as the story stands now'));
+    check('what it found comes back for the sheet, with what it was checked against', pe.conflicts.length === 2 && same(pe.conflicts[0], clash) && pe.conflicts[1].source === 'Kiyoha\'s notes' && same(pe.checked.notes, ['Kiyoha']) && pe.checked.standing === true, JSON.stringify([pe.conflicts, pe.checked]));
+
+    // Going straight on stops: the contradictions are the player's to see first. The sheet then shows that same record.
+    const held = await hub.continueScene({});
+    check('going straight on stops when the record found a contradiction: nothing is ended, and it says why', held.ok === false && held.reason === 'conflicts' && held.conflicts === 2 && held.stage === 'end' && hub.currentScene().ended === false && entry().scenes.find(x => x.id === hub.currentScene().mark.scene).status === 'open');
+    const asked = recapsAsked.length;
+    const again = await hub.prepareEnd();
+    check('the End sheet then shows the record that was written: nothing is asked again', again.ok && again.conflicts.length === 2 && again.recap === 'Dagger showed the key.' && recapsAsked.length === asked);
+
+    // Ended from the sheet: the list is kept with the scene, the world moves, the book is written.
+    gapRuns = 0;
+    const sceneId = hub.currentScene().mark.scene;
+    const ce = await hub.commitEnd({ recap: again.recap, skipCanon: true, continuity: { people: [{ name: 'Kiyoha', now: 'In Hask, puzzled by Dagger.' }], opened: ['Why does Dagger have the key?'], closed: [] }, conflicts: again.conflicts });
+    const record = () => entry().scenes.find(x => x.id === sceneId);
+    check('ended, the scene keeps what it contradicted, and End says so', ce.ok && ce.conflicts === 2 && record().status === 'ended' && record().conflicts.length === 2 && /2 things in it contradict what was established/.test(utils.describeEndResult(ce)) && ce.undo === true, utils.describeEndResult(ce));
+    check('that End moved the world, changed where Kiyoha stands, opened a thread and wrote the book', gapRuns === 1 && entry().memory.facts.date === 'Day 81' && entry().continuity.people.find(p => p.name === 'Kiyoha').now === 'In Hask, puzzled by Dagger.' && entry().continuity.threads.some(t => t.text === 'Why does Dagger have the key?') && bookEntry('Kiyoha: as things stand now').content.endsWith('puzzled by Dagger.') && bookEntry('Open threads').content.includes('- Why does Dagger have the key?') && meta.dooms_hub.endedAt > 0);
+
+    // One Undo puts it all back.
+    const can = hub.canUndoEnd();
+    check('the End can be put back while its scene\'s chat is in front and no scene has started since', can.ok && can.scene === sceneId);
+    const kiyohaBefore = before.continuity.people.find(p => p.name === 'Kiyoha').now;
+    const un = await hub.undoEnd();
+    check('undone: the scene is open again, its record as it was, the chat\'s mark not ended', un.ok && un.scene === sceneId && record().status === 'open' && record().recap === '' && !record().conflicts && meta.dooms_hub.endedAt === 0 && hub.currentScene().ended === false && hub.isScene());
+    check('the world is as it was before the End: its memory, its date, where people stand, the threads', same(entry().memory, before.memory) && entry().continuity.people.find(p => p.name === 'Kiyoha').now === kiyohaBefore && same(entry().continuity.threads, before.continuity.threads) && same(entry().scenes, before.scenes) && same(entry().style, before.style), JSON.stringify([entry().memory.facts, entry().continuity.people]));
+    check('the continuity book is as it was: the text End replaced is back, and it is still the world\'s book', bookEntry('Kiyoha: as things stand now').content === `Kiyoha, as the story stands now: ${kiyohaBefore}` && !bookEntry('Open threads').content.includes('Why does Dagger have the key?') && hub.continuityBookOf(W) === before.continuity.book.name && same(entry().continuity.book, before.continuity.book), JSON.stringify(shelf.get(hub.continuityBookOf(W))));
+    check('the chat\'s ledger is as it was', JSON.stringify(meta.dooms_canon) === ledgerBefore);
+    check('there is one Undo: it is not offered twice', hub.canUndoEnd().ok === false && (await hub.undoEnd()).ok === false);
+    check('the chat\'s messages were never touched', chat.length === 3 && chat[2].mes.includes('never met Solveig'));
+
+    // Put right and ended again: Canon reads the scene this time, and the Undo puts the ledger back too.
+    chat[2].mes = 'Dagger turns a brass token over in his fingers. Kiyoha nods to Solveig.';
+    chat[2].swipes = [chat[2].mes];
+    recapReply = () => JSON.stringify({ recap: 'Dagger showed a token.', people: [{ name: 'Kiyoha', now: 'In Hask, at ease.' }], threads: { opened: [] }, conflicts: [] });
+    cn.__setCanonTransport(async () => '{"add":[{"kind":"fact","name":"Dagger","text":"Dagger carries a brass token."}],"drop":[]}');
+    const pe2 = await hub.prepareEnd();
+    const ce2 = await hub.commitEnd({ recap: pe2.recap, skipWorld: true, continuity: { people: [{ name: 'Kiyoha', now: 'In Hask, at ease.' }], opened: [], closed: [] }, conflicts: pe2.conflicts });
+    check('put right and ended again: no contradiction is found or kept, and the ledger has read the scene', pe2.ok && pe2.conflicts.length === 0 && ce2.ok && ce2.conflicts === undefined && !record().conflicts && ce2.canon === 'ok' && JSON.stringify(meta.dooms_canon).includes('brass token') && !/contradict/.test(utils.describeEndResult(ce2)), JSON.stringify([ce2.canon, pe2.conflicts]));
+    const un2 = await hub.undoEnd();
+    check('that End undone: the ledger is as it was before Canon read the scene, so ending again reads it afresh', un2.ok && JSON.stringify(meta.dooms_canon) === ledgerBefore && !meta.dooms_hub.end && cn.getCanon().entries.length === 1 && cn.getCanon().entries[0].name === 'The Factor\'s key', JSON.stringify(meta.dooms_canon));
+    cn.__setCanonTransport(null);
+    const ce3 = await hub.commitEnd({ recap: pe2.recap, skipCanon: true, skipWorld: true, continuity: { people: [], opened: [], closed: [] }, conflicts: [] });
+    check('ended once more', ce3.ok && hub.canUndoEnd().ok === true);
+
+    // The Undo is this scene's chat's, and goes when the world goes on.
+    ctxTarget.characterId = 0;
+    await openPlain('Mara Vane - plain seven');
+    check('from another chat there is nothing to undo', hub.canUndoEnd().ok === false);
+    const s2 = await start();
+    play2();
+    function play2() { chat.push(user('On.')); chat.push(ai('Kiyoha goes on.')); }
+    recapReply = () => JSON.stringify({ recap: 'On.', people: [], threads: { opened: [] }, conflicts: [] });
+    const e2 = await hub.endScene({ skipCanon: true, skipWorld: true });
+    check('a scene ended by the command can be put back the same way', s2.ok && e2.ok && e2.undo === true && hub.canUndoEnd().ok === true);
+    const s3 = await start();
+    check('once the next scene starts the last End is not put back', s3.ok && hub.canUndoEnd().ok === false && (await hub.undoEnd()).reason === 'none');
+    play2();
+    // The command has no sheet: what the record found is kept with the scene and said in its answer.
+    recapReply = () => JSON.stringify({ recap: 'On again.', people: [], threads: { opened: [] }, conflicts: [clash] });
+    const e3 = await hub.endScene({ skipCanon: true, skipWorld: true });
+    const last = entry().scenes[entry().scenes.length - 1];
+    check('the command ends the scene and keeps what its record found, saying so with the way back', e3.ok && e3.conflicts === 1 && last.conflicts.length === 1 && /One thing in it contradicts what was established: the Atlas lists it, and one Undo puts the End back\./.test(utils.describeEndResult(e3)));
+    await hub.undoEnd();
+    // An End that made the book: undone, the book stays (empty of what End wrote) and is still the world's own.
+    shelf.delete(hub.continuityBookOf(W));
+    hub.onHubBookDeleted(hub.continuityBookOf(W));
+    recapReply = () => JSON.stringify({ recap: 'On again.', people: [{ name: 'Kiyoha', now: 'On the road.' }], threads: { opened: [] }, conflicts: [] });
+    const e4 = await hub.endScene({ skipCanon: true, skipWorld: true });
+    const made = hub.continuityBookOf(W);
+    const un4 = await hub.undoEnd();
+    check('an End that made the book, undone: the entries it wrote are taken out, the book stays the world\'s, and the next End writes into it', e4.ok && e4.bookResult.made === true && un4.ok && un4.book === 'ok' && hub.continuityBookOf(W) === made && shelf.has(made) && Object.keys(shelf.get(made).entries).length === 0 && (await hub.endScene({ skipCanon: true, skipWorld: true })).bookResult.made === false && Object.keys(shelf.get(made).entries).length >= 1, JSON.stringify([e4.bookResult, un4, shelf.get(made)]));
+    hub.__setBookApi(null);
+    hub.__setLoreReader(null);
+    hub.__setRecapTransport(null);
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+    ctxTarget.characterId = 0;
+    ctxTarget.name2 = 'Mara Vane';
+    await openPlain('Mara Vane - plain eight');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

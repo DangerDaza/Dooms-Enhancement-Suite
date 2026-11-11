@@ -38,6 +38,7 @@ export const MAX_NOTE = 300;           // the player's line
 export const MAX_CAST = 12;
 export const MAX_TITLE = 60;           // a scene's title
 export const MAX_SCENES = 200;
+export const MAX_CONFLICTS = 6;        // contradictions a scene's record may hold (D190)
 export const RECAP_CHARS = 600;
 export const OLD_RECAP_CHARS = 200;    // the recaps of all but the last RECENT_RECAPS
 export const RECENT_RECAPS = 20;
@@ -125,9 +126,38 @@ function cleanGap(raw) {
     return gapOf(g.id, g.words);
 }
 
+/**
+ * The contradictions a scene's record found (D190), made safe: what the
+ * scene says, what was established that it cannot be true beside, and
+ * where that was established; each once, six at the most.
+ * @returns {Array<{ scene: string, established: string, source: string }>}
+ */
+export function normalizeConflicts(list) {
+    const out = [];
+    const seen = new Set();
+    for (const c of Array.isArray(list) ? list : []) {
+        if (!isObj(c)) continue;
+        const scene = clean(c.scene ?? c.says, 260), established = clean(c.established ?? c.against, 260);
+        if (!scene || !established) continue;
+        const k = `${scene.toLowerCase()}|${established.toLowerCase()}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push({ scene, established, source: clean(c.source ?? c.where, 80) });
+        if (out.length >= MAX_CONFLICTS) break;
+    }
+    return out;
+}
+
+/** What a record's reply says the scene contradicts (the reply's JSON, or null for prose). */
+export const readConflicts = (reply) => normalizeConflicts(isObj(reply) ? reply.conflicts : null);
+
+/** Two lists of contradictions as one (a record written in passes finds them a page at a time). */
+export const mergeConflicts = (a, b) => normalizeConflicts([...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])]);
+
 export function normalizeScene(raw, seq = 0) {
     const r = isObj(raw) ? raw : {};
     const id = clean(r.id, 24) || `s${seq}`;
+    const conflicts = normalizeConflicts(r.conflicts);
     return {
         id,
         title: clean(r.title, MAX_TITLE),
@@ -146,6 +176,7 @@ export function normalizeScene(raw, seq = 0) {
         reopened: r.reopened === true,
         gone: r.gone === true,
         noRecap: r.noRecap === true,
+        ...(conflicts.length ? { conflicts } : {}),    // what the scene's record found against what was established (D190); absent when it found nothing
     };
 }
 
@@ -200,7 +231,7 @@ export function capScenes(entry) {
     if (scenes.length > MAX_SCENES) { scenes = scenes.slice(scenes.length - MAX_SCENES); changed = true; }
     const cutBefore = scenes.length - RECENT_RECAPS;
     scenes = scenes.map((s, i) => {
-        if (i < cutBefore && s.recap.length > OLD_RECAP_CHARS) { changed = true; return { ...s, recap: cutText(s.recap, OLD_RECAP_CHARS) }; }
+        if (i < cutBefore && (s.recap.length > OLD_RECAP_CHARS || s.conflicts)) { changed = true; const { conflicts: _old, ...rest } = s; return { ...rest, recap: s.recap.length > OLD_RECAP_CHARS ? cutText(s.recap, OLD_RECAP_CHARS) : s.recap }; }
         return s;
     });
     return changed ? { ...entry, scenes } : entry;
@@ -830,19 +861,26 @@ export function sceneTranscriptPages(chat, { budget = RECAP_BUDGET, persona = 'P
  * `continuity` (a draft from continuity.js) the same request also says
  * where each person of the scene stands when it ends and which threads
  * it settled and opened (D188): no request of its own. Without it, the
- * record alone, as before.
+ * record alone, as before. With `check` (what was established before the
+ * scene: the ledger's block, the people's own lorebook entries, the
+ * story's standing notes) it also says what the scene contradicts
+ * (D190), again in the same request.
+ * @param {{ canon?: string, lore?: Array<{ name: string, text: string }>, standing?: string }|null} o.check
  */
-export function buildRecapPrompt({ transcript = '', brief = '', player = '', maxChars = RECAP_CHARS, soFar = '', last = true, continuity = null } = {}) {
+export function buildRecapPrompt({ transcript = '', brief = '', player = '', maxChars = RECAP_CHARS, soFar = '', last = true, continuity = null, check = null } = {}) {
     const who = clean(player, 60) || 'the player';
     const blocks = continuity ? draftBlocks(continuity, { soFar: !!soFar }) : { people: '', threads: '' };
-    const shape = continuity
-        ? '{"recap": "<what happened in this scene>", "people": [{"name": "<someone in the scene>", "now": "<where they stand as the scene ends>"}], "threads": {"closed": [<numbers of the open threads this scene settled>], "opened": ["<a thread this scene leaves open>"]}}'
-        : '{"recap": "<what happened in this scene>"}';
+    const told = isObj(check) ? { canon: clean(check.canon, 2400), lore: (Array.isArray(check.lore) ? check.lore : []).filter(l => l && l.name && l.text).map(l => ({ name: clean(l.name, 60), text: clean(l.text, LORE_PER_PERSON) })), standing: clean(check.standing, LORE_STANDING + 400) } : null;
+    const shape = `{"recap": "<what happened in this scene>"${continuity ? ', "people": [{"name": "<someone in the scene>", "now": "<where they stand as the scene ends>"}], "threads": {"closed": [<numbers of the open threads this scene settled>], "opened": ["<a thread this scene leaves open>"]}' : ''}${told ? ', "conflicts": [{"scene": "<what the scene says or shows>", "established": "<what was established that it contradicts>", "source": "<where that was established>"}]' : ''}}`;
+    const against = told
+        ? ` "conflicts": only where the scene plainly contradicts something established before it${told.canon ? ', in what the story has established' : ''}${told.lore.length ? ', in a person\'s own notes' : ''}${told.standing ? ', in the story\'s standing notes' : ''}${blocks.people ? ', or in where a person stood before the scene' : ''}: two things that cannot both be true. A change the scene itself brings about is not a contradiction (someone wounded who is healed in it, a debt that is paid in it, a place left). Something the notes do not speak of is not one either. "source" names where it was established (the ledger, a person's notes by their name, the standing notes, where a person stood). At most ${MAX_CONFLICTS}; an empty list when there are none, which is the usual case.`
+        : '';
     const more = continuity
         ? ` "people": one entry for each person who took part in the scene or was changed by it, never ${who}; "now" is at most 280 characters, present tense: where they are, what state they are in, how they stand with ${who} and with the others, what they want, owe or have promised next. Where it is given how a person stood before, carry forward what still holds and change what the scene changed; say how things stand, not what kind of person they are. "threads.closed": the numbers of the open threads listed that this scene settled for good (done, answered, paid, given up); a thread that only moved forward stays open. "threads.opened": what the scene leaves unsettled and the story should come back to (a promise not yet kept, a question not answered, a danger not dealt with, a debt, a task taken on): at most 140 characters each, at most 6, none that is listed already. An empty list where there is nothing to say.`
         : '';
-    const system = `You write the record of a scene that has just ended, for the narrator of the next one. You answer with one JSON object and nothing else: ${shape}. Rules for "recap": at most ${maxChars} characters; past tense; ${who} by name; what was said, learned, promised, lost and gained; nothing that did not happen; no advice, no questions, no markup.${more}${soFar ? ' The record so far covers the earlier part of the scene: carry what still matters forward and add what this part adds.' : ''}${!last ? ' This is not the end of the scene yet: the record will be continued.' : ''}`;
-    const user = `${brief ? `The scene's brief:\n${clean(brief, MAX_BRIEF)}\n\n` : ''}${blocks.people ? `${blocks.people}\n\n` : ''}${blocks.threads ? `${blocks.threads}\n\n` : ''}${soFar ? `The record so far:\n${clean(soFar, 1500)}\n\n` : ''}The scene${soFar ? ', continued' : ''}:\n${transcript || '(nothing was played)'}\n\nAnswer with the JSON object only.`;
+    const system = `You write the record of a scene that has just ended, for the narrator of the next one. You answer with one JSON object and nothing else: ${shape}. Rules for "recap": at most ${maxChars} characters; past tense; ${who} by name; what was said, learned, promised, lost and gained; nothing that did not happen; no advice, no questions, no markup.${more}${against}${soFar ? ' The record so far covers the earlier part of the scene: carry what still matters forward and add what this part adds.' : ''}${!last ? ' This is not the end of the scene yet: the record will be continued.' : ''}`;
+    const established = told ? `${told.canon ? `What the story has established (the ledger):\n${told.canon}\n\n` : ''}${told.lore.length ? `The people's own notes:\n${told.lore.map(l => `[${l.name}] ${l.text}`).join('\n')}\n\n` : ''}${told.standing ? `The story's standing notes:\n${told.standing}\n\n` : ''}` : '';
+    const user = `${brief ? `The scene's brief:\n${clean(brief, MAX_BRIEF)}\n\n` : ''}${established}${blocks.people ? `${blocks.people}\n\n` : ''}${blocks.threads ? `${blocks.threads}\n\n` : ''}${soFar ? `The record so far:\n${clean(soFar, 1500)}\n\n` : ''}The scene${soFar ? ', continued' : ''}:\n${transcript || '(nothing was played)'}\n\nAnswer with the JSON object only.`;
     return { system, user };
 }
 
@@ -911,8 +949,9 @@ export function resumeScene(entry, id) {
 }
 
 /** End (D122): status ended, the recap, the dates. */
-export function endSceneRecord(entry, id, { endedAt = 0, endDate = '', recap = '', noRecap = false } = {}) {
-    const r = withScene(entry, id, s => ({ ...s, status: 'ended', endedAt: Number.isFinite(endedAt) ? endedAt : 0, endDate: clean(endDate, 80), recap: clean(recap, 1500), noRecap: noRecap === true || !clean(recap, 1500) }));
+export function endSceneRecord(entry, id, { endedAt = 0, endDate = '', recap = '', noRecap = false, conflicts = [] } = {}) {
+    const found = normalizeConflicts(conflicts);
+    const r = withScene(entry, id, s => { const { conflicts: _old, ...rest } = s; return { ...rest, status: 'ended', endedAt: Number.isFinite(endedAt) ? endedAt : 0, endDate: clean(endDate, 80), recap: clean(recap, 1500), noRecap: noRecap === true || !clean(recap, 1500), ...(found.length ? { conflicts: found } : {}) }; });
     return { ...r, entry: capScenes(r.entry) };
 }
 
@@ -1068,7 +1107,8 @@ export function describeEndResult(r) {
         const c = r.continuity && typeof r.continuity === 'object' ? r.continuity : null;
         if (Array.isArray(r.continuityKept) && r.continuityKept.length) parts.push(`${r.continuityKept.join(', ')} left as you wrote ${r.continuityKept.length === 1 ? 'it' : 'them'} in the book`);
         if (c && (c.people || c.opened || c.closed)) parts.push([c.people ? `${c.people} ${c.people === 1 ? 'person\'s' : 'people\'s'} standing kept` : '', c.opened ? `${c.opened} ${c.opened === 1 ? 'thread' : 'threads'} opened` : '', c.closed ? `${c.closed} settled` : ''].filter(Boolean).join(', '));
-        return `The scene is ended and remembered${parts.length ? ` (${parts.join(', ')})` : ''}.`;
+        const found = Number.isFinite(r.conflicts) ? r.conflicts : 0;
+        return `The scene is ended and remembered${parts.length ? ` (${parts.join(', ')})` : ''}.${found ? ` ${found === 1 ? 'One thing in it contradicts' : `${found} things in it contradict`} what was established: the Atlas lists ${found === 1 ? 'it' : 'them'}, and one Undo puts the End back.` : ''}`;
     }
     const why = {
         'not-scene': 'This chat is not a scene.',
