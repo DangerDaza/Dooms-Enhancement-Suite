@@ -206,6 +206,8 @@ window.__worldgen = (choices) => {
 };
 window.__applyWorld = () => { const top = A.atlasModel({ pack, state, player: 'Jordan', book: window.__book, layer: '' }); const r = W.applyWorldGen(window.__book, top, window.__choices); window.__book = r.book; window.__worldgen(null); window.__ui.layer = ''; draw(); window.__board.fit(); return { added: r.added, unplaced: r.unplaced, replaced: r.replaced }; };
 window.__names = (o) => { const panel = root.querySelector('.dooms-atlas-setup'); if (!o) { panel.hidden = true; panel.innerHTML = ''; return true; } panel.hidden = false; panel.innerHTML = atlasNamesHtml(o); return true; };
+// A person or a new thread crossed off a record's sheet (D188): the row goes (the controller's own line, here).
+document.addEventListener('click', (ev) => { const b = ev.target.closest ? ev.target.closest('[data-act="cont-drop"]') : null; if (b) b.closest('li').remove(); });
 window.__roadTime = { hours: roadTimeHours, parts: roadTimeParts };
 // A road's card saved (the controller's lines, here): the figure and the unit read from the card, the time set on the road.
 window.__saveRoad = () => { const c = document.querySelector('.dooms-atlas-card.is-road'); const hours = roadTimeHours(c.querySelector('[data-field="amount"]').value, c.querySelector('[data-field="unit"]').value); window.__book = A.setRoadTime(window.__book, c.getAttribute('data-a'), c.getAttribute('data-b'), hours); window.__board.closeCard(); draw(); return hours; };
@@ -1118,6 +1120,37 @@ console.log('\n§5i ending a scene from the Atlas; the strip above a scene\'s ch
     await shot('7zi-end-sheet-habits');
     await page.evaluate(({ p, st }) => window.__endScene({ prep: { ...p, style: { messages: 12, phrases: [] } } }), { p: prep, st: style });
     check('a scene with no habit shows no such list', (await page.evaluate(() => !document.querySelector('.dooms-atlas-habits-field'))));
+    // Where the people stand and the threads (D188): what the record said of each, to be corrected or crossed off.
+    check('a record that said nothing of the people or the threads shows no such fields', (await page.evaluate(() => !document.querySelector('.dooms-atlas-cont'))));
+    const cont = { people: [{ name: 'Kiyoha', now: 'At the stair foot, shoulder bound; owes Jordan her life and says so.', was: 'At the Fourth Landing, shoulder cut; sworn to see Jordan down the stair.' }, { name: 'Dagger', now: 'Joined the company on the stair; wants the Factor\'s key.', was: '' }], opened: [{ key: 'new:4', text: 'The Factor wants his key back.' }, { key: 'new:5', text: 'Dagger has not said why he came.' }], closed: [{ id: 't1', text: 'The debt to the Counting Room, due at the new moon.' }], open: 2 };
+    await page.evaluate(({ p, c }) => window.__endScene({ prep: { ...p, continuity: c } }), { p: prep, c: cont });
+    const contOf = () => page.evaluate(() => {
+        const el = document.querySelector('.dooms-atlas-setup-card'); const b = el.getBoundingClientRect();
+        return {
+            people: [...el.querySelectorAll('.dooms-atlas-cont-person')].map(li => ({ name: li.getAttribute('data-name'), now: li.querySelector('.dooms-atlas-cont-now').value, was: (li.querySelector('.dooms-atlas-cont-was') || { textContent: '' }).textContent, ro: li.querySelector('.dooms-atlas-cont-now').readOnly, cross: !!li.querySelector('[data-act="cont-drop"]') })),
+            opened: [...el.querySelectorAll('.dooms-atlas-cont-thread.is-new')].map(li => ({ key: li.getAttribute('data-key'), text: li.querySelector('.dooms-atlas-cont-thread-text').value })),
+            closed: [...el.querySelectorAll('.dooms-atlas-cont-closed')].map(x => `${x.value}:${x.checked}:${x.disabled}`),
+            text: [...el.querySelectorAll('.dooms-atlas-cont')].map(f => f.textContent.replace(/\s+/g, ' ').trim()).join(' | '),
+            order: el.querySelector('.dooms-atlas-cont').compareDocumentPosition(el.querySelector('.dooms-atlas-parts')) === Node.DOCUMENT_POSITION_FOLLOWING && el.querySelector('.dooms-atlas-end-recap').compareDocumentPosition(el.querySelector('.dooms-atlas-cont')) === Node.DOCUMENT_POSITION_FOLLOWING,
+            inside: b.top >= 0 && b.bottom <= innerHeight + 1, overflow: el.scrollWidth > el.clientWidth + 1, scrolls: el.scrollHeight > el.clientHeight + 1,
+        };
+    });
+    let cv = await contOf();
+    check('the End sheet shows where each person the record spoke of stands now, to be corrected, with where they stood before', cv.people.length === 2 && cv.people[0].name === 'Kiyoha' && cv.people[0].now.startsWith('At the stair foot') && /^Before: At the Fourth Landing/.test(cv.people[0].was) && cv.people[1].was === '' && cv.people.every(p => !p.ro && p.cross) && /Where they stand now/.test(cv.text) && /The next scene is told this of whoever is in it/.test(cv.text), JSON.stringify(cv.people));
+    check('and the threads: the ones the scene opened, to be reworded or crossed off; the one it settled, ticked; how many stay open', same(cv.opened, [{ key: 'new:4', text: 'The Factor wants his key back.' }, { key: 'new:5', text: 'Dagger has not said why he came.' }]) && same(cv.closed, ['t1:true:false']) && /settled The debt to the Counting Room/.test(cv.text) && /2 other threads stay open from before/.test(cv.text) && /Untick one that is not settled after all/.test(cv.text), cv.text);
+    check('they sit between the record and what ending does, and the sheet still fits the window (scrolling inside itself when it is long)', cv.order && cv.inside && !cv.overflow);
+    await shot('7zj-end-sheet-continuity');
+    await page.fill('.dooms-atlas-cont-person[data-name="Kiyoha"] .dooms-atlas-cont-now', 'At the stair foot, asleep on her axe.');
+    await page.click('.dooms-atlas-cont-person[data-name="Dagger"] [data-act="cont-drop"]');
+    await page.click('.dooms-atlas-cont-thread[data-key="new:4"] [data-act="cont-drop"]');
+    await page.uncheck('.dooms-atlas-cont-closed');
+    cv = await contOf();
+    check('a line corrected stays as typed; someone or a thread crossed off is gone from the sheet and nothing else is drawn again; a settled thread can be unticked', same(cv.people.map(p => [p.name, p.now]), [['Kiyoha', 'At the stair foot, asleep on her axe.']]) && same(cv.opened.map(t => t.key), ['new:5']) && same(cv.closed, ['t1:false:false']) && (await page.evaluate(() => document.querySelector('.dooms-atlas-end-recap').value.startsWith('They met at the gate'))));
+    await page.evaluate(({ p, c }) => window.__endScene({ prep: { ...p, continuity: c }, states: { recap: 'ok', canon: 'ok', world: 'ok', snapshot: 'ok' }, result: { ok: true } }), { p: prep, c: cont });
+    cv = await contOf();
+    check('once the scene is ended they are shown as kept and can no longer be changed', cv.people.every(p => p.ro && !p.cross) && same(cv.closed, ['t1:true:true']));
+    await page.evaluate(({ p }) => window.__endScene({ prep: { ...p, continuity: { people: [], opened: [], closed: [], open: 3 } } }), { p: prep });
+    check('a record that changed nothing shows no fields, however many threads stay open', (await page.evaluate(() => !document.querySelector('.dooms-atlas-cont'))));
     await page.evaluate((p) => window.__endScene({ prep: { ...p, stale: true, steps: { canon: false, world: true } } }), prep);
     v = await panel();
     check('a scene the world has moved past: the sheet says its End keeps the newer memory, with the tick to replace it; Canon off is shown as off; it cannot be gone straight on from', /began before a later one ended/.test(v.text) && v.replace && /Canon is off/.test(v.text) && v.parts[1] === 'is-off=off' && v.skips === 1 && v.acts.join() === 'end-go,end-continue:off,setup-close');

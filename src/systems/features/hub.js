@@ -40,6 +40,7 @@ import {
 } from '../../utils/hub.js';
 import { normalizeBook } from '../../utils/atlas.js';
 import { narratorTexts, countStyle, applyStyle } from '../../utils/styleLaw.js';
+import { continuityDraft, readContinuity, stepDraft, draftChanges, applyContinuity, changeCounts, standingLines, threadLines } from '../../utils/continuity.js';
 
 export const BRIEF_SLOT = 'dooms-scene-brief';
 import { ensureCss } from '../../core/cssLoader.js';
@@ -579,7 +580,10 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     // The people's own entries and the campaign's standing notes, read from its lorebooks (D177): the request sees no lorebook otherwise.
     const notesOf = await sceneLore(g.id, names, players);
     if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
-    const prompt = buildOpenersPrompt({ world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null });
+    // Where the people of the scene stand now and what the story has left open (D188), as the scenes before left them.
+    const stand = standingLines(g.entry.continuity, names);
+    const threads = threadLines(g.entry.continuity);
+    const prompt = buildOpenersPrompt({ world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads });
     let openers = [];
     let when = null;
     let errors = [];
@@ -601,8 +605,9 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
         token, worldId: g.id, pack, card: g.card, memory, seed: seed && typeof seed === 'object' ? seed : { kind: 'anywhere', text: seedText }, place: { id: placeId, label, region }, cast: names, lines, gap: theGap, note: String(note || ''),
         weather, since, recaps, player: players, openers, when, errors, notes, prompt, movedMemory,
         lore: { found: notesOf.found, missing: notesOf.missing, standing: !!notesOf.standing, books: notesOf.books },
+        stand, threads, continuity: { stand: stand.map(x => x.name), threads: threads.length },
     };
-    return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes, lore: pending.lore };
+    return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes, lore: pending.lore, continuity: pending.continuity };
 }
 
 // ─── Hooks over the memory (§4.4) ────────────────────────────────────────
@@ -756,7 +761,7 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     if (moved) memoryNow = { ...memoryNow, stores: { ...memoryNow.stores, dooms_world: moved.stores.dooms_world }, facts: moved.facts };
     const hooked = p.seed && p.seed.kind === 'hook' && p.seed.id ? { id: p.seed.id, title: p.seed.label || '', text: p.seed.text || '' } : null;
     const seeded = seedStores(memoryNow, { chatId: fileName, place: p.place.label, cast: p.cast, player: p.player, weather: p.weather, when: p.when, hookId: hooked ? hooked.id : '', hook: hooked, now });
-    const brief = buildBrief({ world: p.pack.name, sceneNo: n, place: p.place.label, region: p.place.region, date: seeded.facts.date, time: seeded.facts.time, weather: seeded.facts.weather, gapWords: p.gap.words, cast: p.lines.map(l => l.line), seed: p.seed.text || p.seed.label || '', since: p.since, lastRecap: p.recaps[0] || '', beforeRecap: p.recaps[1] || '', player: p.player[0] || '', note: p.note, style: isStyleLawOn() ? g.entry.style : null });
+    const brief = buildBrief({ world: p.pack.name, sceneNo: n, place: p.place.label, region: p.place.region, date: seeded.facts.date, time: seeded.facts.time, weather: seeded.facts.weather, gapWords: p.gap.words, cast: p.lines.map(l => l.line), seed: p.seed.text || p.seed.label || '', since: p.since, lastRecap: p.recaps[0] || '', beforeRecap: p.recaps[1] || '', player: p.player[0] || '', note: p.note, style: isStyleLawOn() ? g.entry.style : null, stand: p.stand || [], threads: p.threads || [] });
     const mark = hubMark({ world: p.worldId, scene: `s${n}`, title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, startedAt: now, startDate: seeded.facts.date, file: fileName, brief });
     // The brief rides DES's own slot every generation (D120): a chat-completion preset may not send the scenario at all.
     const header = sceneHeader({ stores: seeded.stores, mark, scenario: '', worldInfo: '', integrity: b.uuid(), persona: b.userAvatar() });
@@ -841,9 +846,23 @@ function sceneStyle() {
     try { return countStyle(narratorTexts(chatArray() || []), { names: sceneNames() }); } catch (e) { log('the style count failed', String(e && e.message || e)); return { messages: 0, phrases: [] }; }
 }
 
+let prepared = null;    // what the last prepared End's record said of the continuity: { id (the chat), reply (its last reply), change }
+
+/** The people a scene's record may speak of: the ones it began with and the ones the tracker has there now (the player aside); and every name the world knows, for the spelling. */
+function scenePeople(cur, players) {
+    const cast = [];
+    const add = (n) => { const c = String(n || '').trim(); if (c && !players.some(p => sameName(p, c)) && !cast.some(x => sameName(x, c))) cast.push(c); };
+    for (const n of cur && cur.mark && Array.isArray(cur.mark.cast) ? cur.mark.cast : []) add(n);
+    try { for (const n of presentNamesFromTracker()) add(n); } catch (e) { /* no tracker */ }
+    const st = getWorldState();
+    return { cast, known: [...cast, ...(st && st.known && typeof st.known === 'object' ? Object.keys(st.known) : [])] };
+}
+
 /**
  * The End sheet's first step (D122): the recap written for the user to
- * read and edit. Waits for the main generation and the background line.
+ * read and edit, and with it where the scene's people stand now and the
+ * threads it settled and opened (D188). Waits for the main generation and
+ * the background line.
  */
 export async function prepareEnd() {
     const g = guardEnd();
@@ -856,33 +875,42 @@ export async function prepareEnd() {
     const brief = g.cur.mark && typeof g.cur.mark.brief === 'string' ? g.cur.mark.brief : '';
     // A scene longer than one page is read in passes, oldest first, each pass carrying the record so far (§5.2).
     const pages = sceneTranscriptPages(chatArray() || [], { budget: RECAP_BUDGET, persona: players[0] || 'Player' });
+    // The same request says where the scene's people stand when it ends and which threads it settled and opened (D188):
+    // it is told where they stood before and what was open, and a record written in passes carries both from pass to pass.
+    const people = scenePeople(g.cur, players);
+    let draft = continuityDraft(g.entry.continuity, people.cast);
     let recap = '';
     let error = '';
     try {
         for (let i = 0; i < Math.max(1, pages.length); i++) {
-            const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1 });
+            const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1, continuity: draft });
             const r = await request(prompt, { transport: recapTransport, label: 'recap' });
             if (r.busy) { error = 'Another request holds the line.'; break; }
             const p = parseRecapReply(r.text, { maxChars: cfg().recapChars });
             if (!p.ok) { error = p.errors.join(' '); break; }
             recap = p.recap;
             error = '';
+            draft = stepDraft(draft, readContinuity(p.reply, draft, { players, known: people.known, text: pages.slice(0, i + 1).join('\n') }));
         }
     } catch (e) { error = String(e && e.message || e); }
     if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
     const facts = factsNow();
     const stale = isStaleScene(g.cur.scene, g.entry.memory);
     const canonDone = !!(g.cur.mark.end && g.cur.mark.end.canonAt && g.cur.mark.end.canonAt === lastReplyId());
-    return { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, stale, canonDone, steps: { canon: isCanonOn() && !canonDone, world: isLiveWorldOn() && !!getWorldState() }, pages: pages.length, style: isStyleLawOn() ? sceneStyle() : null };
+    const continuity = draftChanges(draft);
+    // Kept for an End that has no sheet to hand it back (the command, the handover): this chat's, for this last reply.
+    prepared = { id: token.id, reply: lastReplyId(), change: { people: continuity.people.map(x => ({ name: x.name, now: x.now })), opened: continuity.opened.map(t => t.text), closed: continuity.closed.map(t => t.id) } };
+    return { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, stale, canonDone, steps: { canon: isCanonOn() && !canonDone, world: isLiveWorldOn() && !!getWorldState() }, pages: pages.length, style: isStyleLawOn() ? sceneStyle() : null, continuity };
 }
 
 /**
  * End (D122): Canon over the scene, the advancer after the scene, the chat
- * flushed, the snapshot taken and sealed, the record and the mark ended.
+ * flushed, the snapshot taken and sealed, the record and the mark ended,
+ * and where the scene's people stand and the threads kept (D188).
  * Each step says how it went; a chat that changes under End stops it
  * before anything of the world is touched.
  */
-export async function commitEnd({ recap = '', skipRecap = false, skipCanon = false, skipWorld = false, replaceMemory = false, onStep = null, bans = null } = {}) {
+export async function commitEnd({ recap = '', skipRecap = false, skipCanon = false, skipWorld = false, replaceMemory = false, onStep = null, bans = null, continuity = undefined } = {}) {
     const step = (name, state) => { if (typeof onStep === 'function') { try { onStep(name, state); } catch (e) { /* the sheet's own */ } } };
     if (ending) return { ok: false, reason: 'running' };
     const g = guardEnd();
@@ -950,7 +978,17 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
             style = applyStyle(entry.style, { texts, chosen, scene: sceneId });
             out.style = style.bans.length;
         } catch (e) { log('the style law was not updated', String(e && e.message || e)); }
-        putEntry(g.cur.worldId, { ...ended.entry, memory: keep ? entry.memory : memory, style }, { source: 'end', world: g.cur.worldId });
+        // Where the scene's people stand now and the threads it settled and opened (D188): as the End sheet has them, else
+        // as the record said when it was written for this chat and this last reply. Like the memory, a scene the world
+        // has moved past does not overwrite what a later scene left (unless the memory is replaced with it).
+        let cont = entry.continuity;
+        const change = continuity !== undefined ? continuity : (prepared && prepared.id === token.id && prepared.reply === replyId ? prepared.change : null);
+        if (change && !keep) try {
+            cont = applyContinuity(entry.continuity, change, { scene: sceneId, at: now });
+            out.continuity = changeCounts(change);
+        } catch (e) { log('the continuity was not updated', String(e && e.message || e)); }
+        prepared = null;
+        putEntry(g.cur.worldId, { ...ended.entry, memory: keep ? entry.memory : memory, style, continuity: cont }, { source: 'end', world: g.cur.worldId });
         out.snapshot = keep ? 'kept' : 'ok';
         m[HUB_META_KEY] = markEnded(m[HUB_META_KEY] || g.cur.mark, { endedAt: now, endDate: facts.date });
         try { await bridge().saveChat(); } catch (e) { log('the mark could not be saved', String(e && e.message || e)); }
@@ -1151,16 +1189,23 @@ export async function prepareAdopt() {
     const pages = sceneTranscriptPages((chatArray() || []).slice(-ADOPT_MESSAGES), { budget: RECAP_BUDGET, persona: players[0] || 'Player' });
     let recap = '';
     let error = '';
+    // The same request says where the people of the chat stand now and what it has left open (D188): the world's first continuity.
+    const people = scenePeople(null, players);
+    const before = plan.world && !plan.world.made ? entryOf(plan.world.id).continuity : null;    // taken again: what the scenes since have said stands until this says otherwise
+    let draft = continuityDraft(before, people.cast);
     if (pages.length) {
         try {
-            const prompt = buildRecapPrompt({ transcript: pages[pages.length - 1], brief: '', player: players[0] || '', maxChars: cfg().recapChars, soFar: '', last: true });
+            const prompt = buildRecapPrompt({ transcript: pages[pages.length - 1], brief: '', player: players[0] || '', maxChars: cfg().recapChars, soFar: '', last: true, continuity: draft });
             const r = await request(prompt, { transport: recapTransport, label: 'recap' });
             if (r.busy) error = 'Another request holds the line.';
-            else { const p = parseRecapReply(r.text, { maxChars: cfg().recapChars }); if (p.ok) recap = p.recap; else error = p.errors.join(' '); }
+            else {
+                const p = parseRecapReply(r.text, { maxChars: cfg().recapChars });
+                if (p.ok) { recap = p.recap; draft = stepDraft(draft, readContinuity(p.reply, draft, { players, known: people.known, text: pages[pages.length - 1] })); } else error = p.errors.join(' ');
+            }
         } catch (e) { error = String(e && e.message || e); }
     }
     if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
-    return { ok: true, reason: '', plan: scenesPlan(), recap, error, messages: (chatArray() || []).length };
+    return { ok: true, reason: '', plan: scenesPlan(), recap, error, messages: (chatArray() || []).length, continuity: draftChanges(draft) };
 }
 
 /**
@@ -1200,7 +1245,7 @@ async function backupChat(card) {
  * cannot be written, nothing is changed.
  * @returns {Promise<{ ok: boolean, reason: string, worldId?: string, worldName?: string, made?: boolean, card?: string, replaced?: boolean, recap?: string, backup?: string }>}
  */
-export async function commitAdopt({ recap = '', replace = false } = {}) {
+export async function commitAdopt({ recap = '', replace = false, continuity = null } = {}) {
     if (adopting) return { ok: false, reason: 'running' };
     const plan = scenesPlan();
     if (!plan.ok) return plan;
@@ -1238,9 +1283,11 @@ export async function commitAdopt({ recap = '', replace = false } = {}) {
         if (!base.card || !cardOf(worldId)) base.card = plan.card.avatar;    // none yet, or the one it had is gone
         if (plan.campaign) base.campaign = plan.campaign.id;
         const r = adoptScene({ ...base, memory }, { chat: String(chatId() || ''), card: card ? card.avatar : '', recap, place: { label: facts.location || '' }, endDate: facts.date || '', endedAt: now });
-        putEntry(worldId, r.entry, { source: 'adopt', world: worldId });
+        // Where the chat's people stand now and what it has left open (D188), as the panel has them.
+        const cont = continuity ? applyContinuity(r.entry.continuity, continuity, { scene: ADOPTED_ID, at: now }) : r.entry.continuity;
+        putEntry(worldId, { ...r.entry, continuity: cont }, { source: 'adopt', world: worldId });
         log(`${worldId} is played as scenes from "${chatId()}"`, { made: plan.world.made, replaced: plan.replaces, campaign: plan.campaign ? plan.campaign.id : '', backup: kept.file });
-        return { ok: true, reason: '', worldId, worldName: plan.world.name, made: plan.world.made, card: plan.card.name, replaced: plan.replaces, recap: r.scene.recap, backup: kept.file };
+        return { ok: true, reason: '', worldId, worldName: plan.world.name, made: plan.world.made, card: plan.card.name, replaced: plan.replaces, recap: r.scene.recap, backup: kept.file, continuity: continuity ? changeCounts(continuity) : null };
     } catch (e) {
         return { ok: false, reason: 'error', errors: [String(e && e.message || e)] };
     } finally {

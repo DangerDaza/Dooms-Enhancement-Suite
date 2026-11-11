@@ -575,6 +575,36 @@ function applyNamesNow() {
     commit(applyNames(theBook(), names), `${names.length} ${names.length === 1 ? 'land is' : 'lands are'} named. They are still not canon (a dashed border): open one by its badge to rename it, make it canon or delete it.`);
 }
 
+// ─── Where the people stand and the threads, on a record's sheet (D188) ────
+
+/**
+ * What the sheet holds of the continuity now, read from the page: the people as corrected (one whose line was
+ * emptied or crossed out is left as they stood), the new threads as corrected, and the threads still ticked as
+ * settled. Null when the sheet showed none (the record said nothing of either): End then keeps what the record said.
+ */
+function readContinuityFields(shown) {
+    if (!shown) return null;
+    const $p = $(`${root()} .dooms-atlas-setup`);
+    const people = [];
+    $p.find('.dooms-atlas-cont-person').each(function () { const name = String(this.getAttribute('data-name') || ''); const now = String($(this).find('.dooms-atlas-cont-now').val() || '').trim(); if (name && now) people.push({ name, now }); });
+    const opened = [];
+    $p.find('.dooms-atlas-cont-thread.is-new').each(function () { const text = String($(this).find('.dooms-atlas-cont-thread-text').val() || '').trim(); if (text) opened.push({ key: String(this.getAttribute('data-key') || ''), text }); });
+    const closed = [];
+    $p.find('.dooms-atlas-cont-closed:checked').each(function () { closed.push(String($(this).val() || '')); });
+    return { people, opened, closed };
+}
+
+/** The sheet's continuity as the page has it, in the shape the sheet is drawn from (so a redraw keeps what was typed). */
+function continuityShown(shown, read) {
+    if (!shown || !read) return shown;
+    const was = (name) => (shown.people.find(p => p.name === name) || { was: '' }).was;
+    const closed = new Set(read.closed);
+    return { ...shown, people: read.people.map(p => ({ ...p, was: was(p.name) })), opened: read.opened, closed: shown.closed.filter(t => closed.has(t.id)), open: shown.open + shown.closed.filter(t => !closed.has(t.id)).length };
+}
+
+/** What End (or Play as scenes) is handed: the people, the new threads' texts, the ids of the threads settled. */
+const continuityChange = (read) => (read ? { people: read.people, opened: read.opened.map(t => t.text), closed: read.closed } : undefined);
+
 // ─── Starting a scene from a place (D174) ───────────────────────────────────
 
 /** The sheet opened for a marker: who the world last saw there ticked, the time counted from the journey on the map. */
@@ -678,6 +708,7 @@ async function endSceneGo({ thenContinue = false } = {}) {
     const skipCanon = $p.find('.dooms-atlas-end-skip-canon').is(':checked');
     const skipWorld = thenContinue || $p.find('.dooms-atlas-end-skip-world').is(':checked');    // going straight on, no time passes: the world is not moved (D181)
     const replaceMemory = $p.find('.dooms-atlas-end-replace').is(':checked');
+    const cont = readContinuityFields(setup.prep.continuity);    // where the people stand and the threads, as corrected on the sheet (D188)
     // The phrases ticked on the sheet are the ones held against the next scenes (D179); with no count on the sheet, End chooses by itself.
     const counted = setup.prep.style && Array.isArray(setup.prep.style.phrases) ? setup.prep.style.phrases : null;
     const bans = counted ? [] : null;
@@ -686,10 +717,10 @@ async function endSceneGo({ thenContinue = false } = {}) {
     const keep = !!setup.prep.stale && !replaceMemory;
     const steps = setup.prep.steps || {};
     const states = { recap: recap ? 'ok' : 'skipped', canon: steps.canon ? (skipCanon ? 'skipped' : 'waiting') : 'off', world: steps.world ? (keep ? 'kept' : skipWorld ? 'skipped' : 'waiting') : 'off', snapshot: keep ? 'kept' : 'waiting' };
-    setup = { ...setup, prep: { ...setup.prep, recap, ...(counted ? { style: { ...setup.prep.style, phrases: counted.map(h => ({ ...h, ticked: chosen.has(h.phrase) })) } } : {}) }, states, error: '' };
+    setup = { ...setup, prep: { ...setup.prep, recap, continuity: continuityShown(setup.prep.continuity, cont), ...(counted ? { style: { ...setup.prep.style, phrases: counted.map(h => ({ ...h, ticked: chosen.has(h.phrase) })) } } : {}) }, states, error: '' };
     renderSetup();
     const onStep = (name, state) => { if (setup && setup.end) { setup = { ...setup, states: { ...setup.states, [name]: state } }; renderSetup(); } };
-    const r = await commitEnd({ recap, skipRecap: !recap, skipCanon, skipWorld, replaceMemory, onStep, bans });
+    const r = await commitEnd({ recap, skipRecap: !recap, skipCanon, skipWorld, replaceMemory, onStep, bans, continuity: continuityChange(cont) });
     if (!setup || !setup.end) return;
     if (!r.ok) { setup = { ...setup, states: { ...setup.states, snapshot: 'failed' }, error: describeEndResult(r) }; renderSetup(); return; }
     setup = { ...setup, result: r, states: { ...setup.states, canon: r.canon === 'ok' ? 'ok' : r.canon === 'failed' ? 'failed' : setup.states.canon, world: ['ok', 'failed', 'kept', 'skipped'].includes(r.world) ? r.world : setup.states.world, snapshot: r.snapshot === 'kept' ? 'kept' : 'ok' } };
@@ -727,7 +758,7 @@ async function prepareScenes() {
     const r = await prepareAdopt();
     if (!setup || !setup.scenes) return;    // the panel was closed meanwhile
     if (!r.ok) { setup = { ...setup, step: 'ask', plan: r.reason === 'busy' || r.reason === 'changed' ? setup.plan : r, error: r.reason === 'busy' || r.reason === 'changed' ? scenesRefusalText(r) : '' }; renderSetup(); return; }
-    setup = { ...setup, step: 'review', plan: r.plan, recap: r.recap, messages: r.messages, error: r.error ? `The record could not be written (${r.error}). Write a few lines yourself, or leave it empty.` : '' };
+    setup = { ...setup, step: 'review', plan: r.plan, recap: r.recap, messages: r.messages, continuity: r.continuity || null, error: r.error ? `The record could not be written (${r.error}). Write a few lines yourself, or leave it empty.` : '' };
     renderSetup();
 }
 
@@ -736,8 +767,9 @@ async function commitScenes() {
     if (!setup || !setup.scenes || setup.step !== 'review') return;
     const recap = String($(`${root()} .dooms-atlas-scenes-recap`).val() ?? setup.recap);
     const replace = $(`${root()} .dooms-atlas-scenes-replace`).is(':checked');
-    setup = { ...setup, recap, replace };
-    const r = await commitAdopt({ recap, replace });
+    const cont = readContinuityFields(setup.continuity);
+    setup = { ...setup, recap, replace, continuity: continuityShown(setup.continuity, cont) };
+    const r = await commitAdopt({ recap, replace, continuity: continuityChange(cont) || null });
     if (!setup || !setup.scenes) return;
     if (!r.ok) { setup = { ...setup, error: r.reason === 'has-memory' ? 'Tick the box to replace what it remembers.' : scenesRefusalText(r) }; renderSetup(); return; }
     result = `${r.worldName} is played as scenes now.`;
@@ -925,6 +957,8 @@ function build() {
             if (act === 'arm') { const t = model ? model.tray.find(x => x.id === id) : null; arm(t && !(armed && armed.kind === 'place' && armed.id === id) ? { kind: 'place', id, label: t.label } : null); return; }
             if (act === 'roads') { setRoading(!roading); return; }
             if (act === 'add') { if (roading) setRoading(false); arm(armed && armed.kind === 'add' ? null : { kind: 'add' }); $(`${root()} .dooms-atlas-start`).prop('hidden', true); return; }
+            // A person or a new thread crossed off a record's sheet (D188): the row goes; what else was typed stays.
+            if (act === 'cont-drop') { $(this).closest('li').remove(); return; }
             // World gen (D182) and the names of its lands (D186).
             if (act === 'worldgen') { openWorldGen(); return; }
             if (act === 'worldgen-roll') { readWorldGen({ roll: true }); return; }
@@ -1131,7 +1165,7 @@ function build() {
     // The tick that a world's memory may be replaced lights Play as scenes; what was typed in the record is kept.
     $(document).on('change', `${root()} .dooms-atlas-scenes-replace`, function () {
         if (!setup || !setup.scenes) return;
-        setup = { ...setup, replace: $(this).is(':checked'), recap: String($(`${root()} .dooms-atlas-scenes-recap`).val() ?? setup.recap), error: '' };
+        setup = { ...setup, replace: $(this).is(':checked'), recap: String($(`${root()} .dooms-atlas-scenes-recap`).val() ?? setup.recap), continuity: continuityShown(setup.continuity, readContinuityFields(setup.continuity)), error: '' };
         renderSetup();
     });
     $(document).on('change', `${root()} .dooms-atlas-ground-select`, function () { commit(withGround(theBook(), String($(this).val() || ''), layer)); });

@@ -478,10 +478,12 @@ console.log('\n§9 a chat already played, taken as where a campaign\'s scenes be
     const plan = hub.scenesPlan();
     check('what playing it as scenes would do: a new world under the campaign\'s name, the chat\'s card its narrator, nothing replaced', plan.ok && plan.world.made === true && plan.world.id === 'first-descent' && plan.world.name === 'First Descent' && plan.campaign.id === 'camp1' && plan.card.avatar === 'The Redward.png' && plan.replaces === false && plan.scenes === 0, JSON.stringify(plan));
     let asked = null;
-    hub.__setRecapTransport(async (p) => { asked = p; return '{"recap":"The company came up from the Fourth Landing with the inkstone; Kiyoha walked out on her own feet."}'; });
+    hub.__setRecapTransport(async (p) => { asked = p; return '{"recap":"The company came up from the Fourth Landing with the inkstone; Kiyoha walked out on her own feet.","people":[{"name":"Kiyoha","now":"In Hask, on her own feet again; owes Jordan for the carry out."},{"name":"Jordan","now":"never told of"}],"threads":{"closed":[],"opened":["The inkstone has not been assayed yet."]}}'; });
     const prep = await hub.prepareAdopt();
+    check('the same request says where the chat\'s people stand and what it has left open (D188), for the panel to show', prep.ok && /"people": \[\{"name"/.test(asked.system) && same(prep.continuity.people.map(x => x.name), ['Kiyoha']) && same(prep.continuity.opened.map(x => x.text), ['The inkstone has not been assayed yet.']) && prep.continuity.closed.length === 0, JSON.stringify(prep.continuity));
     check('the record of the chat so far is written from its last messages, by one request, and nothing is changed yet', prep.ok && prep.recap.startsWith('The company came up') && prep.error === '' && prep.messages === 9 && asked && asked.user.includes('landing 4') && lw.getWorldState().pack === 'blank' && !('first-descent' in extensionSettings.liveWorld.customPacks) && hub.worldEntry('first-descent') === null, JSON.stringify([prep.ok, prep.error, prep.messages]));
-    const done = await hub.commitAdopt({ recap: prep.recap });
+    const done = await hub.commitAdopt({ recap: prep.recap, continuity: { people: prep.continuity.people.map(x => ({ name: x.name, now: x.now })), opened: prep.continuity.opened.map(x => x.text), closed: [] } });
+    check('taken with them, they are the world\'s first continuity, from scene 0', done.ok && same(done.continuity, { people: 1, opened: 1, closed: 0 }) && hub.worldEntry('first-descent').continuity.people[0].name === 'Kiyoha' && hub.worldEntry('first-descent').continuity.people[0].scene === 's0' && hub.worldEntry('first-descent').continuity.threads[0].text === 'The inkstone has not been assayed yet.', JSON.stringify(hub.worldEntry('first-descent') && hub.worldEntry('first-descent').continuity));
     const now = lw.getWorldState();
     const pack = lw.getActivePack();
     const entry = hub.worldEntry('first-descent');
@@ -811,6 +813,115 @@ console.log('\n§15 going straight on in a fresh chat (D181)');
     hub.__setRecapTransport(null);
     hub.__setOpenersTransport(null);
     hub.__setGapTransport(null);
+}
+
+console.log('\n§16 where the people stand and the open threads: written with the record, kept, told to the next scene (D188)');
+{
+    const W = 'first-descent';
+    extensionSettings.hub.styleLaw = false;
+    const utils = await import(`${DES}/src/utils/hub.js`);
+    let openersAsked = null;
+    hub.__setOpenersTransport(async (p) => { openersAsked = p; return '{"when":{"date":"Day 63","time":"morning"},"openers":[{"title":"a","text":"The lane, again.","who":[]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}'; });
+    const recapsAsked = [];
+    let recapReply = () => '{"recap":"x"}';
+    hub.__setRecapTransport(async (p) => { recapsAsked.push(p); return recapReply(p, recapsAsked.length); });
+    hub.__setGapTransport(async () => '{"elapsed":"a day","now":{"date":"Day 64","time":"dawn"},"clocks":{},"moved":[],"blurb":"x","heard":[]}');
+    const start = async (cast = ['Kiyoha', 'Lysandra']) => { const p = await hub.prepareScene({ worldId: W, place: { label: 'Hask' }, cast, gap: { id: 'now' } }); return p.ok ? { ...(await hub.commitScene(p.token, { choice: 0 })), prep: p } : p; };
+    const cont = () => hub.worldEntry(W).continuity;
+    extensionSettings.hub.worlds[W].continuity = { people: [], threads: [], seq: 0 };    // what §9 took with the chat is set aside: this section starts from none
+    check('a world whose scenes have said nothing of it has no continuity', cont().people.length === 0 && cont().threads.length === 0);
+
+    // A scene: the record's request is asked for the people and the threads too, and its reply is checked.
+    const s1 = await start();
+    check('with nothing to tell, a scene\'s openings and brief say nothing of it', s1.ok && s1.prep.continuity.stand.length === 0 && s1.prep.continuity.threads === 0 && !openersAsked.user.includes('Where they stand now') && !meta.dooms_hub.brief.includes('Where they stand now') && !meta.dooms_hub.brief.includes('Still open'));
+    chat.push(user('We go down.'));
+    chat.push(ai('Kiyoha takes the front. On the Third Landing a stranger, Dagger, is waiting with the Factor\'s key. Lysandra says nothing.'));
+    recapsAsked.length = 0;
+    recapReply = () => JSON.stringify({
+        recap: 'The company went down to the Third Landing and met Dagger, who holds the Factor\'s key.',
+        people: [{ name: 'kiyoha', now: 'On the Third Landing, at the front; trusts Jordan with her back.' }, { name: 'Dagger', now: 'On the Third Landing with the Factor\'s key; has not said whose side he is on.' }, { name: 'Jordan', now: 'never told of' }, { name: 'Ghost', now: 'nobody the scene names' }],
+        threads: { closed: [], opened: ['The Factor will want his key back.', 'Dagger has not said why he came.'] },
+    });
+    const pe = await hub.prepareEnd();
+    check('the record\'s own request asks for them: one request, no other', recapsAsked.length === 1 && /"people": \[\{"name"/.test(recapsAsked[0].system) && /"threads": \{"closed"/.test(recapsAsked[0].system) && /never Jordan/.test(recapsAsked[0].system) && !recapsAsked[0].user.includes('Where they stood before') && !recapsAsked[0].user.includes('Open threads'));
+    check('what it said comes back for the sheet: the people (in the world\'s spelling, the player and a stranger to the scene left out), the threads opened', pe.ok && same(pe.continuity.people.map(p => [p.name, p.was]), [['Kiyoha', ''], ['Dagger', '']]) && same(pe.continuity.opened.map(t => t.text), ['The Factor will want his key back.', 'Dagger has not said why he came.']) && pe.continuity.closed.length === 0 && pe.continuity.open === 0, JSON.stringify(pe.continuity));
+    // The sheet's corrections are what is kept: Kiyoha reworded, Dagger crossed off, one thread reworded.
+    const ce = await hub.commitEnd({ recap: pe.recap, skipCanon: true, skipWorld: true, continuity: { people: [{ name: 'Kiyoha', now: 'On the Third Landing, at the front; trusts Jordan with her back and has said so.' }], opened: ['The Factor will want his key back, and soon.', 'Dagger has not said why he came.'], closed: [] } });
+    check('End keeps what the sheet handed it, and says so', ce.ok && same(ce.continuity, { people: 1, opened: 2, closed: 0 }) && cont().people.length === 1 && cont().people[0].now.endsWith('has said so.') && cont().people[0].scene === hub.currentScene().mark.scene && same(cont().threads.map(t => t.text), ['The Factor will want his key back, and soon.', 'Dagger has not said why he came.']) && /1 person's standing kept, 2 threads opened/.test(utils.describeEndResult(ce)), utils.describeEndResult(ce));
+    check('it is kept with the world in the settings', extensionSettings.hub.worlds[W].continuity.threads.length === 2);
+
+    // The next scene is told: its openings and its brief.
+    const s2 = await start(['Kiyoha', 'Lysandra']);
+    check('the next scene\'s openings are told where its people stand and what is open', s2.ok && openersAsked.user.includes('Where they stand now:\n- Kiyoha: On the Third Landing, at the front; trusts Jordan with her back and has said so\n') && openersAsked.user.includes('Left open by the story so far') && openersAsked.user.includes('- Dagger has not said why he came') && /that is how the story left them/.test(openersAsked.system) && same(s2.prep.continuity, { stand: ['Kiyoha'], threads: 2 }), openersAsked.user.slice(0, 1200));
+    check('and so is its brief, which the narrator has every reply', meta.dooms_hub.brief.includes('Where they stand now: Kiyoha: On the Third Landing, at the front; trusts Jordan with her back and has said so.') && meta.dooms_hub.brief.includes('Still open: Dagger has not said why he came; The Factor will want his key back, and soon.'), meta.dooms_hub.brief);
+
+    // Its record is told where they stood and what was open; with no sheet (the command), what the record said is kept.
+    chat.push(user('We give the key back.'));
+    chat.push(ai('The Factor takes his key without a word. Lysandra laughs for the first time in days. Kiyoha sleeps.'));
+    recapsAsked.length = 0;
+    recapReply = () => JSON.stringify({ recap: 'The key went back to the Factor.', people: [{ name: 'Kiyoha', now: 'Asleep at the stair foot; the debt of the key is off her mind.' }, { name: 'Lysandra', now: 'In Hask, laughing again; her ink is still gone.' }], threads: { closed: [1], opened: ['Lysandra still has no ink.'] } });
+    const ended = await hub.endScene({ skipCanon: true, skipWorld: true });
+    check('a record is told where the scene\'s people stood before it and the threads open before it, numbered', recapsAsked.length === 1 && recapsAsked[0].user.includes('Where they stood before this scene:\n- Kiyoha: On the Third Landing') && recapsAsked[0].user.includes('Open threads:\n1. The Factor will want his key back, and soon.\n2. Dagger has not said why he came.'), recapsAsked[0].user.slice(0, 700));
+    check('with no sheet, what the record said is kept: the people stand anew, the settled thread is gone, the new one is open', ended.ok && same(ended.continuity, { people: 2, opened: 1, closed: 1 }) && cont().people.find(p => p.name === 'Kiyoha').now.startsWith('Asleep at the stair foot') && cont().people.find(p => p.name === 'Lysandra').now.startsWith('In Hask, laughing') && same(cont().threads.map(t => t.text), ['Dagger has not said why he came.', 'Lysandra still has no ink.']), JSON.stringify(cont()));
+
+    // What a prepared End said is this chat's, for this last reply: a reply later, it is not kept unseen.
+    const s3 = await start(['Kiyoha']);
+    chat.push(user('On.'));
+    chat.push(ai('Kiyoha wakes.'));
+    recapReply = () => JSON.stringify({ recap: 'Kiyoha woke.', people: [{ name: 'Kiyoha', now: 'Awake and hungry.' }], threads: { opened: ['Breakfast is owed.'] } });
+    const pe3 = await hub.prepareEnd();
+    chat.push(user('And then?'));
+    chat.push(ai('Nothing yet.'));
+    const ce3 = await hub.commitEnd({ recap: pe3.recap, skipCanon: true, skipWorld: true });
+    check('a record written before the scene went on is not kept unseen once the scene has gone on', s3.ok && pe3.ok && ce3.ok && ce3.continuity === undefined && cont().people.find(p => p.name === 'Kiyoha').now.startsWith('Asleep') && cont().threads.length === 2);
+
+    // A long scene, read in two passes: the second is told how things stand so far, and its numbers are of that list.
+    const s4 = await start(['Kiyoha']);
+    for (let i = 0; i < 26; i++) { chat.push(user(`Step ${i}. ${'We go on down the stair. '.repeat(20)}`)); chat.push(ai(`Kiyoha goes first, step ${i}. ${'The stair goes on down. '.repeat(40)}`)); }
+    recapsAsked.length = 0;
+    recapReply = (p, n) => (n === 1
+        ? JSON.stringify({ recap: 'They went down.', people: [{ name: 'Kiyoha', now: 'Halfway down, tired.' }], threads: { closed: [], opened: ['The lamp oil is running low.'] } })
+        : JSON.stringify({ recap: 'They went down and found oil.', people: [{ name: 'Kiyoha', now: 'At the stair foot, rested.' }], threads: { closed: [3], opened: [] } }));
+    const pe4 = await hub.prepareEnd();
+    check('a long scene is read in passes; the later pass is told how things stand so far, the thread the scene opened numbered with the rest', pe4.ok && pe4.pages >= 2 && recapsAsked.length === pe4.pages && recapsAsked[1].user.includes('Where they stand as of the record so far:\n- Kiyoha: Halfway down, tired.') && recapsAsked[1].user.includes('3. The lamp oil is running low.'), `${pe4.pages} pages; ${recapsAsked.length} asked`);
+    check('what stands at the end is the last pass\'s word; a thread the scene opened and settled leaves no trace', same(pe4.continuity.people.map(p => p.now), ['At the stair foot, rested.']) && pe4.continuity.people[0].was.startsWith('Asleep') && pe4.continuity.opened.length === (pe4.pages > 2 ? pe4.continuity.opened.length : 0) && pe4.continuity.closed.length === 0 && pe4.continuity.open === 2, JSON.stringify(pe4.continuity));
+    const ce4 = await hub.commitEnd({ recap: pe4.recap, skipCanon: true, skipWorld: true });
+    check('ended, the world has it', ce4.ok && cont().people.find(p => p.name === 'Kiyoha').now === 'At the stair foot, rested.' && cont().threads.length === 2);
+
+    // A scene the world has moved past does not overwrite what a later scene left.
+    const old = await start(['Kiyoha']);
+    const oldId = hub.currentScene().mark.scene;
+    chat.push(user('Wait here.'));
+    chat.push(ai('Kiyoha waits.'));
+    await wait(5);
+    check('a scene set aside', hub.setSceneAside(W, oldId) === true || hub.worldEntry(W).scenes.find(x => x.id === oldId).status === 'aside');
+    await wait(5);
+    const later = await start(['Kiyoha']);
+    chat.push(user('Later.'));
+    chat.push(ai('Kiyoha has moved on to the gate.'));
+    recapReply = () => JSON.stringify({ recap: 'Later, at the gate.', people: [{ name: 'Kiyoha', now: 'At the gate, a day on.' }], threads: { opened: [] } });
+    const laterEnd = await hub.endScene({ skipCanon: true, skipWorld: true });
+    const back = await hub.openSceneChat(W, oldId);
+    recapReply = () => JSON.stringify({ recap: 'She waited.', people: [{ name: 'Kiyoha', now: 'Waiting on the stair, a day before.' }], threads: { opened: ['An older thread.'] } });
+    const stalePrep = await hub.prepareEnd();
+    const staleEnd = await hub.commitEnd({ recap: stalePrep.recap, skipCanon: true, skipWorld: true });
+    check('a scene that began before a later one ended keeps the world\'s continuity as the later one left it', old.ok && later.ok && laterEnd.ok && back.ok && stalePrep.ok && stalePrep.stale === true && staleEnd.ok && staleEnd.continuity === undefined && cont().people.find(p => p.name === 'Kiyoha').now === 'At the gate, a day on.' && !cont().threads.some(t => t.text === 'An older thread.'), JSON.stringify([stalePrep.stale, staleEnd.continuity, cont().people]));
+
+    // Going straight on carries it too.
+    const s5 = await start(['Kiyoha']);
+    chat.push(user('On we go.'));
+    chat.push(ai('Kiyoha shoulders her axe.'));
+    recapReply = () => JSON.stringify({ recap: 'On they went.', people: [{ name: 'Kiyoha', now: 'On the road, axe shouldered.' }], threads: { opened: ['The road is watched.'] } });
+    const on = await hub.continueScene({});
+    check('going straight on keeps what the record said, and the scene it opens is told it', s5.ok && on.ok && cont().people.find(p => p.name === 'Kiyoha').now === 'On the road, axe shouldered.' && cont().threads.some(t => t.text === 'The road is watched.') && meta.dooms_hub.brief.includes('Where they stand now: Kiyoha: On the road, axe shouldered') && meta.dooms_hub.brief.includes('The road is watched'), meta.dooms_hub.brief);
+    await hub.endScene({ skipCanon: true, skipWorld: true });
+
+    hub.__setRecapTransport(null);
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+    ctxTarget.characterId = 0;
+    ctxTarget.name2 = 'Mara Vane';
+    await openPlain('Mara Vane - plain five');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

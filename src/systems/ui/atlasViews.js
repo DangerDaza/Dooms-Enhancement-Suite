@@ -226,6 +226,7 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
             <h3>How does ${sceneNo ? `scene ${sceneNo}` : 'the scene'} open?</h3>
             <p>${e(where)}${when ? ` · ${e(when)}` : ''}. Pick one; the other two stay as swipes on the first message.</p>
             ${loreLine(p.lore)}
+            ${contLine(p.continuity)}
             ${err}
             <ul class="dooms-atlas-openers">${openers || '<li class="dooms-atlas-none">No opening was written. Write your own below, or ask again.</li>'}</ul>
             <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">Or write the opening yourself</span>
@@ -271,6 +272,16 @@ const sceneNoOf = (id) => String(id || '').replace(/^s/, '');
 const listOf = (names) => (names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
 
 /** Whose lorebook entries the openings were written with, and who had none (D177); '' when no lorebook was read. */
+/** What the openings were told of how things stand (D188): whose standing, and how many open threads. */
+function contLine(c) {
+    const k = c && typeof c === 'object' ? c : null;
+    const stand = k && Array.isArray(k.stand) ? k.stand : [];
+    const threads = k && Number.isFinite(k.threads) ? k.threads : 0;
+    if (!stand.length && !threads) return '';
+    const parts = [stand.length ? `where ${e(listOf(stand))} ${stand.length === 1 ? 'stands' : 'stand'} now` : '', threads ? `${threads} open ${threads === 1 ? 'thread' : 'threads'}` : ''].filter(Boolean);
+    return `<p class="dooms-atlas-start-note"><i class="fa-solid fa-link" aria-hidden="true"></i> Told ${parts.join(' and ')}, as the scenes before left them.</p>`;
+}
+
 function loreLine(lore) {
     const l = lore && typeof lore === 'object' ? lore : null;
     if (!l || !Array.isArray(l.books) || !l.books.length) return '';
@@ -281,6 +292,50 @@ function loreLine(lore) {
     else if (l.standing) parts.push("Written with the story's standing notes.");
     if (missing.length) parts.push(`No entry was found for ${e(listOf(missing))}: the opening has only a line about ${missing.length === 1 ? 'them' : 'each'}. An entry whose title begins with the name, or that has the name among its keywords, is found.`);
     return parts.length ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-book" aria-hidden="true"></i> ${parts.join(' ')}</p>` : '';
+}
+
+/**
+ * Where the people stand and the threads, on a record's sheet (D188):
+ * what the record's request said of each person it spoke of, the threads
+ * it opened and the ones it settled, each to be corrected or left out
+ * before it is kept. Nothing when the record said nothing of either.
+ * @param {{ people: Array<{ name: string, now: string, was: string }>, opened: Array<{ key: string, text: string }>, closed: Array<{ id: string, text: string }>, open: number }|null} c  draftChanges()
+ * @param {object} o
+ * @param {boolean} o.locked  the sheet is running or done: nothing can be changed
+ * @param {string} o.next     who is told: "the next scene" or "the first scene"
+ */
+export function continuityFieldsHtml(c, { locked = false, next = 'the next scene' } = {}) {
+    const k = c && typeof c === 'object' ? c : null;
+    const people = k && Array.isArray(k.people) ? k.people : [];
+    const opened = k && Array.isArray(k.opened) ? k.opened : [];
+    const closed = k && Array.isArray(k.closed) ? k.closed : [];
+    const open = k && Number.isFinite(k.open) ? k.open : 0;
+    if (!people.length && !opened.length && !closed.length) return '';
+    const off = locked ? ' disabled' : '';
+    const ro = locked ? ' readonly' : '';
+    const person = (p) => `<li class="dooms-atlas-cont-person" data-name="${attr(p.name)}">
+            <label class="dooms-atlas-cont-row"><span class="dooms-atlas-cont-name">${e(p.name)}</span>
+                <textarea class="dooms-atlas-input dooms-atlas-cont-now" maxlength="320" rows="2" aria-label="Where ${attr(p.name)} stands now"${ro}>${e(p.now)}</textarea></label>
+            ${locked ? '' : `<button type="button" class="dooms-atlas-icon-btn" data-act="cont-drop" title="Leave ${attr(p.name)} ${p.was ? 'as they stood before' : 'out'}" aria-label="Leave ${attr(p.name)} ${p.was ? 'as they stood before' : 'out'}"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>`}
+            ${p.was ? `<p class="dooms-atlas-fill-note dooms-atlas-cont-was">Before: ${e(p.was)}</p>` : ''}
+        </li>`;
+    const fresh = (t) => `<li class="dooms-atlas-cont-thread is-new" data-key="${attr(t.key)}">
+            <span class="dooms-atlas-cont-tag">new</span>
+            <input type="text" class="dooms-atlas-input dooms-atlas-cont-thread-text" maxlength="180" value="${attr(t.text)}" aria-label="A thread left open"${ro} />
+            ${locked ? '' : '<button type="button" class="dooms-atlas-icon-btn" data-act="cont-drop" title="Not a thread: leave it out" aria-label="Leave this thread out"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>'}
+        </li>`;
+    const settled = (t) => `<li class="dooms-atlas-cont-thread is-closed"><label class="dooms-atlas-check"><input type="checkbox" class="dooms-atlas-cont-closed" value="${attr(t.id)}" checked${off} /> <span><span class="dooms-atlas-cont-tag">settled</span> ${e(t.text)}</span></label></li>`;
+    const threadCount = opened.length + closed.length;
+    return `${people.length ? `<fieldset class="dooms-atlas-scene-field dooms-atlas-cont">
+            <legend class="dooms-atlas-card-label">Where they stand now</legend>
+            <ul class="dooms-atlas-cont-list dooms-atlas-cont-people">${people.map(person).join('')}</ul>
+            <p class="dooms-atlas-start-note">${e(next.charAt(0).toUpperCase() + next.slice(1))} is told this of whoever is in it. Correct what is wrong; the cross leaves someone as they stood before.</p>
+        </fieldset>` : ''}
+        ${threadCount || open ? `<fieldset class="dooms-atlas-scene-field dooms-atlas-cont">
+            <legend class="dooms-atlas-card-label">Threads</legend>
+            ${threadCount ? `<ul class="dooms-atlas-cont-list dooms-atlas-cont-threads">${opened.map(fresh).join('')}${closed.map(settled).join('')}</ul>` : ''}
+            <p class="dooms-atlas-start-note">${opened.length ? 'A new thread is something left unsettled that the story should come back to. ' : ''}${closed.length ? 'Untick one that is not settled after all: it stays open. ' : ''}${open ? `${open} ${open === 1 ? 'other thread stays' : 'other threads stay'} open from before.` : ''}</p>
+        </fieldset>` : ''}`;
 }
 
 /**
@@ -328,6 +383,7 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
         <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What happened${busy ? ' (being written…)' : ''}</span>
             <textarea class="dooms-atlas-input dooms-atlas-setup-notes dooms-atlas-end-recap" maxlength="1500" placeholder="${busy ? 'The record of the scene is being written…' : 'What happened in this scene, in a few lines. The next scene is told this.'}"${done || busy ? ' readonly' : ''}>${prep && prep.recap ? e(prep.recap) : ''}</textarea></label>
         ${prep && prep.error ? `<p class="dooms-atlas-setup-error" role="alert">The record could not be written (${e(prep.error)}). Write it yourself, or end without one.</p>` : ''}
+        ${continuityFieldsHtml(prep && prep.continuity, { locked: done || running || busy })}
         ${stale}
         ${habits}
         <ul class="dooms-atlas-parts">
@@ -405,7 +461,7 @@ export function scenesRefusalText(plan) {
  * @param {boolean} o.replace  the player ticked that the memory may be replaced
  * @param {object|null} o.result  commitAdopt()'s answer, for the last step
  */
-export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error = '', replace = false, result = null, messages = 0 } = {}) {
+export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error = '', replace = false, result = null, messages = 0, continuity = null } = {}) {
     const p = plan && typeof plan === 'object' ? plan : { ok: false, reason: '' };
     const close = '<button type="button" class="dooms-atlas-btn" data-act="setup-close">Not now</button>';
     if (!p.ok && step !== 'done') return `<div class="dooms-atlas-setup-card is-scenes"><h3>Play this story as scenes</h3><p class="dooms-atlas-setup-error" role="alert">${e(scenesRefusalText(p))}</p><div class="dooms-atlas-setup-actions"><button type="button" class="dooms-atlas-btn" data-act="setup-close">Close</button></div></div>`;
@@ -432,6 +488,7 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
             <h3>Play ${e(world)} as scenes</h3>
             <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What has happened so far (the first scene is told this)</span>
                 <textarea class="dooms-atlas-input dooms-atlas-setup-notes dooms-atlas-scenes-recap" maxlength="1500" placeholder="A few lines on where the story stands. It can be left empty.">${e(recap)}</textarea></label>
+            ${continuityFieldsHtml(continuity, { next: 'the first scene' })}
             ${err}
             ${warn}
             ${p.replaces ? `<label class="dooms-atlas-check"><input type="checkbox" class="dooms-atlas-scenes-replace"${replace ? ' checked' : ''} /> <span>Replace what ${e(world)} remembers with this chat</span></label>` : ''}
@@ -461,7 +518,7 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
             <button type="button" class="dooms-atlas-btn is-primary" data-act="scenes-prepare"><i class="fa-solid fa-feather" aria-hidden="true"></i> <span>Write the record of this chat so far</span></button>
             ${close}
         </div>
-        <p class="dooms-atlas-start-note">One request on the tracker's connection reads the last forty messages${messages ? ` of ${messages}` : ''} and writes a few lines on where the story stands. You read and correct them before anything is changed.</p>
+        <p class="dooms-atlas-start-note">One request on the tracker's connection reads the last forty messages${messages ? ` of ${messages}` : ''} and writes a few lines on where the story stands, where the people in it stand and what it has left open. You read and correct them before anything is changed.</p>
     </div>`;
 }
 

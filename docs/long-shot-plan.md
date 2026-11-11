@@ -712,3 +712,33 @@ right, and it is so now.
 | # | Decision | What it means |
 | --- | --- | --- |
 | D187 | A generated world's map reads at a world's scale; a region on it reads at the scale its map does | `scaleOf`: with a world under it the top map is "A world" (60 miles a unit: a medium world is about 3,850 by 2,650 miles, a land some 600 across) unless the player chose another scale for it, which still wins. A region that stands on a generated world reads at the top map's scale and not at a region's own (15 miles a unit), so a land is as wide inside as it is on the world's map and a journey across it takes the same time on either (D166's rule, kept). A scale chosen by hand for a region's own map still wins; a place inside a region is a town as before. Taking ship still costs a day's travel (D185): at a world's scale that is 24 miles' worth, small beside a sea and enough to keep a boat off a pond. A map with no world measures as it did |
+
+## 28. End, step 1: where each person stands, and the open threads (2026-11-11, D188)
+
+The owner, offered the rest of End or rivers and climates for the world
+gen: "yes start on End step 1". Against his own chat-to-canon run (§16)
+End lacked where each character stands now and the open threads: a
+scene's record says what happened; these say how things stand because of
+it. Built in "Atlas 28".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D188 | The request that writes a scene's record also says where each person stands and which threads it settled and opened; they are corrected on the End sheet, kept with the world and told to the next scene | **No request of its own.** `buildRecapPrompt` asks for `{"recap", "people": [{"name", "now"}], "threads": {"closed": [numbers], "opened": [texts]}}`: "now" is at most 280 characters on where the person is, what state they are in, how they stand with the player and the others and what they want, owe or have promised next; the request is given where the scene's people stood before it and the open threads, numbered, so a standing is carried forward and changed, not written from nothing, and a thread is settled by its number. A record written in passes carries both from pass to pass (the later pass is told how things stand so far; a thread the scene opened and settled leaves no trace). **Checked in code** (`readContinuity`): never the player; a name is one the world knows (in its own spelling) or one the scene's text has; a thread is not one already open; at most twelve people and eight new threads a scene. **The End sheet** shows each person the record spoke of with where they stood before, the threads opened and the ones settled: a line is corrected, a person or a thread crossed off (the person stays as they stood), a settled thread unticked (it stays open). What the sheet has is what is kept; an End with no sheet (the command, Continue fresh, the old Hub window) keeps what the record said, when it was written for that chat and that last reply. **Kept** in `extensionSettings.hub.worlds[id].continuity` (`{ people: [{ name, now, scene, at }], threads: [{ id, text, scene, at }] }`, sixty people and forty open threads at the most), made safe with the rest of the entry. Like the memory, a scene the world has moved past does not overwrite what a later scene left. **Told to the next scene:** its openings get "Where they stand now" for the people in it (as how the story left them, holding over older notes) and the open threads (to pick up or not); its brief, which the narrator has every reply, gets "Where they stand now" after "Who is here" and "Still open" (the six newest) after the record. The brief may now be 3,600 characters (it was 2,500); cut for room, the older records and the threads go before where the people stand. **Play as scenes** asks the same of the chat's last messages and its panel shows them, so a world starts with a continuity |
+
+Pure: `src/utils/continuity.js` (the store, the draft a record is asked
+with, the reply read, the change kept, what a scene is told),
+`tools/continuity-test.mjs`; the record's request and the brief in
+`src/utils/hub.js` (`tools/hub-test.mjs` §8e); End, Start, the handover
+and Play as scenes in `src/systems/features/hub.js`
+(`tools/hub-flow-test.mjs` §9, §16); the sheet's fields in `atlasViews.js`
+(`continuityFieldsHtml`; `tools/atlas-browser-test.mjs` §5i).
+
+What it is not, yet: it is not a lorebook (step 2, D170: until then it
+is seen only on the End sheet and in what the next scene is told, and a
+person's standing reaches a scene only when they are in its cast, not
+when their name comes up); a standing is rewritten whole each time it is
+told, so a fact the record drops is gone from it (the ledger and the
+lorebook entry are where hard facts live); nothing can be added by hand
+that the record did not say; contradictions are not put to the player
+(step 3). Not run in a real SillyTavern: the request's reply is a
+stand-in in every test.
