@@ -25,8 +25,17 @@
  *   OpenRouter) or saved in SillyTavern's "Custom OpenAI TTS" slot (through
  *   SillyTavern's OpenAI Compatible route).
  */
+import { pcm16ToWav, sampleRateFromMime } from './wav.js';
 
 export const OPENROUTER_SPEECH_URL = 'https://openrouter.ai/api/v1/audio/speech';
+
+/**
+ * The audio format DES asks OpenRouter for. Gemini TTS answers raw PCM and
+ * nothing else: asked for mp3, OpenRouter refuses the request with a 400
+ * ('Gemini TTS only supports response_format="pcm"'). The answer is 16-bit
+ * little-endian mono, which openRouterAudio wraps as a WAV file to play.
+ */
+export const OPENROUTER_FORMAT = 'pcm';
 
 /** SillyTavern secret slots DES looks at. */
 export const ST_SECRET = Object.freeze({
@@ -100,12 +109,48 @@ export function openRouterBody({ text, voiceId, model, style }) {
         model: openRouterModel(model),
         input: String(text || ''),
         voice: voiceId,
-        response_format: 'mp3',
+        response_format: OPENROUTER_FORMAT,
     };
     if (style) {
         body.provider = { options: { 'google-ai-studio': { speech_metadata: { style } } } };
     }
     return body;
+}
+
+/** A file's own type, read from its first bytes; '' for bytes that carry no header, which is what raw PCM is. */
+export function audioSignature(bytes) {
+    const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(0);
+    const at = (offset, word) => b.length >= offset + word.length && [...word].every((ch, i) => b[offset + i] === ch.charCodeAt(0));
+    if (at(0, 'RIFF') && at(8, 'WAVE')) return 'audio/wav';
+    if (at(0, 'ID3')) return 'audio/mpeg';
+    if (at(0, 'OggS')) return 'audio/ogg';
+    if (at(0, 'fLaC')) return 'audio/flac';
+    return '';
+}
+
+/**
+ * OpenRouter's answer as audio a browser can play. DES asks for raw PCM
+ * (OPENROUTER_FORMAT), so bytes with no header of their own are 16-bit
+ * little-endian mono samples and are wrapped as a WAV file: at the rate
+ * the Content-Type names when it names one, else Gemini's 24 kHz. A file
+ * that names itself (a WAV, an MP3 with its tag, Ogg, FLAC) is played as
+ * what it is.
+ *
+ * The Content-Type counts only when the answer came straight from
+ * OpenRouter (`direct`): SillyTavern's server route marks everything it
+ * relays "audio/mpeg" whatever it is, so there the bytes alone decide.
+ * @param {Uint8Array} bytes
+ * @param {string} contentType  the response's Content-Type
+ * @param {{ direct?: boolean }} [o]
+ * @returns {{ bytes: Uint8Array, type: string }}
+ */
+export function openRouterAudio(bytes, contentType = '', { direct = false } = {}) {
+    const own = audioSignature(bytes);
+    if (own) return { bytes, type: own };
+    const named = String(contentType || '').split(';')[0].trim().toLowerCase();
+    // A compressed type OpenRouter itself names (a model that answers mp3 whatever is asked): played as it says.
+    if (direct && /^audio\/(mpeg|mp3|mp4|aac|ogg|opus|webm|flac|wav|wave|x-wav)$/.test(named)) return { bytes, type: named };
+    return { bytes: pcm16ToWav(bytes, sampleRateFromMime(contentType)), type: 'audio/wav' };
 }
 
 /**

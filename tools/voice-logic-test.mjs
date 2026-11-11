@@ -562,9 +562,65 @@ test('connections: the OpenRouter request', () => {
     assert.equal(conn.openRouterModel('gemini-3.8-flash-tts'), 'google/gemini-3.8-flash-tts');
     assert.equal(conn.openRouterModel('hexgrad/kokoro-82m'), 'hexgrad/kokoro-82m');
     assert.deepEqual(conn.openRouterBody({ text: 'Hi.', voiceId: 'Kore', model: 'gemini-3.8-flash-lite-tts', style: '' }),
-        { model: 'google/gemini-3.8-flash-lite-tts', input: 'Hi.', voice: 'Kore', response_format: 'mp3' });
+        { model: 'google/gemini-3.8-flash-lite-tts', input: 'Hi.', voice: 'Kore', response_format: 'pcm' });
     const styled = conn.openRouterBody({ text: 'Hi.', voiceId: 'Kore', model: 'gemini-3.8-flash-lite-tts', style: 'calm' });
     assert.deepEqual(styled.provider, { options: { 'google-ai-studio': { speech_metadata: { style: 'calm' } } } });
+    assert.equal(styled.response_format, 'pcm');
+    assert.equal(conn.OPENROUTER_FORMAT, 'pcm', 'Gemini TTS answers raw PCM only: OpenRouter refuses mp3 for it');
+});
+
+test('connections: OpenRouter\'s raw PCM is wrapped as a WAV a browser can play', () => {
+    const text = (bytes, from, to) => String.fromCharCode(...bytes.slice(from, to));
+    const pcm = new Uint8Array([0, 0, 255, 127, 0, 128, 52, 18]);    // four 16-bit little-endian samples
+    // Straight from OpenRouter, marked as its docs say: audio/pcm.
+    const direct = conn.openRouterAudio(pcm, 'audio/pcm', { direct: true });
+    const view = new DataView(direct.bytes.buffer);
+    assert.equal(direct.type, 'audio/wav');
+    assert.equal(text(direct.bytes, 0, 4), 'RIFF');
+    assert.equal(text(direct.bytes, 8, 12), 'WAVE');
+    assert.equal(view.getUint16(22, true), 1, 'mono');
+    assert.equal(view.getUint32(24, true), 24000, 'Gemini\'s rate when the type names none');
+    assert.equal(view.getUint16(34, true), 16, '16 bits a sample');
+    assert.equal(view.getUint32(40, true), 8, 'every sample kept');
+    assert.deepEqual([...direct.bytes.slice(44)], [...pcm], 'the samples as they came, little-endian');
+    // Through SillyTavern's server route every answer is marked audio/mpeg: the bytes decide, and these are PCM.
+    const relayed = conn.openRouterAudio(pcm, 'audio/mpeg', { direct: false });
+    assert.equal(relayed.type, 'audio/wav');
+    assert.deepEqual([...relayed.bytes], [...direct.bytes]);
+    // A rate the type names is the rate of the file.
+    assert.equal(new DataView(conn.openRouterAudio(pcm, 'audio/pcm;rate=16000', { direct: true }).bytes.buffer).getUint32(24, true), 16000);
+    // No type at all (a proxy dropped it): still PCM, since that is what was asked for.
+    assert.equal(conn.openRouterAudio(pcm, '', { direct: true }).type, 'audio/wav');
+    // An odd byte at the end is half a sample: it is dropped, not played as noise.
+    assert.equal(new DataView(conn.openRouterAudio(new Uint8Array([1, 2, 3]), 'audio/pcm', { direct: true }).bytes.buffer).getUint32(40, true), 2);
+});
+
+test('connections: an answer that is already a file is played as what it is', () => {
+    const bytes = (s, pad = 16) => new Uint8Array([...[...s].map(c => c.charCodeAt(0)), ...new Array(pad).fill(0)]);
+    const wavFile = bytes('RIFF\0\0\0\0WAVEfmt ');
+    assert.equal(conn.audioSignature(wavFile), 'audio/wav');
+    assert.equal(conn.audioSignature(bytes('ID3\x04')), 'audio/mpeg');
+    assert.equal(conn.audioSignature(bytes('OggS')), 'audio/ogg');
+    assert.equal(conn.audioSignature(bytes('fLaC')), 'audio/flac');
+    assert.equal(conn.audioSignature(new Uint8Array([0, 0, 255, 127])), '', 'raw samples carry no header');
+    assert.equal(conn.audioSignature(bytes('RIFF\0\0\0\0AVI ')), '', 'a RIFF file that is not a WAV');
+    assert.equal(conn.audioSignature(new Uint8Array(0)), '');
+    assert.equal(conn.audioSignature(null), '');
+    // A WAV is not wrapped a second time, whichever way it came and whatever it was marked.
+    for (const direct of [true, false]) {
+        const out = conn.openRouterAudio(wavFile, 'audio/mpeg', { direct });
+        assert.equal(out.type, 'audio/wav');
+        assert.equal(out.bytes, wavFile, 'the same bytes, untouched');
+    }
+    // An MP3 with its tag is an MP3 even through SillyTavern's route.
+    assert.equal(conn.openRouterAudio(bytes('ID3\x04'), 'audio/mpeg', { direct: false }).type, 'audio/mpeg');
+    // Straight from OpenRouter, a compressed type it names itself is believed (an MP3 with no tag has no signature to go by).
+    const bare = new Uint8Array([0xff, 0xfb, 0x90, 0x00, 1, 2, 3, 4]);
+    const mp3 = conn.openRouterAudio(bare, 'audio/mpeg', { direct: true });
+    assert.equal(mp3.type, 'audio/mpeg');
+    assert.equal(mp3.bytes, bare);
+    // The same bytes relayed by SillyTavern are taken for the PCM that was asked for: its "audio/mpeg" says nothing.
+    assert.equal(conn.openRouterAudio(bare, 'audio/mpeg', { direct: false }).type, 'audio/wav');
 });
 
 test('connections: OpenRouter errors map to DES error kinds', () => {

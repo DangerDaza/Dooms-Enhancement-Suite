@@ -43,6 +43,10 @@ function silentWav(ms = 150) {
   h.writeUInt32LE(sr * 2, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(data.length, 40);
   return Buffer.concat([h, data]);
 }
+/** Raw 16-bit little-endian mono samples with no header: what Gemini TTS answers through OpenRouter. */
+function silentPcm(ms = 150) {
+  return Buffer.alloc(Math.floor(24000 * ms / 1000) * 2);
+}
 const DES = '/scripts/extensions/third-party/Dooms-Enhancement-Suite';
 
 /** A 440 Hz tone as 44.1 kHz STEREO WAV (the clone wizard must resample it to 24 kHz mono). */
@@ -962,12 +966,18 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     orCalls.push({ auth: req.headers()['authorization'], body: JSON.parse(req.postData() || '{}') });
     if (orMode === 'cors') return route.abort('failed');
     if (orMode === 'credits') return route.fulfill({ status: 402, headers: orCors, contentType: 'application/json', body: JSON.stringify({ error: { code: 402, message: 'Insufficient credits. Add more using https://openrouter.ai/credits' } }) });
-    return route.fulfill({ status: 200, headers: { ...orCors, 'content-type': 'audio/wav' }, body: silentWav() });
+    // As OpenRouter answers for Gemini TTS: raw PCM only, anything else refused (the 3.2.0-beta.1 report).
+    const asked = orCalls[orCalls.length - 1].body.response_format;
+    if (asked !== 'pcm') return route.fulfill({ status: 400, headers: orCors, contentType: 'application/json', body: JSON.stringify({ error: { code: 400, message: `Gemini TTS only supports response_format="pcm". Got "${asked}".` } }) });
+    return route.fulfill({ status: 200, headers: { ...orCors, 'content-type': 'audio/pcm' }, body: silentPcm() });
   });
   let stCustomCalls = [];
   await page.route('**/api/openai/custom/generate-voice', async (route) => {
-    stCustomCalls.push(JSON.parse(route.request().postData() || '{}'));
-    return route.fulfill({ status: 200, contentType: 'audio/mpeg', body: silentWav() });
+    const body = JSON.parse(route.request().postData() || '{}');
+    stCustomCalls.push(body);
+    // As SillyTavern relays it: OpenRouter's refusal as a 500 with its text; the audio marked audio/mpeg whatever it is.
+    if (body.response_format !== 'pcm') return route.fulfill({ status: 500, contentType: 'text/plain', body: JSON.stringify({ error: { code: 400, message: `Gemini TTS only supports response_format="pcm". Got "${body.response_format}".` } }) });
+    return route.fulfill({ status: 200, contentType: 'audio/mpeg', body: silentPcm() });
   });
   const voicesSet = (patch) => page.evaluate(async ({ DES, patch }) => {
     const st = await import(`${DES}/src/core/state.js`);
@@ -1024,13 +1034,13 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     assert.strictEqual(orCalls[0].auth, 'Bearer sk-or-e2e');
     assert.strictEqual(orCalls[0].body.model, 'google/gemini-3.8-flash-lite-tts');
     assert.strictEqual(orCalls[0].body.voice, 'Kore');
-    assert.strictEqual(orCalls[0].body.response_format, 'mp3');
+    assert.strictEqual(orCalls[0].body.response_format, 'pcm', 'Gemini TTS answers raw PCM only');
   });
   check('OpenRouter: the delivery note rides in Google\'s provider options', () => {
     assert.strictEqual(orCalls[0].body.provider?.options?.['google-ai-studio']?.speech_metadata?.style, 'clear, natural speaking voice at a normal, steady volume');
   });
   const orPlayed = await page.evaluate(() => { const a = document.getElementById('dooms-tts-audio'); return a && a.error ? 'error ' + a.error.code : 'ok'; });
-  check('OpenRouter audio plays', () => assert.strictEqual(orPlayed, 'ok'));
+  check('OpenRouter audio plays: the raw PCM it answers with is wrapped as a WAV', () => assert.strictEqual(orPlayed, 'ok'));
 
   // "Gemini voices via: Google" but no Google connection → OpenRouter is used anyway.
   await page.route('**/api/secrets/read', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
@@ -1081,7 +1091,10 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     assert.strictEqual(b.model, 'google/gemini-3.8-flash-lite-tts');
     assert.strictEqual(b.voice, 'Kore');
     assert.match(b.input, /OpenRouter line/);
+    assert.strictEqual(b.response_format, 'pcm', 'the server route asks for raw PCM too');
   });
+  const stPlayed = await page.evaluate(() => { const a = document.getElementById('dooms-tts-audio'); return a && a.error ? 'error ' + a.error.code : 'ok'; });
+  check('…and the raw PCM that route relays (marked audio/mpeg by SillyTavern) plays', () => assert.strictEqual(stPlayed, 'ok'));
   stCustomCalls = []; orCalls = [];
   await sayKore();
   check('…and stays on the server route without retrying the browser each line', () => { assert.strictEqual(orCalls.length, 0); assert.strictEqual(stCustomCalls.length, 1); });
