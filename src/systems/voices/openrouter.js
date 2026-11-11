@@ -32,8 +32,10 @@ import { extensionSettings } from '../../core/state.js';
 import { TtsError, fetchWithTimeout, timeoutFor } from './transport.js';
 import {
     OPENROUTER_SPEECH_URL,
+    OPENROUTER_FORMAT,
     ST_SECRET,
     openRouterBody,
+    openRouterAudio,
     openRouterModel,
     classifyOpenRouterError,
     isStyleComplaint,
@@ -98,15 +100,21 @@ async function errorFrom(response) {
     return err;
 }
 
-async function audioFrom(response) {
-    const blob = await response.blob();
-    if (!blob || blob.size === 0) {
+/**
+ * The answer as a blob the player can play. Gemini TTS answers raw PCM,
+ * which no browser plays as it is: it is wrapped as a WAV file here
+ * (connections.js openRouterAudio). `direct` says the answer came straight
+ * from OpenRouter, so its Content-Type can be believed.
+ */
+async function audioFrom(response, { direct = false } = {}) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.length === 0) {
         const err = new TtsError('content', 'OpenRouter returned no audio', response.status);
         err.provider = 'openrouter';
         throw err;
     }
-    // OpenRouter answers mp3 bytes; some proxies drop the type.
-    return blob.type && blob.type.startsWith('audio/') ? blob : new Blob([blob], { type: 'audio/mpeg' });
+    const audio = openRouterAudio(bytes, response.headers?.get?.('content-type') || '', { direct });
+    return new Blob([audio.bytes], { type: audio.type });
 }
 
 async function viaBrowser({ text, voiceId, model, style, signal, key }) {
@@ -117,7 +125,7 @@ async function viaBrowser({ text, voiceId, model, style, signal, key }) {
             body: JSON.stringify(openRouterBody({ text, voiceId, model, style: withStyle ? style : '' })),
         }, signal, 'Couldn’t reach OpenRouter from the browser', timeoutFor(text));
         if (!response.ok) throw await errorFrom(response);
-        return audioFrom(response);
+        return audioFrom(response, { direct: true });
     };
     const withStyle = !!style && !styleRejected;
     try {
@@ -139,15 +147,15 @@ async function viaServer({ text, voiceId, model, signal }) {
         body: JSON.stringify({
             input: text,
             provider_endpoint: OPENROUTER_SPEECH_URL,
-            response_format: 'mp3',
+            response_format: OPENROUTER_FORMAT,
             voice: voiceId,
             speed: 1,
             model: openRouterModel(model),
         }),
     }, signal, 'Couldn’t reach SillyTavern', timeoutFor(text));
-    // SillyTavern relays OpenRouter's error text with a 500.
+    // SillyTavern relays OpenRouter's error text with a 500, and marks the audio it relays "audio/mpeg" whatever it is.
     if (!response.ok) throw await errorFrom(response);
-    return audioFrom(response);
+    return audioFrom(response, { direct: false });
 }
 
 /**
