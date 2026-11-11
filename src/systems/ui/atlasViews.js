@@ -1052,7 +1052,13 @@ export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', 
             : 'Between scenes: the world as it stands now, not as this chat left it.')
         : '';
     const tabs = shown.map(t => `<button type="button" class="dooms-atlas-tab${t.id === active ? ' is-active' : ''}" data-act="tab" data-tab="${t.id}" role="tab" aria-selected="${t.id === active ? 'true' : 'false'}" title="${attr(t.label)}"><i class="fa-solid ${t.icon}" aria-hidden="true"></i><span>${e(t.label)}</span></button>`).join('');
+    // On a phone the sidebar is the whole screen (D196): the head carries the way to the map and the way out. Hidden on a wider screen, where the map's own tools are in sight.
+    const headTools = `<div class="dooms-atlas-head-tools">
+                <button type="button" class="dooms-atlas-tool" data-act="fold" title="Show the map" aria-label="Show the map"><i class="fa-solid fa-map" aria-hidden="true"></i></button>
+                <button type="button" class="dooms-atlas-tool is-close" data-act="close" title="Close the Atlas" aria-label="Close the Atlas"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            </div>`;
     return `<header class="dooms-atlas-head">
+            ${headTools}
             <h2 class="dooms-atlas-title">${e(name || 'The world')}</h2>
             <p class="dooms-atlas-sub">${when ? e(when) : 'No date in the tracker yet'}${facts.weather ? ` · ${e(facts.weather)}` : ''}</p>
             ${facts.location ? `<p class="dooms-atlas-sub is-place"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> ${e(facts.location)}</p>` : ''}

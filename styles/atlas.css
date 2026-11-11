@@ -31,16 +31,34 @@
     --atlas-plains: rgba(150, 168, 96, 0.22);
     --atlas-map-font: 'Palatino Linotype', 'Book Antiqua', Palatino, 'Iowan Old Style', Georgia, serif;
     --atlas-side-w: 340px;
-    position: fixed; inset: 0; z-index: 10010; display: none; background: var(--atlas-bg); color: var(--atlas-text);
+    /* Nothing behind the Atlas shows through it (D196). A look's panel and ground are see-through by design (Lumen's
+       glass; any theme whose tint is), and they are laid over a solid colour here: the theme's own, made opaque where
+       the browser can do that, else a dark one. Every surface that used the panel or the ground paints with these. */
+    --atlas-solid: #14141c;
+    --atlas-bg-paint: linear-gradient(var(--atlas-bg), var(--atlas-bg)), var(--atlas-solid);
+    --atlas-panel-paint: linear-gradient(var(--atlas-panel), var(--atlas-panel)), var(--atlas-solid);
+    /* The whole screen, by name (D196): on a phone SillyTavern's layout can leave a fixed window's containing block
+       short or empty, and "inset: 0" alone then is not the screen (the Workshop's rule, styles/modals.css). */
+    position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; z-index: 10010; display: none; background: var(--atlas-bg-paint); color: var(--atlas-text);
     font-size: 15px; line-height: 1.4;
+}
+@supports (color: rgb(from red r g b / 1)) {
+    #dooms-atlas {
+        --atlas-solid: rgb(from var(--ui-bg, var(--rpg-bg, #14141c)) r g b / 1);
+        /* What is written on the accent (a primary button, "You are here") is mixed from the theme's tint too: see-through with it, and then it cannot be read on the accent. */
+        --atlas-on-accent: rgb(from var(--ov-on-accent, #fff) r g b / 1);
+    }
 }
 #dooms-atlas.is-open { display: flex; }
 #dooms-atlas * { box-sizing: border-box; }
 
 /* ── The sidebar ── */
-.dooms-atlas-side { flex: 0 0 var(--atlas-side-w); width: var(--atlas-side-w); min-width: 0; height: 100%; display: flex; flex-direction: column; background: var(--atlas-panel); border-right: 1px solid var(--atlas-line); z-index: 2; }
+.dooms-atlas-side { flex: 0 0 var(--atlas-side-w); width: var(--atlas-side-w); min-width: 0; height: 100%; display: flex; flex-direction: column; background: var(--atlas-panel-paint); border-right: 1px solid var(--atlas-line); z-index: 2; }
 #dooms-atlas.is-folded .dooms-atlas-side { display: none; }
-.dooms-atlas-head { flex: 0 0 auto; padding: 16px 16px 10px; border-bottom: 1px solid var(--atlas-line); }
+.dooms-atlas-head { position: relative; flex: 0 0 auto; padding: 16px 16px 10px; border-bottom: 1px solid var(--atlas-line); }
+/* On a phone the sidebar is the whole screen, so the map's own tools are under it: the head carries the two that are needed there. */
+.dooms-atlas-head-tools { display: none; position: absolute; top: 10px; right: 10px; gap: 6px; }
+.dooms-atlas-head-tools .dooms-atlas-tool { width: 40px; height: 40px; }
 .dooms-atlas-title { margin: 0; font-size: 1.35em; font-weight: 700; font-family: var(--atlas-display); color: var(--atlas-text); overflow-wrap: anywhere; }
 .dooms-atlas-sub { margin: 4px 0 0; font-size: 0.8em; color: var(--atlas-muted); overflow-wrap: anywhere; }
 .dooms-atlas-sub.is-place { color: var(--atlas-accent2); }
@@ -112,7 +130,7 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 #dooms-atlas .kind-other { --kind: #7a7a88; }
 
 /* ── The stage: the map, the paper over it, the tools, the scale ── */
-.dooms-atlas-stage { position: relative; flex: 1 1 auto; min-width: 0; height: 100%; background: var(--atlas-sea); overflow: hidden; }
+.dooms-atlas-stage { position: relative; flex: 1 1 auto; min-width: 0; height: 100%; background: var(--atlas-sea); overflow: hidden; isolation: isolate; }    /* a layer of its own: the map's markers and tools stay under the sidebar where the sidebar lies over the map (a phone) */
 .dooms-atlas-map { position: absolute; inset: 0; }
 .dooms-atlas-leaflet.leaflet-container { font: inherit; background: var(--atlas-sea); outline: none; }
 #dooms-atlas.is-armed .dooms-atlas-leaflet, #dooms-atlas.is-armed .dooms-atlas-leaflet .leaflet-interactive { cursor: crosshair; }
@@ -124,16 +142,16 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-leaflet .leaflet-marker-pane, .dooms-atlas-leaflet .leaflet-popup-pane, .dooms-atlas-leaflet .leaflet-tooltip-pane { z-index: 600; }
 .dooms-atlas-leaflet .leaflet-popup-pane { z-index: 700; }
 .dooms-atlas-compass { position: absolute; right: 22px; bottom: 22px; width: 110px; height: 110px; z-index: 460; color: var(--atlas-ink); opacity: 0.5; pointer-events: none; }
-.dooms-atlas-empty { position: absolute; inset: 0; z-index: 800; display: flex; align-items: center; justify-content: center; padding: 30px; text-align: center; background: var(--atlas-bg); color: var(--atlas-muted); }
+.dooms-atlas-empty { position: absolute; inset: 0; z-index: 800; display: flex; align-items: center; justify-content: center; padding: 30px; text-align: center; background: var(--atlas-bg-paint); color: var(--atlas-muted); }
 .dooms-atlas-empty[hidden] { display: none; }
 .dooms-atlas-empty p { max-width: 460px; margin: 0; font-size: 1em; line-height: 1.5; }
 /* Setting up the world (D159): a panel over the map */
 .dooms-atlas-setup { position: absolute; inset: 0; z-index: 830; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0, 0, 0, 0.35); }
 .dooms-atlas-setup[hidden] { display: none; }
-.dooms-atlas-setup-card { width: min(640px, 100%); max-height: 100%; overflow: auto; padding: 22px 24px; border-radius: calc(var(--atlas-radius) + 4px); background: var(--atlas-panel); color: var(--atlas-text); border: 1px solid var(--atlas-line); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 12px; }
+.dooms-atlas-setup-card { width: min(640px, 100%); max-height: 100%; overflow: auto; padding: 22px 24px; border-radius: calc(var(--atlas-radius) + 4px); background: var(--atlas-panel-paint); color: var(--atlas-text); border: 1px solid var(--atlas-line); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 12px; }
 .dooms-atlas-setup-card.is-review { width: min(860px, 100%); }
 /* A long End sheet scrolls inside itself; its buttons stay in view at its foot (D190: Undo is one of them). */
-.dooms-atlas-setup-card.is-end .dooms-atlas-setup-actions { position: sticky; bottom: -22px; z-index: 2; margin: 0 -24px -22px; padding: 12px 24px 22px; background: var(--atlas-panel); border-top: 1px solid var(--atlas-line); }
+.dooms-atlas-setup-card.is-end .dooms-atlas-setup-actions { position: sticky; bottom: -22px; z-index: 2; margin: 0 -24px -22px; padding: 12px 24px 22px; background: var(--atlas-panel-paint); border-top: 1px solid var(--atlas-line); }
 /* What the scene's record found against what was established (D190). */
 .dooms-atlas-conflicts { border: 1px solid color-mix(in srgb, #d9a441 60%, var(--atlas-line)); border-radius: var(--atlas-radius); padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; background: color-mix(in srgb, #d9a441 8%, transparent); min-width: 0; }
 .dooms-atlas-conflicts legend { padding: 0 6px; color: #d9a441; }
@@ -295,7 +313,7 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-fill-home-row { padding: 8px 10px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); }
 
 /* The trail: where this map is, and the way back out (D156) */
-.dooms-atlas-trail { position: absolute; left: 12px; top: 12px; z-index: 820; display: flex; align-items: center; gap: 6px; max-width: calc(100% - 330px); padding: 5px 12px 5px 5px; border-radius: 999px; background: var(--atlas-panel); border: 1px solid var(--atlas-line); color: var(--atlas-text); font-size: 0.86em; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); overflow: hidden; }
+.dooms-atlas-trail { position: absolute; left: 12px; top: 12px; z-index: 820; display: flex; align-items: center; gap: 6px; max-width: calc(100% - 330px); padding: 5px 12px 5px 5px; border-radius: 999px; background: var(--atlas-panel-paint); border: 1px solid var(--atlas-line); color: var(--atlas-text); font-size: 0.86em; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); overflow: hidden; }
 .dooms-atlas-trail[hidden] { display: none; }
 .dooms-atlas-trail-up { appearance: none; cursor: pointer; flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--atlas-accent); color: var(--atlas-on-accent); display: inline-flex; align-items: center; justify-content: center; font-size: 0.85em; }
 .dooms-atlas-trail-up i { transform: scaleX(-1); }
@@ -312,7 +330,7 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-enter { align-self: stretch; justify-content: center; }
 .dooms-atlas-start { position: absolute; inset: 0; z-index: 815; display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none; }
 .dooms-atlas-start[hidden] { display: none; }
-.dooms-atlas-start-card { pointer-events: auto; max-width: 460px; padding: 22px 24px; border-radius: calc(var(--atlas-radius) + 4px); background: var(--atlas-panel); color: var(--atlas-text); border: 1px solid var(--atlas-line); box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45); display: flex; flex-direction: column; gap: 10px; }
+.dooms-atlas-start-card { pointer-events: auto; max-width: 460px; padding: 22px 24px; border-radius: calc(var(--atlas-radius) + 4px); background: var(--atlas-panel-paint); color: var(--atlas-text); border: 1px solid var(--atlas-line); box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45); display: flex; flex-direction: column; gap: 10px; }
 .dooms-atlas-start-card h3 { margin: 0; font-size: 1.3em; font-family: var(--atlas-display); color: var(--atlas-text); }
 .dooms-atlas-start-card p { margin: 0; font-size: 0.92em; line-height: 1.45; }
 .dooms-atlas-start-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0; }
@@ -320,11 +338,11 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-start-card .dooms-atlas-start-note { font-size: 0.8em; color: var(--atlas-muted); }
 .dooms-atlas-tool.is-base { display: none; }
 #dooms-atlas.has-picture .dooms-atlas-tool.is-base { display: inline-flex; }
-.dooms-atlas-hint { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 820; margin: 0; max-width: min(560px, 60%); padding: 8px 16px; border-radius: 999px; background: var(--atlas-panel); color: var(--atlas-text); border: 1px solid var(--atlas-line); font-size: 0.86em; text-align: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); }
+.dooms-atlas-hint { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 820; margin: 0; max-width: min(560px, 60%); padding: 8px 16px; border-radius: 999px; background: var(--atlas-panel-paint); color: var(--atlas-text); border: 1px solid var(--atlas-line); font-size: 0.86em; text-align: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); }
 .dooms-atlas-hint[hidden] { display: none; }
 #dooms-atlas.is-armed .dooms-atlas-hint { border-color: var(--atlas-accent); }
 .dooms-atlas-tools { position: absolute; top: 12px; right: 12px; z-index: 820; display: flex; gap: 6px; }
-.dooms-atlas-tool { appearance: none; cursor: pointer; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel); color: var(--atlas-text); font-size: 0.95em; }
+.dooms-atlas-tool { appearance: none; cursor: pointer; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel-paint); color: var(--atlas-text); font-size: 0.95em; }
 .dooms-atlas-tool:hover, .dooms-atlas-tool:focus-visible { border-color: var(--atlas-accent); }
 .dooms-atlas-tool.is-on { background: var(--atlas-accent); border-color: var(--atlas-accent); color: var(--atlas-on-accent); }
 .dooms-atlas-tool.is-close { margin-left: 8px; }
@@ -333,9 +351,9 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-leaflet .leaflet-top.leaflet-left { top: auto; bottom: 46px; left: 4px; }
 .dooms-atlas-leaflet .leaflet-control-container { position: relative; z-index: 810; }
 .dooms-atlas-leaflet .leaflet-bar { border: 1px solid var(--atlas-line); box-shadow: none; border-radius: var(--atlas-radius); overflow: hidden; }
-.dooms-atlas-leaflet .leaflet-bar a { background: var(--atlas-panel); color: var(--atlas-text); border-bottom-color: var(--atlas-line); }
-.dooms-atlas-leaflet .leaflet-bar a:hover, .dooms-atlas-leaflet .leaflet-bar a:focus-visible { background: var(--atlas-panel); color: var(--atlas-accent); }
-.dooms-atlas-leaflet .leaflet-bar a.leaflet-disabled { opacity: 0.4; background: var(--atlas-panel); }
+.dooms-atlas-leaflet .leaflet-bar a { background: var(--atlas-panel-paint); color: var(--atlas-text); border-bottom-color: var(--atlas-line); }
+.dooms-atlas-leaflet .leaflet-bar a:hover, .dooms-atlas-leaflet .leaflet-bar a:focus-visible { background: var(--atlas-panel-paint); color: var(--atlas-accent); }
+.dooms-atlas-leaflet .leaflet-bar a.leaflet-disabled { opacity: 0.4; background: var(--atlas-panel-paint); }
 
 /* The land, inked: one shore with two ripples off it; the regions tinted by their terrain, with its drawings; the paths.
    Strokes keep their width at every zoom. */
@@ -486,9 +504,9 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-leaflet[data-zoom="far"] .dooms-atlas-glyph { stroke-opacity: 0.5; }
 
 /* The card (a Leaflet popup) */
-.dooms-atlas-popup .leaflet-popup-content-wrapper { background: var(--atlas-panel); color: var(--atlas-text); border: 1px solid var(--atlas-line); border-radius: calc(var(--atlas-radius) + 2px); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); padding: 0; overflow: hidden; }
+.dooms-atlas-popup .leaflet-popup-content-wrapper { background: var(--atlas-panel-paint); color: var(--atlas-text); border: 1px solid var(--atlas-line); border-radius: calc(var(--atlas-radius) + 2px); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); padding: 0; overflow: hidden; }
 .dooms-atlas-popup .leaflet-popup-content { margin: 0; width: auto !important; font-size: 14px; line-height: 1.4; }
-.dooms-atlas-popup .leaflet-popup-tip { background: var(--atlas-panel); border: 1px solid var(--atlas-line); box-shadow: none; }
+.dooms-atlas-popup .leaflet-popup-tip { background: var(--atlas-panel-paint); border: 1px solid var(--atlas-line); box-shadow: none; }
 .dooms-atlas-popup a.leaflet-popup-close-button { color: var(--atlas-muted); top: 4px; right: 4px; }
 .dooms-atlas-popup a.leaflet-popup-close-button:hover { color: var(--atlas-text); }
 .dooms-atlas-popup .dooms-atlas-card p { margin: 0; }    /* Leaflet gives a popup's paragraphs a margin of its own */
@@ -526,7 +544,7 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-field { display: flex; flex-direction: column; gap: 2px; }
 #dooms-atlas .dooms-atlas-input { width: 100%; margin: 0; font: inherit; font-size: 0.88em; padding: 6px 8px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); resize: vertical; }
 #dooms-atlas .dooms-atlas-input:focus { outline: none; border-color: var(--atlas-accent); }
-#dooms-atlas select.dooms-atlas-input option { background: var(--atlas-panel); color: var(--atlas-text); }
+#dooms-atlas select.dooms-atlas-input option { background: var(--atlas-panel-paint); color: var(--atlas-text); }
 .dooms-atlas-card-actions { display: flex; gap: 6px; margin-top: 2px; }
 
 /* The tray: what is not on the map yet */
@@ -543,7 +561,7 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-icon-btn:hover, .dooms-atlas-icon-btn:focus-visible { color: #e0524d; background: var(--atlas-panel2); }
 .dooms-atlas-scale-pick { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; font-size: 0.78em; color: var(--atlas-muted); }
 #dooms-atlas .dooms-atlas-scale-select, #dooms-atlas .dooms-atlas-ground-select { width: auto; margin: 0; font: inherit; padding: 3px 6px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
-#dooms-atlas .dooms-atlas-scale-select option, #dooms-atlas .dooms-atlas-ground-select option { background: var(--atlas-panel); color: var(--atlas-text); }
+#dooms-atlas .dooms-atlas-scale-select option, #dooms-atlas .dooms-atlas-ground-select option { background: var(--atlas-panel-paint); color: var(--atlas-text); }
 .dooms-atlas-deleted { flex: 0 0 auto; font-size: 0.8em; color: var(--atlas-muted); }
 .dooms-atlas-deleted summary { cursor: pointer; }
 .dooms-atlas-deleted ul { list-style: none; margin: 4px 0 0; padding: 0; }
@@ -564,13 +582,26 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 /* Live World's own views in the sidebar keep their styles; only their room is set here */
 .dooms-atlas-body .dooms-world-cards { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
 
-/* A phone: the sidebar is a sheet over the map */
+/* A phone (D196): the sidebar and the map take turns at the whole screen. The sidebar's head has Map (the sidebar
+   put away) and Close; the map's first tool brings the sidebar back. A sheet (End, Start a scene, World gen, a
+   set-up) is the map's, so the sidebar makes way for it. */
 @media (max-width: 720px) {
-    #dooms-atlas { --atlas-side-w: min(88vw, 340px); }
-    .dooms-atlas-side { position: absolute; left: 0; top: 0; bottom: 0; box-shadow: 8px 0 30px rgba(0, 0, 0, 0.5); }
+    #dooms-atlas { --atlas-side-w: 100vw; }
+    .dooms-atlas-side { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-right: 0; }
+    #dooms-atlas.has-sheet .dooms-atlas-side { display: none; }
+    .dooms-atlas-head { padding-right: 108px; min-height: 62px; }
+    .dooms-atlas-head-tools { display: flex; }
+    .dooms-atlas-tab { padding: 10px 2px 8px; }
+    .dooms-atlas-tools { top: 10px; right: 10px; gap: 5px; max-width: calc(100% - 20px); flex-wrap: wrap; justify-content: flex-end; }    /* never wider than the screen: the first tool is the way back to the sidebar */
+    .dooms-atlas-tool { width: 40px; height: 40px; }
+    .dooms-atlas-setup { padding: 0; align-items: stretch; }
+    .dooms-atlas-setup-card, .dooms-atlas-setup-card.is-worldgen { width: 100%; max-height: none; height: 100%; border-radius: 0; border: 0; padding: 16px 14px; }
+    .dooms-atlas-setup-card.is-end .dooms-atlas-setup-actions { bottom: -16px; margin: 0 -14px -16px; padding: 10px 14px 14px; }
+    .dooms-atlas-setup-actions .dooms-atlas-btn { flex: 1 1 auto; justify-content: center; min-height: 42px; }
+    .dooms-atlas-foot-actions .dooms-atlas-btn { flex: 1 1 auto; justify-content: center; min-height: 40px; }
     .dooms-atlas-card { width: 260px; }
     .dooms-atlas-compass { width: 70px; height: 70px; right: 10px; bottom: 10px; }
-    .dooms-atlas-hint { max-width: 86%; top: 104px; }
+    .dooms-atlas-hint { max-width: 92%; width: max-content; top: 104px; border-radius: 14px; }
     .dooms-atlas-trail { top: 58px; max-width: calc(100% - 24px); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -606,3 +637,13 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-scene-where-new { margin-top: 6px; }
 .dooms-atlas-scene-where-new[hidden] { display: none; }
 .dooms-atlas-scenes-top .dooms-atlas-start-note { font-size: 0.82em; color: var(--atlas-muted); }
+/* Where a browser has :has(), a sheet puts the sidebar away on a phone without the controller's help (D196). */
+@media (max-width: 720px) {
+    #dooms-atlas:has(.dooms-atlas-setup:not([hidden])) .dooms-atlas-side { display: none; }
+}
+/* A narrow phone: the map's tools a size smaller, so all of them stay on one row. */
+@media (max-width: 380px) {
+    .dooms-atlas-tools { gap: 4px; }
+    .dooms-atlas-tools .dooms-atlas-tool { width: 35px; height: 35px; }
+    .dooms-atlas-tab span { font-size: 0.92em; }
+}

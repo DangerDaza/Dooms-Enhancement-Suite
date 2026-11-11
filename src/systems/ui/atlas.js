@@ -266,8 +266,36 @@ function setHint(text) {
     $h.prop('hidden', !text).text(text || '');
 }
 
+/** A phone's width (D196): the sidebar and the map take turns at the whole screen there. */
+function isPhone() {
+    try { return !!(window.matchMedia && window.matchMedia('(max-width: 720px)').matches); } catch (e) { return false; }
+}
+
+/**
+ * The window the size of the screen, by hand where the stylesheet did not
+ * manage it (D196). A fixed window is laid out against the screen unless
+ * something above it has taken that place (a transform, a filter): then
+ * "the whole screen" in the stylesheet is that thing's box, which on a
+ * phone has been seen short. Measured after it is shown; left alone when
+ * it already covers the screen.
+ */
+function fitToScreen() {
+    const el = document.querySelector(root());
+    if (!el || !isOpen) return;
+    for (const p of ['left', 'top', 'width', 'height']) el.style.removeProperty(p);
+    const vw = window.innerWidth, vh = window.innerHeight;
+    if (!(vw > 0 && vh > 0)) return;
+    const r = el.getBoundingClientRect();
+    if (Math.abs(r.left) < 2 && Math.abs(r.top) < 2 && Math.abs(r.width - vw) < 3 && Math.abs(r.height - vh) < 3) return;
+    el.style.left = `${Math.round(-r.left)}px`;
+    el.style.top = `${Math.round(-r.top)}px`;
+    el.style.width = `${vw}px`;
+    el.style.height = `${vh}px`;
+}
+
 function arm(next) {
     armed = next;
+    if (armed && isPhone() && !folded) setFolded(true);    // what waits for a tap on the map needs the map in sight
     setHint(!armed ? '' : armed.kind === 'add' ? 'Tap the map where the new marker goes. Esc cancels.' : `Tap the map where ${armed.label} goes. Esc cancels.`);
     $(root()).toggleClass('is-armed', !!armed);
     $(`${root()} .dooms-atlas-tool[data-act="add"]`).toggleClass('is-on', !!armed && armed.kind === 'add');
@@ -496,7 +524,9 @@ function render() {
     const showStart = bare && !model.realm && !model.world && !armed && !setup && startDismissed !== `${world}|${layer}`;    // nor over a generated world: its land is there to be seen (D184)
     $(`${root()} .dooms-atlas-start`).prop('hidden', !showStart).html(showStart ? atlasStartHtml({ waiting, loose: model.tray.length - waiting, picture: !!pictureOf(ctx.pack), layerLabel: model.layerLabel }) : '');
     $(`${root()} .dooms-atlas-trail`).prop('hidden', !layer).html(atlasTrailHtml({ world: (ctx.state && ctx.state.name) || (ctx.pack && ctx.pack.name) || 'The world', trail: model.trail }));
-    if (roading) { /* the roads' own word stays */ } else if (!armed) setHint(bare && !showStart ? (model.world ? (model.tray.length ? 'The land is made. Drag a region or a place from the list on the left onto it, or press Place all: a region holds the land around where it stands.' : 'The land is made. The pin button above adds a place; a region put on the land holds the land around it.') : model.realm ? `Nothing stands in ${model.layerLabel} yet. ${model.tray.length ? 'Drag a place from the list on the left onto its land, or add one with the pin button above.' : 'The pin button above adds a place to its land.'}` : model.tray.length ? 'Drag a place from the list on the left onto the map, or press Place all.' : 'The pin button above adds a place by hand.') : '');
+    // On a phone with the sidebar put away its foot is out of sight (D196): what an action answered is said over the map instead.
+    const said = isPhone() && folded && !setup ? result : '';
+    if (roading) { /* the roads' own word stays */ } else if (!armed) setHint((bare && !showStart ? (model.world ? (model.tray.length ? 'The land is made. Drag a region or a place from the list on the left onto it, or press Place all: a region holds the land around where it stands.' : 'The land is made. The pin button above adds a place; a region put on the land holds the land around it.') : model.realm ? `Nothing stands in ${model.layerLabel} yet. ${model.tray.length ? 'Drag a place from the list on the left onto its land, or add one with the pin button above.' : 'The pin button above adds a place to its land.'}` : model.tray.length ? 'Drag a place from the list on the left onto the map, or press Place all.' : 'The pin button above adds a place by hand.') : '') || said);
     // The picture tool shows for a world that has a picture, lit while the picture is the map.
     const hasPicture = !!(ctx.pack && ctx.pack.map && ctx.pack.map.image && ctx.pack.map.image !== brokenPicture);
     $(root()).toggleClass('has-picture', hasPicture);
@@ -524,12 +554,13 @@ function showMarker(id) {
     if (hidden.includes(m.kind)) { hidden = hidden.filter(k => k !== m.kind); keep(HIDDEN_KEY, JSON.stringify(hidden)); render(); }
     cardMode = 'view';
     board.show(id);
-    try { if (window.matchMedia('(max-width: 720px)').matches) setFolded(true); } catch (e) { /* no matchMedia */ }
+    if (isPhone()) setFolded(true);    // the sidebar is the whole screen there: it makes way for the place shown
 }
 
 /** The set-up's panel drawn (or put away). */
 function renderSetup() {
     const $p = $(`${root()} .dooms-atlas-setup`);
+    $(root()).toggleClass('has-sheet', !!setup);    // on a phone the sidebar makes way for a sheet (D196)
     if (!setup) { $p.prop('hidden', true).empty(); return; }
     const scroll = $p.find('.dooms-atlas-setup-list').scrollTop() || 0;
     $p.prop('hidden', false).html(setup.gen ? atlasWorldGenHtml(setup) : setup.naming ? atlasNamesHtml(setup) : setup.end ? atlasEndSceneHtml(setup) : setup.start ? atlasStartSceneHtml(setup) : setup.scenes ? atlasScenesHtml(setup) : setup.fill ? atlasFillHtml({ ...setup, step: setup.step }) : atlasSetupHtml({ ...setup, onMap: model ? model.all.length : 0 }));
@@ -1328,7 +1359,7 @@ function build() {
             if (act === 'start-dismiss') { startDismissed = `${worldKey()}|${layer}`; render(); return; }
             if (act === 'base') { const b = theBook(); commit(withDrawn(b, !b.drawn), b.drawn ? 'The world\'s picture is the map again.' : 'The drawn map is showing; the picture is kept and the same button brings it back.'); if (board) board.fit(); return; }
             if (act === 'move') { moving = !moving; keep(MOVE_KEY, moving ? '1' : '0'); result = moving ? 'Moving is on: drag a marker to where it belongs.' : ''; render(); return; }
-            if (act === 'place-all') { if (model) commit(placeAll(theBook(), model), 'Everything is on the map. Turn on moving (the arrows above the map) to drag a marker to where it belongs.'); if (board) board.fit(); return; }
+            if (act === 'place-all') { if (model) commit(placeAll(theBook(), model), 'Everything is on the map. Turn on moving (the arrows above the map) to drag a marker to where it belongs.'); if (isPhone() && !folded) setFolded(true); if (board) board.fit(); return; }
             if (act === 'delete') { ev.stopPropagation(); const label = labelOf(id); if (board) board.closeCard(); commit(removeMarker(theBook(), id), `${label} is deleted. It is under Deleted at the foot of Places if you want it back.`); return; }
             if (act === 'restore') { commit(restoreMarker(theBook(), id), 'Brought back: it waits in the list to be placed.'); return; }
             if (act === 'unplace') { ev.stopPropagation(); if (board) board.closeCard(); commit(unplace(theBook(), id)); return; }
@@ -1522,7 +1553,7 @@ function build() {
         if (src === 'bind' || src === 'unbind') refreshWorlds().catch(() => {});
         if (src !== 'map') render();
     });
-    window.addEventListener('resize', () => { if (isOpen && board) board.size(); });
+    window.addEventListener('resize', () => { if (!isOpen) return; fitToScreen(); if (board) board.size(); });
 }
 
 /**
@@ -1541,6 +1572,7 @@ export async function openAtlas({ place = '', name = '', worldId = '', tab: open
     if (openTab && ATLAS_TABS.some(t => t.id === openTab)) tab = openTab;    // not remembered: the tab asked for this once
     try { recordCurrentScene(); } catch (e) { /* the map stays as it is */ }    // the place the chat stands in, if no reply recorded it
     $(root()).addClass('is-open').css('display', 'flex');    // shown before the render, so the map's frame has its size when Leaflet fits it
+    fitToScreen();
     render();
     refreshWorlds().catch(() => {});
     // A world asked for by name (the World Builder, Settings): shown whatever chat is in front, unless that chat is a scene of it.
@@ -1580,7 +1612,7 @@ export function closeAtlas() {
     pickedPack = null;
     pickToken++;
     $(`${root()} .dooms-atlas-setup`).prop('hidden', true).empty();
-    $(root()).removeClass('is-open is-armed is-roading').css('display', 'none');
+    $(root()).removeClass('is-open is-armed is-roading has-sheet').css('display', 'none');
     $(`${root()} .dooms-atlas-tool[data-act="roads"]`).removeClass('is-on');
 }
 

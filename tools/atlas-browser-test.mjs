@@ -1547,7 +1547,7 @@ console.log('\n§7 the sidebar folds; the looks; a phone');
         await page.evaluate(() => window.__board.fit());
         await settle();
         l = await layout();
-        sides[look || 'default'] = await page.evaluate(() => getComputedStyle(document.querySelector('.dooms-atlas-side')).backgroundColor);
+        sides[look || 'default'] = await page.evaluate(() => { const cs = getComputedStyle(document.querySelector('.dooms-atlas-side')); return cs.backgroundImage + ' ' + cs.color + ' ' + cs.fontFamily; });
         check(`the look "${look || 'default'}": the window, the markers and the land`, near(l.atlas.width, VIEW.width, 1) && l.count === 5 && l.ground === 'country' && l.groundLines === 0 && !l.overflowX && !l.sideOverflow);
         await shot(`8-look-${look || 'default'}`);
     }
@@ -1556,8 +1556,149 @@ console.log('\n§7 the sidebar folds; the looks; a phone');
     await page.evaluate(() => window.__open({ look: '', world: 'campaign' }));
     await settle();
     l = await layout();
-    check('a phone: the map fills it, the sidebar a sheet over it', near(l.stage.width, 390, 1) && near(l.stage.left, 0, 1) && l.side.width <= 345 && !l.overflowX);
+    check('a phone: the map fills it, and the sidebar is the whole screen over it', near(l.stage.width, 390, 1) && near(l.stage.left, 0, 1) && near(l.side.width, 390, 1) && near(l.side.height, 844, 1) && !l.overflowX);
     await shot('9-phone');
+}
+
+console.log('\n§8 nothing shows through the Atlas, and a phone (D196: the owner\'s report)');
+{
+    // The owner's phone: a look, a theme whose tint is mostly see-through, and the chat behind.
+    await page.setViewportSize({ width: 412, height: 800 });
+    await page.evaluate(() => {
+        const chat = document.createElement('div');
+        chat.id = 'page-behind';
+        chat.style.cssText = 'position:fixed;inset:0;z-index:1;font:700 22px/1.5 Georgia,serif;color:#00ff9c;background:#fff;padding:10px;overflow:hidden;';
+        chat.textContent = 'Eighth bell, three quarters. The house on the lane above the temple, the kitchen. '.repeat(40);
+        document.body.appendChild(chat);
+        for (const [k, v] of Object.entries({ '--dooms-ui-bg': 'rgba(14, 4, 46, 0.25)', '--dooms-ui-text': '#00e08a', '--dooms-ui-highlight': '#ff2bd6', '--dooms-ui-border': '#ff2bd6', '--dooms-ui-accent': 'rgba(255, 43, 214, 0.12)' })) document.body.style.setProperty(k, v);
+    });
+    const theme = { tab: 'places', scenesTab: true, worlds: [{ id: 'eld', name: 'The Eld', card: 'Narrator' }], chatWorld: 'The Eld', status: 'Last advanced on Tail of Harvestide, the second morning after the return (about three quarters of a bell, from a quarter past the Eighth bell to the Ninth passed) · next run in 2 replies.', result: 'This chat is not a scene, so there is nothing to end.', canAdvance: true, scenes: true };
+    const openOn = async (look) => {
+        await page.evaluate((k) => window.__open({ look: k, world: 'campaign', book: null }), look);
+        await page.evaluate(() => window.__edit((b, m) => window.A.placeAll(b, m)));
+        await page.evaluate(() => window.__board.fit());
+        await settle();
+        await page.evaluate((o) => window.__side({ ...o, body: document.querySelector('.dooms-atlas-body').innerHTML }), theme);
+    };
+    /** Whether an element paints every pixel of its box: a colour with no see-through in it under whatever else it paints. */
+    const solid = (sel) => page.evaluate((q) => {
+        const el = document.querySelector(q);
+        if (!el) return 'missing';
+        const c = getComputedStyle(el).backgroundColor;
+        const m = /\/\s*([\d.]+)\s*\)$/.exec(c) || /^rgba\([^)]*,\s*([\d.]+)\s*\)$/.exec(c);
+        const alpha = c === 'transparent' ? 0 : m ? Number(m[1]) : 1;
+        return alpha === 1 ? 'solid' : `see-through (${c})`;
+    }, sel);
+    const prep = { ok: true, scene: { id: 's3', title: 'The gate at dusk' }, recap: 'They met at the gate in the fog; Kiyoha carried the new healer\'s pack and said nothing about it.', from: 'Day 42', to: 'Day 42, night', stale: false, canonDone: false, steps: { canon: true, world: true }, continuity: { people: [{ name: 'Kiyoha', now: 'At the gate, carrying the healer\'s pack.', was: 'In the yard.' }, { name: 'Solveig', now: 'Has set her rule.', was: '' }], threads: { open: [{ id: 't1', text: 'Who cut the harbour chain?' }], opened: ['What is in the healer\'s pack?'], closed: [] } } };
+    for (const look of ['console', 'lumen', '']) {
+        await openOn(look);
+        const name = look || 'no look';
+        const window_ = await solid('#dooms-atlas'), side = await solid('.dooms-atlas-side');
+        await page.evaluate(() => { document.getElementById('dooms-atlas').classList.add('is-folded'); window.__board.size(); });
+        await settle();
+        const tool = await solid('.dooms-atlas-tools .dooms-atlas-tool');
+        await page.locator('#dooms-atlas .dooms-atlas-marker').first().locator('.dooms-atlas-pin').click();
+        await settle();
+        const card = await solid('.dooms-atlas-popup .leaflet-popup-content-wrapper');
+        await page.evaluate(() => { window.__board.closeCard(); document.getElementById('dooms-atlas').classList.remove('is-folded'); });
+        await page.evaluate((p) => window.__endScene({ prep: p }), prep);
+        await settle();
+        const sheet = await solid('.dooms-atlas-setup-card'), bar = await solid('.dooms-atlas-setup-card.is-end .dooms-atlas-setup-actions');
+        await page.evaluate(() => { const p = document.querySelector('.dooms-atlas-setup'); p.hidden = true; p.innerHTML = ''; });
+        check(`${name}, a see-through theme: the window, the sidebar, the map's tools, a place's card, a sheet and its bar of buttons are all solid`, [window_, side, tool, card, sheet, bar].every(x => x === 'solid'), JSON.stringify({ window: window_, side, tool, card, sheet, bar }));
+    }
+    await openOn('console');
+    const seen = await page.evaluate(() => { const hit = (x, y) => { const el = document.elementFromPoint(x, y); return el ? (el.closest('#dooms-atlas') ? 'atlas' : el.id || el.tagName) : 'nothing'; }; return [[10, 10], [200, 400], [400, 790], [206, 60]].map(([x, y]) => hit(x, y)); });
+    check('and the page behind is under it at every corner', seen.every(x => x === 'atlas'), JSON.stringify(seen));
+    const ink = await page.evaluate(() => { const on = (sel) => { const el = document.querySelector(sel); if (!el) return 'missing'; const c = getComputedStyle(el).color; return /\/\s*0?\.\d+\s*\)$/.test(c) || /^rgba\(/.test(c) ? `see-through (${c})` : 'solid'; }; document.querySelector('.dooms-atlas-setup').hidden = true; return on('.dooms-atlas-here, .dooms-atlas-tray-here, .dooms-atlas-btn.is-primary'); });
+    check('what is written on the accent can be read: it is solid too', ink === 'solid' || ink === 'missing', ink);
+
+    // The sidebar on a phone: the whole screen, with its own way to the map and its own way out.
+    let ph = await page.evaluate(() => {
+        const box = (el) => { const b = el.getBoundingClientRect(); return { left: Math.round(b.left), top: Math.round(b.top), right: Math.round(b.right), bottom: Math.round(b.bottom), w: Math.round(b.width), h: Math.round(b.height) }; };
+        const side = document.querySelector('.dooms-atlas-side');
+        const tools = [...side.querySelectorAll('.dooms-atlas-head-tools [data-act]')];
+        const marker = document.querySelector('#dooms-atlas .dooms-atlas-marker').getBoundingClientRect();
+        const over = document.elementFromPoint(marker.left + marker.width / 2, marker.top + marker.height / 2);
+        const mapTool = document.querySelector('.dooms-atlas-tools .dooms-atlas-tool').getBoundingClientRect();
+        const overTool = document.elementFromPoint(mapTool.left + 5, mapTool.top + 5);
+        const tabs = [...side.querySelectorAll('.dooms-atlas-tab')];
+        return {
+            atlas: box(document.getElementById('dooms-atlas')), side: box(side), head: box(side.querySelector('.dooms-atlas-head')), body: box(side.querySelector('.dooms-atlas-body')), foot: box(side.querySelector('.dooms-atlas-foot')),
+            tools: tools.map(t => [t.getAttribute('data-act'), box(t)]), title: box(side.querySelector('.dooms-atlas-title')),
+            overMarker: over ? !!over.closest('.dooms-atlas-side') : false, overTool: overTool ? !!overTool.closest('.dooms-atlas-side') : false,
+            tabs: tabs.length, tabsFit: tabs.every(t => t.scrollWidth <= t.clientWidth + 1), sideOverflow: side.scrollWidth > side.clientWidth + 1,
+            footActs: [...side.querySelectorAll('.dooms-atlas-foot [data-act]')].map(b => box(b)),
+        };
+    });
+    check('a phone: the window is the screen, and the sidebar is all of it', same([ph.atlas.left, ph.atlas.top, ph.atlas.w, ph.atlas.h], [0, 0, 412, 800]) && same([ph.side.left, ph.side.top, ph.side.w, ph.side.h], [0, 0, 412, 800]) && !ph.sideOverflow, JSON.stringify([ph.atlas, ph.side]));
+    check('its head has Map and Close, each a finger wide, clear of the world\'s name', same(ph.tools.map(t => t[0]), ['fold', 'close']) && ph.tools.every(t => t[1].w >= 40 && t[1].h >= 40 && t[1].right <= 412 && t[1].top >= 0) && ph.title.right <= ph.tools[0][1].left, JSON.stringify([ph.tools, ph.title]));
+    check('the head, the tabs, the tab\'s own list and the foot share the height, the list scrolling between them: nothing lies on anything else', ph.head.bottom <= ph.body.top && ph.body.bottom <= ph.foot.top + 1 && ph.foot.bottom <= 800 && ph.body.h >= 250 && ph.tabs === 6 && ph.tabsFit, JSON.stringify([ph.head, ph.body, ph.foot]));
+    check('the foot\'s buttons are on the screen and a finger tall', ph.footActs.length >= 3 && ph.footActs.every(b => b.left >= 0 && b.right <= 412 && b.bottom <= 800 && b.h >= 40), JSON.stringify(ph.footActs));
+    check('nothing of the map is drawn on top of the sidebar: not its markers, not its tools', ph.overMarker && ph.overTool);
+    await shot('9a-phone-sidebar');
+
+    // The map on a phone: the sidebar put away, every tool on the screen at any width.
+    for (const width of [412, 360, 320]) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.evaluate(() => { document.getElementById('dooms-atlas').classList.add('is-folded'); window.__board.size(); });
+        await settle();
+        const tl = await page.evaluate(() => [...document.querySelectorAll('.dooms-atlas-tools .dooms-atlas-tool')].filter(t => getComputedStyle(t).display !== 'none').map(t => { const b = t.getBoundingClientRect(); return [t.getAttribute('data-act'), Math.round(b.left), Math.round(b.right), Math.round(b.top), Math.round(b.width)]; }));
+        check(`${width} wide: every one of the map's tools is on the screen, the first of them the way back to the sidebar`, tl.length >= 6 && tl[0][0] === 'fold' && tl.every(t => t[1] >= 0 && t[2] <= width && t[4] >= 34), JSON.stringify(tl));
+        await page.evaluate(() => { document.getElementById('dooms-atlas').classList.remove('is-folded'); });
+    }
+    await page.setViewportSize({ width: 412, height: 800 });
+    await page.evaluate(() => { document.getElementById('dooms-atlas').classList.add('is-folded'); window.__board.size(); });
+    await settle();
+    await page.locator('#dooms-atlas .dooms-atlas-marker').first().locator('.dooms-atlas-pin').click();
+    await settle();
+    const pc = await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-popup .leaflet-popup-content-wrapper').getBoundingClientRect(); return { left: Math.round(c.left), right: Math.round(c.right), top: Math.round(c.top), bottom: Math.round(c.bottom) }; });
+    check('a place\'s card is on the screen', pc.left >= 0 && pc.right <= 412 && pc.top >= 0 && pc.bottom <= 800, JSON.stringify(pc));
+    await shot('9b-phone-map');
+    await page.evaluate(() => { window.__board.closeCard(); document.getElementById('dooms-atlas').classList.remove('is-folded'); });
+
+    // A sheet on a phone: the sidebar makes way, the sheet is the screen, and its buttons stay in reach while it scrolls.
+    await page.evaluate((p) => window.__endScene({ prep: p }), prep);
+    await settle();
+    const sheetAt = () => page.evaluate(() => {
+        const c = document.querySelector('.dooms-atlas-setup-card'); const b = c.getBoundingClientRect();
+        const acts = [...c.querySelectorAll('.dooms-atlas-setup-actions [data-act]')].map(x => { const r = x.getBoundingClientRect(); const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { act: x.getAttribute('data-act'), left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), h: Math.round(r.height), reachable: !!top && (top === x || x.contains(top)) }; });
+        return { side: getComputedStyle(document.querySelector('.dooms-atlas-side')).display, card: [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)], scrolls: c.scrollHeight > c.clientHeight + 1, overflowX: c.scrollWidth > c.clientWidth + 1, acts, scrollTop: Math.round(c.scrollTop), max: c.scrollHeight - c.clientHeight };
+    });
+    let sh = await sheetAt();
+    check('End scene on a phone: the sidebar makes way and the sheet is the whole screen', sh.side === 'none' && same(sh.card, [0, 0, 412, 800]) && !sh.overflowX, JSON.stringify([sh.side, sh.card]));
+    check('its buttons are on the screen and can be pressed before any scrolling, each a finger tall', sh.scrolls && same(sh.acts.map(a => a.act), ['end-go', 'end-continue', 'setup-close']) && sh.acts.every(a => a.left >= 0 && a.right <= 412 && a.bottom <= 800 && a.h >= 40 && a.reachable), JSON.stringify(sh.acts));
+    await shot('9c-phone-end-sheet');
+    await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-setup-card'); c.scrollTop = c.scrollHeight; });
+    sh = await sheetAt();
+    const lastPart = await page.evaluate(() => { const parts = document.querySelectorAll('.dooms-atlas-part'); const p = parts[parts.length - 1].getBoundingClientRect(); const bar = document.querySelector('.dooms-atlas-setup-card.is-end .dooms-atlas-setup-actions').getBoundingClientRect(); return { part: Math.round(p.bottom), bar: Math.round(bar.top), parts: parts.length }; });
+    check('scrolled to its end, the last part of the record is above the buttons, not under them', sh.scrollTop > 0 && lastPart.parts >= 4 && lastPart.part <= lastPart.bar + 1 && sh.acts.every(a => a.bottom <= 800 && a.reachable), JSON.stringify([lastPart, sh.scrollTop, sh.max]));
+    await page.evaluate(() => { const p = document.querySelector('.dooms-atlas-setup'); p.hidden = true; p.innerHTML = ''; });
+    check('the sheet closed, the sidebar is back', (await page.evaluate(() => getComputedStyle(document.querySelector('.dooms-atlas-side')).display)) !== 'none');
+    // Start a scene and World gen are sheets too.
+    await page.evaluate(() => window.__sceneStart({ step: 'form', place: { id: '', label: '' }, sceneNo: 6, card: 'The Redward', people: [{ name: 'Kiyoha', here: true }, { name: 'Dagger', here: false }], cast: [], gap: { id: 'later', words: '' }, journey: '', seedText: '', note: '', places: [{ id: 'pin:hask', label: 'Hask', where: '' }] }));
+    await settle();
+    let other = await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-setup-card'); const b = c.getBoundingClientRect(); const go = c.querySelector('[data-act="scene-write"]').getBoundingClientRect(); return { card: [Math.round(b.left), Math.round(b.width)], overflowX: c.scrollWidth > c.clientWidth + 1, side: getComputedStyle(document.querySelector('.dooms-atlas-side')).display, go: [Math.round(go.left), Math.round(go.right)] }; });
+    check('Start a scene on a phone: the sheet is the screen\'s width, nothing spills sideways', same(other.card, [0, 412]) && !other.overflowX && other.side === 'none' && other.go[0] >= 0 && other.go[1] <= 412, JSON.stringify(other));
+    await shot('9d-phone-start-sheet');
+    await page.evaluate(() => window.__worldgen({ shape: 'pangea' }));
+    await settle();
+    other = await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-setup-card'); const b = c.getBoundingClientRect(); const svg = c.querySelector('.dooms-atlas-worldgen-map').getBoundingClientRect(); return { card: [Math.round(b.left), Math.round(b.width)], overflowX: c.scrollWidth > c.clientWidth + 1, svg: [Math.round(svg.left), Math.round(svg.right), Math.round(svg.height)] }; });
+    check('World gen on a phone: the picture above the choices, all of it within the screen', same(other.card, [0, 412]) && !other.overflowX && other.svg[0] >= 0 && other.svg[1] <= 412 && other.svg[2] > 100, JSON.stringify(other));
+    await page.evaluate(() => window.__worldgen(null));
+
+    // The window is the screen even where "the whole of what holds it" is not (SillyTavern's phone layout: the Workshop's rule).
+    await page.evaluate(() => { document.body.style.transform = 'translateZ(0)'; document.body.style.height = '430px'; });
+    const held = await page.evaluate(() => { const b = document.getElementById('dooms-atlas').getBoundingClientRect(); const s = document.querySelector('.dooms-atlas-side').getBoundingClientRect(); const f = document.querySelector('.dooms-atlas-foot').getBoundingClientRect(); return { atlas: [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)], side: Math.round(s.height), foot: Math.round(f.bottom) }; });
+    check('held by something only half the screen tall, the window is still the whole screen, its foot at the bottom', same(held.atlas, [0, 0, 412, 800]) && held.side === 800 && held.foot === 800, JSON.stringify(held));
+    await page.evaluate(() => { document.body.style.transform = ''; document.body.style.height = ''; document.getElementById('page-behind').remove(); for (const k of ['--dooms-ui-bg', '--dooms-ui-text', '--dooms-ui-highlight', '--dooms-ui-border', '--dooms-ui-accent']) document.body.style.removeProperty(k); });
+
+    // A wide screen is as it was: the head's two tools are a phone's.
+    await page.setViewportSize(VIEW);
+    await page.evaluate(() => window.__open({ look: '', world: 'realm' }));
+    await settle();
+    const wide = await page.evaluate(() => ({ head: getComputedStyle(document.querySelector('.dooms-atlas-head-tools')).display, side: Math.round(document.querySelector('.dooms-atlas-side').getBoundingClientRect().width), atlas: Math.round(document.getElementById('dooms-atlas').getBoundingClientRect().width) }));
+    check('on a wide screen the head has no tools of its own, and the sidebar is beside the map as before', wide.head === 'none' && wide.side === 340 && wide.atlas === VIEW.width, JSON.stringify(wide));
 }
 
 check('no errors on the page', errors.length === 0, errors.join(' | '));

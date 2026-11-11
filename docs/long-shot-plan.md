@@ -925,3 +925,39 @@ Tests: `tools/live-world-flow-test.mjs` §6 and §10 (the tabs' bodies
 read as the Atlas shows them; Draw on a place's card), `tools/hub-test.mjs`
 §1, `tools/hub-board-test.mjs`, `tools/hub-board-browser-test.mjs`,
 `tools/lazy-graph-test.mjs`. Not run in a real SillyTavern.
+
+## 35. The Atlas on a phone, and nothing showing through it (2026-11-11, D196)
+
+The owner, with a screenshot from a phone: "The end scene menu and the
+atlas are very broken on mobile." The picture showed the chat plainly
+readable through the Atlas, the Atlas only about half the screen tall,
+and the sidebar's foot lying over the tab's list. The Atlas had one
+check at a phone's width and had never been on a phone. Built in
+"Atlas 35".
+
+Three faults, each reproduced before it was fixed:
+
+| Fault | Cause | Fix |
+| --- | --- | --- |
+| The chat shows through the Atlas | Every surface was painted with the look's panel and ground colours, which are see-through by design (Lumen's glass) or whenever the theme's own tint is (SillyTavern's blur tint usually is). On a wide screen with a nearly opaque theme it passed for solid | Every surface paints the look's colour over a solid one: the theme's own tint made opaque (`rgb(from … / 1)`, where the browser has it), else a dark fallback. The window, the sidebar, the map's tools, a place's card, the sheets and their bar of buttons, the hint and the trail. What is written on the accent (a primary button, "You are here") is made solid the same way: it was mixed from the same tint and could not be read |
+| The window is not the screen | `position: fixed; inset: 0` is the screen only while nothing above the window has taken the screen's place. In SillyTavern's phone layout something has (the Workshop met this in 3.1 and names the viewport; the old Hub window copied that rule and the Atlas never had it) | The window is sized by name, `100vw` by `100dvh`. The controller also measures it when it opens and on a resize, and places and sizes it by hand if it still does not cover the screen (`fitToScreen`) |
+| The map draws over the sidebar; a sheet's buttons collide with its text | On a phone the sidebar lay over the map as an 88%-wide sheet, but the map's markers, tools and compass are stacked above it (the stage made no layer of its own), and the sticky bar of buttons on a sheet was see-through | The stage is a layer of its own (`isolation: isolate`). On a phone the sidebar and the map take turns at the whole screen (D196, below) |
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D196 | On a phone the sidebar and the map take turns at the whole screen | Under 720 px the sidebar is the full screen, not a sheet with a strip of map beside it. Its head has two buttons of its own, **Map** (the sidebar put away) and **Close**, since the map's tools are under it; the map's first tool brings the sidebar back. A sheet (End scene, Start a scene, World gen, a set-up, the names) is the whole screen and the sidebar makes way for it (a class the controller sets, and `:has()` where the browser has it). Showing a place, Place all and anything that waits for a tap on the map put the sidebar away; with it away, what an action answered is said over the map, since the foot that says it is out of sight. Buttons in the foot and on a sheet are a finger tall and share the width. The map's tools never run off the screen: a size smaller under 380 px, and they wrap as a last resort |
+
+What it is not: tested on a phone. It was reproduced and checked in
+Chromium at a phone's size with a see-through theme, a look, a page
+behind the window, and the window's holder cut to half the screen; no
+real device and no real SillyTavern has run it. A notch or a home bar is
+not allowed for (no safe-area padding). The marker cards, the roads tool
+and dragging a place from the list are as they were, and on a touch
+screen the drag from the list is still tap, then tap the map.
+
+Tests: `tools/atlas-browser-test.mjs` §7 (a phone's sidebar is the whole
+screen) and §8 (new: solid under three looks with a see-through theme;
+the phone's sidebar, tools at three widths, a place's card, the End
+sheet scrolled to its end, Start a scene, World gen; the window held by
+something half the screen tall; a wide screen unchanged). Every one of
+§8's checks but the last fails on the styles before this.
