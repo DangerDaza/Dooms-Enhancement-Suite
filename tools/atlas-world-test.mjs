@@ -40,7 +40,7 @@ console.log('\n§1 an empty map');
     check('the same choices give the same book', same(applyWorldGen(null, m, { ...d, seed: 'alpha' }).book, r.book));
     check('no regions asked for: the world alone', (() => { const x = applyWorldGen(null, m, { ...d, seed: 'alpha', regions: 0 }); return x.added.length === 0 && top(x.book).territories.length === 0 && top(x.book).world.shape === 'pangea'; })());
     check('a strange shape, size or count falls back', (() => { const x = planWorldGen(null, m, { seed: 'a', shape: 'ring', size: 'vast', regions: 999, mode: 'what' }); return x.spec.shape === 'pangea' && x.spec.w === WORLD_SIZES.medium.w && x.added.length <= WORLD_REGIONS.max && x.mode === 'keep'; })());
-    check('a world\'s size in words, at the map\'s scale', worldReach(plan.spec, after.measure) === 'about 960 by 660 miles' && worldReach(plan.spec, { per: 60, unit: 'km' }) === 'about 3850 by 2650 km' && worldReach(null, after.measure) === '');
+    check('a world\'s size in words, at the map\'s scale', after.measure.scale === 'world' && worldReach(plan.spec, after.measure) === 'about 3850 by 2650 miles' && worldReach(plan.spec) === 'about 3850 by 2650 miles' && worldReach(plan.spec, { per: 15, unit: 'km' }) === 'about 960 by 660 km' && worldReach(null, after.measure) === '');
 }
 
 console.log('\n§2 a map that has places: around them, or clean');

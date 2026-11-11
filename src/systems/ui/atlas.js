@@ -461,9 +461,9 @@ function topModel() {
 function planOf(choices) {
     const top = topModel();
     const plan = planWorldGen(theBook(), top, choices);
-    // A generated world's map reads at a region's scale unless the player chose another for the top map.
+    // A generated world's map reads at a world's scale unless the player chose another for the top map (D187).
     const unit = top.measure.per / ATLAS_SCALES[top.measure.scale].per;    // what a mile is in the world's unit
-    const measure = theBook().scale ? top.measure : { per: ATLAS_SCALES.region.per * unit, unit: top.measure.unit };
+    const measure = theBook().scale ? top.measure : { per: ATLAS_SCALES.world.per * unit, unit: top.measure.unit };
     return { plan, reach: plan ? worldReach(plan.spec, measure) : '' };
 }
 

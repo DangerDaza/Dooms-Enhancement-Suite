@@ -550,18 +550,23 @@ export function partyKey(pack, state, player = '') {
  * stands on the top map or in a region, and a site below that.
  * `below` counts the places from the nearest region above down to the
  * layer (the layer itself is 1).
+ * A generated world (D187) is a world's size: its map reads at a world's
+ * scale unless the player chose another for it (`world`), and a region
+ * that stands on it reads at the scale its map does (`onWorld`), so a
+ * land is as wide inside as it is on the world's map.
  */
-export function scaleOf(pack, book = null, layer = '', { depth = 0, below = 0, layered = false, regions = false, kind = '' } = {}) {
+export function scaleOf(pack, book = null, layer = '', { depth = 0, below = 0, layered = false, regions = false, kind = '', world = false, onWorld = false } = {}) {
     const b = book && typeof book === 'object' ? book : null;
     if (!layer) {
         if (b && ATLAS_SCALES[b.scale]) return b.scale;
+        if (world) return 'world';
         const a = pack && pack.atlas;
         if (a && ATLAS_SCALES[a.scale]) return a.scale;
         if (regions) return 'region';    // a map of regions reads at the scale a region's own map does, so a land is as wide on it as it is inside (D166)
         return layered || placesOf(pack).some(p => p.parent) ? 'region' : 'town';
     }
     if (b && b.scales && ATLAS_SCALES[b.scales[layer]]) return b.scales[layer];
-    if (kind === 'region') return 'region';
+    if (kind === 'region') return onWorld ? scaleOf(pack, book, '', { world: true }) : 'region';
     return (below || depth) >= 2 ? 'site' : 'town';
 }
 
@@ -1434,7 +1439,7 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
     const kindOfId = (id) => (live.get(id).kind || guessKind(live.get(id).label));
     const up = chain(cur);
     const lastRegion = up.map(kindOfId).lastIndexOf('region');
-    const measure = measureOf(pack, bk, cur, { depth, below: up.length - 1 - lastRegion, layered: holds.size > 0, regions: sites.length > 0 || !!gen, kind: cur ? kindOfId(cur) : '' });
+    const measure = measureOf(pack, bk, cur, { depth, below: up.length - 1 - lastRegion, layered: holds.size > 0, regions: sites.length > 0, kind: cur ? kindOfId(cur) : '', world: !!gen, onWorld: !!(cur && bk.world && !(par.get(cur) || '')) });
     const ground = gen ? 'world' : groundOf(bk, cur, { scale: measure.scale, label: labelOfLayer(cur), kind: cur ? (live.get(cur).kind || guessKind(live.get(cur).label)) : '' });
 
     // Inside a region (D168): the land it has on the map above is the land of its own map, the lands it borders

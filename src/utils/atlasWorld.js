@@ -131,9 +131,9 @@ export function applyWorldGen(book, model, choices) {
     return { book: b, added, unplaced: plan.unplaced, replaced: plan.replaced.length };
 }
 
-/** A world's size in words, at a scale: "about 960 by 660 miles". */
+/** A world's size in words, at a scale: "about 3850 by 2650 miles". */
 export function worldReach(spec, measure) {
-    const per = measure && measure.per > 0 ? measure.per : ATLAS_SCALES.region.per;
+    const per = measure && measure.per > 0 ? measure.per : ATLAS_SCALES.world.per;
     const unit = measure && measure.unit === 'km' ? 'km' : measure && measure.unit === 'league' ? 'leagues' : 'miles';
     const tidy = (n) => (n >= 1000 ? Math.round(n / 50) * 50 : Math.round(n / 10) * 10);
     return spec ? `about ${tidy(spec.w * per)} by ${tidy(spec.h * per)} ${unit}` : '';

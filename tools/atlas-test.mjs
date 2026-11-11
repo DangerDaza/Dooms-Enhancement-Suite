@@ -525,7 +525,7 @@ console.log('\n§6f a generated world: its land is the map\'s, its regions divid
 
     // The top map with nothing on it.
     const m0 = atlasModel({ pack, book: bare });
-    check('the top map is the world: its bounds, its ground, read at a region\'s scale', same(m0.bounds, world.bounds) && m0.ground === 'world' && m0.measure.scale === 'region' && m0.world.shape === 'divide' && m0.world.seed === 'alpha' && m0.world.size === 'medium' && m0.world.landmasses === world.masses.length);
+    check('the top map is the world: its bounds, its ground, read at a world\'s scale', same(m0.bounds, world.bounds) && m0.ground === 'world' && m0.measure.scale === 'world' && m0.measure.per === 60 && m0.world.shape === 'divide' && m0.world.seed === 'alpha' && m0.world.size === 'medium' && m0.world.landmasses === world.masses.length);
     check('its coasts, forests, lakes, trees and peaks are drawn', m0.decor.look === 'world' && m0.decor.coasts === world.coasts && m0.decor.forests.length > 0 && m0.decor.lakes.length > 0 && m0.decor.trees.length > 20 && m0.decor.peaks.length > 10 && m0.decor.peaks.every(pk => pk.length === 4));
     check('with no regions on it, all the land is nobody\'s', m0.territories.length === 0 && m0.land.length === 0 && near(m0.world.unclaimed, world.landArea));
     check('a map with no world has none', atlasModel({ pack, book: null }).world === null && atlasModel({ pack, book: null }).geo === null);
@@ -567,6 +567,7 @@ console.log('\n§6f a generated world: its land is the map\'s, its regions divid
     // Inside a region of the world.
     const inside = atlasModel({ pack, book: b, layer: red.id });
     const landOf = m.territories.find(t => t.id === red.id);
+    check('a generated world is a world\'s size unless the player says otherwise; a region on it reads at the scale its map does, so a land is as wide inside as on it', inside.measure.scale === 'world' && atlasModel({ pack, book: withScale(b, 'region') }).measure.scale === 'region' && atlasModel({ pack, book: withScale(b, 'region'), layer: red.id }).measure.scale === 'region' && atlasModel({ pack, book: withScale(b, 'town', red.id), layer: red.id }).measure.scale === 'town' && atlasModel({ pack, book: withWorld(b, null), layer: red.id }).measure.scale === 'region');
     check('inside a region: its land is its share of the world, as it lies on the world\'s map', inside.realm && inside.realm.world === true && inside.realm.k === 1 && same(inside.realm.outline, landOf.outline) && inside.ground === 'country' && inside.world === null);
     check('its neighbours lie around it, each named along the border they share', inside.realm.neighbours.length === landOf.neighbours.length && inside.realm.neighbours.every(nb => landOf.neighbours.includes(nb.id) && nb.border.length >= 2 && nb.outline.length >= 8 && nb.parts));
     check('the world\'s own terrain lies across it, and the sea beyond its coast', inside.decor.look === 'world' && same(inside.decor.coasts, world.coasts) && inside.decor.peaks.length === m0.decor.peaks.length && inside.geo.world === world && inside.geo.at === null);
@@ -634,10 +635,12 @@ console.log('\n§6f a generated world: its land is the map\'s, its regions divid
         const pass = routeBetween(roadModel, a, z);
         check('a road over the range is a pass: quicker than no road, slower than a road over open ground', pass.mode === 'road' && pass.hours < over.hours && pass.hours > travelHours(6 * pm.measure.per, pm.measure) * 1.05 && pass.mountain > 0, JSON.stringify(pass));
         check('a road with a set time takes that time, whatever is under it', routeBetween(atlasModel({ pack, book: setRoadTime(pb, a, z, 5) }), a, z).hours === 5);
-        check('a road\'s card tells it as drawn: its length, and the time the ground under it makes it', near(roadAsDrawn(roadModel, a, z).hours, pass.hours) && near(roadAsDrawn(roadModel, a, z).length, 90, 0.01) && /^90 miles, about [\d.]+ days on foot, over the mountains$/.test(describeRoad(roadModel, a, z)) && roadAsDrawn(roadModel, a, 'pin:nowhere') === null && describeRoad(roadModel, a, 'pin:nowhere') === '', describeRoad(roadModel, a, z));
+        check('a road\'s card tells it as drawn: its length, and the time the ground under it makes it', near(roadAsDrawn(roadModel, a, z).hours, pass.hours) && near(roadAsDrawn(roadModel, a, z).length, 360, 0.01) && /^360 miles, about [\d.]+ days on foot, over the mountains$/.test(describeRoad(roadModel, a, z)) && roadAsDrawn(roadModel, a, 'pin:nowhere') === null && describeRoad(roadModel, a, 'pin:nowhere') === '', describeRoad(roadModel, a, z));
         {
             const plain = atlasModel({ pack, book: withScale(withWorld(toggleRoad(pb, a, z, { routes: [] }), null), 'region') });
             check('with no world a road as drawn is its straight length at the map\'s pace', near(roadAsDrawn(plain, a, z).hours, travelHours(90, plain.measure)) && describeRoad(plain, a, z) === '90 miles, about 4 days on foot', describeRoad(plain, a, z));
+            const asRegion = atlasModel({ pack, book: withScale(toggleRoad(pb, a, z, { routes: [] }), 'region') });
+            check('a world the player set to a region\'s scale measures by it', asRegion.measure.per === 15 && /^90 miles, /.test(describeRoad(asRegion, a, z)));
         }
         check('with no road the journey is told as across country', / across country/.test(describeJourney(pm, a, z)) && / cross-country/.test(describeDistance(pm, a, z)));
         check('the scene after such a journey opens that much later', journeyGap(pm, a, z).id === 'when' && /later$/.test(journeyGap(pm, a, z).words));

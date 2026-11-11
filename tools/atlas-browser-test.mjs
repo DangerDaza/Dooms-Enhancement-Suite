@@ -200,7 +200,7 @@ window.__worldgen = (choices) => {
     const c = { ...d, seed: 'alpha', ...choices };
     const plan = W.planWorldGen(window.__book, top, c);
     panel.hidden = false;
-    panel.innerHTML = atlasWorldGenHtml({ ...c, state: W.worldGenState(window.__book, top), plan, reach: plan ? W.worldReach(plan.spec, { per: 15, unit: 'mi' }) : '', error: c.seed ? '' : 'A world needs a seed: type one, or press Roll again.' });
+    panel.innerHTML = atlasWorldGenHtml({ ...c, state: W.worldGenState(window.__book, top), plan, reach: plan ? W.worldReach(plan.spec, { per: 60, unit: 'mi' }) : '', error: c.seed ? '' : 'A world needs a seed: type one, or press Roll again.' });
     window.__choices = c;
     return { defaults: d, added: plan ? plan.added.length : 0, lands: plan ? plan.lands.length : 0, unplaced: plan ? plan.unplaced : 0 };
 };
@@ -1200,7 +1200,7 @@ console.log('\n§5j World gen: the land made first, the regions put on it (D182�
     let pn = await panelOf();
     check('the panel: four shapes, three sizes, the regions to add, the seed, and the world they make drawn beside them', pn.shown && pn.title === 'Generate a world' && same(pn.shapes, [['pangea', true], ['earth', false], ['islands', false], ['divide', false]]) && same(pn.sizes, [['small', false], ['medium', true], ['large', false]]) && pn.regions === '9' && pn.seed === 'alpha' && pn.svg && pn.svg.w > 400 && pn.svg.h > 250 && pn.lands === 9 && pn.added === 9 && pn.peaks > 10, JSON.stringify({ ...pn, text: '' }));
     check('an empty map is asked nothing about what is on it; nothing to remove yet', pn.modes.length === 0 && same(pn.acts, [['worldgen-apply', false], ['setup-close', false]]));
-    check('the picture says what the world is: its landmasses, its size at the map\'s scale, its regions', /^1 landmass · about 960 by 660 miles · 9 regions$/.test(pn.caption) && pn.names.length === 9 && pn.names.includes('The Heartland'), pn.caption);
+    check('the picture says what the world is: its landmasses, its size at the map\'s scale, its regions', /^1 landmass · about 3850 by 2650 miles · 9 regions$/.test(pn.caption) && pn.names.length === 9 && pn.names.includes('The Heartland'), pn.caption);
     check('the panel fits the window: the choices beside the picture, nothing cut off', !pn.overflow && pn.card.w <= VIEW.width && pn.card.bottom <= VIEW.height + 1 && pn.form.right <= pn.svg.left + 1 && /no AI request/.test(pn.text));
     await shot('60-worldgen-panel');
     for (const shape of ['earth', 'islands', 'divide']) {
