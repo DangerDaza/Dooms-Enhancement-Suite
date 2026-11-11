@@ -565,6 +565,7 @@ function renderHubSettings() {
     $('#rpg-hub-start').prop('disabled', !worldId || !bound);
     $('#rpg-hub-close').prop('checked', hubConfig(extensionSettings).closeOnStart);
     $('#rpg-hub-style-law').prop('checked', hubConfig(extensionSettings).styleLaw);
+    $('#rpg-hub-nudge').val(hubConfig(extensionSettings).nudgeAt);
     renderHubStatus();
 }
 
@@ -2266,6 +2267,8 @@ function bindSettingsUI() {
     $(document).on('change', '#rpg-hub-close', function () { _hubRules().closeOnStart = $(this).prop('checked'); saveSettings(); });
     // The count of repeated phrases at a scene's end (docs/long-shot-plan.md D179): off until switched on (D180).
     $(document).on('change', '#rpg-hub-style-law', function () { _hubRules().styleLaw = $(this).prop('checked'); saveSettings(); });
+    // The length from which a scene's strip suggests a fresh chat (docs/long-shot-plan.md D181); the field shows what is in force (0 to 500).
+    $(document).on('change', '#rpg-hub-nudge', function () { _hubRules().nudgeAt = Number($(this).val()); $(this).val(hubConfig(extensionSettings).nudgeAt); saveSettings(); onHubChatChanged(); });
     window.addEventListener('dooms:hub-changed', () => { try { renderHubStatus(); } catch (e) { /* not mounted */ } });
     $(document).on('click', '#rpg-world-builder', function () {
         import('./src/systems/ui/worldBuilder.js').then(m => m.openWorldBuilder()).catch(err => console.error('[Dooms Tracker] World Builder failed to load:', err));

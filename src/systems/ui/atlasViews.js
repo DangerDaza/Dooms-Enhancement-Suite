@@ -292,7 +292,7 @@ function loreLine(lore) {
  * @param {Object<string,string>} o.states  recap | canon | world | snapshot -> waiting | running | ok | failed | skipped | off | kept
  * @param {object|null} o.result   commitEnd()'s answer once it has run
  */
-export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, result = null, error = '' } = {}) {
+export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, result = null, error = '', going = '' } = {}) {
     const scene = prep && (prep.scene || prep.mark) ? (prep.scene || prep.mark) : null;
     const title = scene ? `scene ${e(sceneNoOf(scene.id || scene.scene))}${scene.title ? `: ${e(scene.title)}` : ''}` : 'this scene';
     const when = prep && (prep.from || prep.to) ? `From ${e(prep.from || '?')} to ${e(prep.to || 'now')}.` : '';
@@ -335,34 +335,43 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
             ${part('world', 'The world', worldOn ? 'the clocks tick and people move, by the time the scene took' : 'Live World has no world here', worldOn, 'dooms-atlas-end-skip-world')}
             ${part('snapshot', 'The memory', 'everything this chat knows, with the map, kept for the next scene', true, '')}
         </ul>
-        ${done ? `<p class="dooms-atlas-end-done"><i class="fa-solid fa-check" aria-hidden="true"></i> The scene is ended and remembered. The map shows the world as it stands now: open a place to start the next scene.</p>` : ''}
+        ${done ? `<p class="dooms-atlas-end-done"><i class="fa-solid fa-check" aria-hidden="true"></i> The scene is ended and remembered. ${going ? e(going) : 'The map shows the world as it stands now: open a place to start the next scene.'}</p>` : ''}
         ${error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : ''}
         <div class="dooms-atlas-setup-actions">
             ${done
-                ? '<button type="button" class="dooms-atlas-btn is-primary" data-act="setup-close"><i class="fa-solid fa-map" aria-hidden="true"></i> <span>To the map</span></button>'
+                ? `<button type="button" class="dooms-atlas-btn is-primary" data-act="setup-close"${going ? ' disabled' : ''}><i class="fa-solid fa-map" aria-hidden="true"></i> <span>To the map</span></button>`
                 : `<button type="button" class="dooms-atlas-btn is-primary" data-act="end-go"${busy || running || !prep ? ' disabled' : ''}><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> <span>${running ? 'Ending…' : 'End scene'}</span></button>
+                   <button type="button" class="dooms-atlas-btn" data-act="end-continue"${busy || running || !prep || (prep && prep.stale) ? ' disabled' : ''} title="End it with this record and go straight on in a fresh chat: the same place, the same people, no time passed, so the world is not moved"><i class="fa-solid fa-forward-step" aria-hidden="true"></i> <span>End and continue here</span></button>
                    <button type="button" class="dooms-atlas-btn" data-act="setup-close"${running ? ' disabled' : ''}>Keep playing</button>`}
         </div>
     </div>`;
 }
 
 /**
- * The strip across the top of a scene's chat (hub-plan D121, D176): the
- * scene's number, its place and date, the Atlas and End scene; ended: the
- * Atlas and Reopen. Drawn with the strip's own classes (style.css).
- * @param {{ mark: object, scene?: object|null, ended: boolean }} o
+ * The strip across the top of a scene's chat (hub-plan D121, D176, D181):
+ * the scene's number, its place and date and how long it has run; the
+ * Atlas, Continue fresh and End scene; ended: the Atlas, Continue fresh
+ * and Reopen. From the length the player set, the strip says a fresh
+ * chat is worth it and Continue fresh is lit. While a handover runs the
+ * strip says what is being done and nothing can be pressed. Drawn with
+ * the strip's own classes (style.css).
+ * @param {{ mark: object, scene?: object|null, ended: boolean, count?: number, long?: boolean, busy?: string, note?: string }} o
  */
-export function atlasStripHtml({ mark = null, scene = null, ended = false } = {}) {
+export function atlasStripHtml({ mark = null, scene = null, ended = false, count = 0, long = false, busy = '', note = '' } = {}) {
     const id = (scene && scene.id) || (mark && mark.scene) || '';
     const title = (scene && scene.title) || (mark && mark.title) || '';
     const place = mark && mark.place && mark.place.label ? mark.place.label : (scene && scene.place ? scene.place.label : '');
     const date = mark && mark.startDate ? mark.startDate : (scene && scene.startDate ? scene.startDate : '');
-    const text = [`Scene ${sceneNoOf(id)}${title ? `: ${title}` : ''}`, ended ? 'ended' : place, ended ? (mark && mark.endDate ? mark.endDate : '') : date].filter(Boolean).join(' · ');
-    const atlas = `<button type="button" class="rpg-accordion-action-btn" data-act="atlas" title="${ended ? 'The world as it stands now: start the next scene from the map' : 'The map of this scene\'s world'}"><i class="fa-solid fa-map" aria-hidden="true"></i> Atlas</button>`;
+    const length = !ended && count > 0 ? `${count} ${count === 1 ? 'message' : 'messages'}` : '';
+    const text = busy || [`Scene ${sceneNoOf(id)}${title ? `: ${title}` : ''}`, ended ? 'ended' : place, ended ? (mark && mark.endDate ? mark.endDate : '') : date, length].filter(Boolean).join(' · ');
+    const off = busy ? ' disabled' : '';
+    const atlas = `<button type="button" class="rpg-accordion-action-btn" data-act="atlas" title="${ended ? 'The world as it stands now: start the next scene from the map' : 'The map of this scene\'s world'}"${off}><i class="fa-solid fa-map" aria-hidden="true"></i> Atlas</button>`;
+    const fresh = `<button type="button" class="rpg-accordion-action-btn${long && !busy ? ' is-nudged' : ''}" data-act="continue" title="${ended ? 'Start the next scene straight on from this one: the same place, the same people, no time passed' : 'End this scene and go straight on in a fresh chat: the same place, the same people, no time passed'}"${off}><i class="fa-solid fa-forward-step" aria-hidden="true"></i> Continue fresh</button>`;
     const actions = ended
-        ? `${atlas}<button type="button" class="rpg-accordion-action-btn" data-act="reopen" title="Play on; ending it again replaces its record and the memory"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reopen</button>`
-        : `${atlas}<button type="button" class="rpg-accordion-action-btn" data-act="end" title="Write the record of this scene and remember it"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> End scene</button>`;
-    return `<div class="dooms-strip-text"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i><span>${e(text)}</span></div><div class="dooms-strip-actions">${actions}</div>`;
+        ? `${atlas}${fresh}<button type="button" class="rpg-accordion-action-btn" data-act="reopen" title="Play on; ending it again replaces its record and the memory"${off}><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reopen</button>`
+        : `${atlas}${fresh}<button type="button" class="rpg-accordion-action-btn" data-act="end" title="Write the record of this scene and remember it"${off}><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> End scene</button>`;
+    const nudge = long && !busy ? '<span class="dooms-strip-nudge">a good place to go on in a fresh chat</span>' : '';
+    return `<div class="dooms-strip-text"><i class="fa-solid ${busy ? 'fa-hourglass-half' : 'fa-clapperboard'}" aria-hidden="true"></i><span>${e(text)}</span>${nudge}</div><div class="dooms-strip-actions">${actions}</div>${note ? `<div class="dooms-strip-note" role="status">${e(note)}</div>` : ''}`;
 }
 
 /** Why a chat cannot be played as scenes, in words (D172). */

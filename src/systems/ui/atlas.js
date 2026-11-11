@@ -24,7 +24,7 @@ import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHAN
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
 import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours } from './atlasViews.js';
-import { scenesPlan, prepareAdopt, commitAdopt, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd } from '../features/hub.js';
+import { scenesPlan, prepareAdopt, commitAdopt, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene } from '../features/hub.js';
 import { describeStartResult, describeEndResult, gapOf, hubConfig } from '../../utils/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
@@ -525,7 +525,7 @@ async function askOpeningsAgain() {
 
 // ─── Ending the scene in front (D176) ───────────────────────────────────────
 
-const endRunning = () => !!(setup && setup.end && (setup.busy || Object.values(setup.states || {}).includes('running')));
+const endRunning = () => !!(setup && setup.end && (setup.busy || setup.going || Object.values(setup.states || {}).includes('running')));
 
 /** The End sheet opened: the record of the scene is written (one to four requests) and shown to be corrected. Nothing is ended yet. */
 async function openEndScene() {
@@ -544,12 +544,12 @@ async function openEndScene() {
 }
 
 /** The scene ended: the record kept, the ledger read, the chat's stores made the world's memory, the world moved on. Each part's state is shown as it runs. */
-async function endSceneGo() {
+async function endSceneGo({ thenContinue = false } = {}) {
     if (!setup || !setup.end || !setup.prep || endRunning()) return;
     const $p = $(`${root()} .dooms-atlas-setup`);
     const recap = String($p.find('.dooms-atlas-end-recap').val() || '').trim();
     const skipCanon = $p.find('.dooms-atlas-end-skip-canon').is(':checked');
-    const skipWorld = $p.find('.dooms-atlas-end-skip-world').is(':checked');
+    const skipWorld = thenContinue || $p.find('.dooms-atlas-end-skip-world').is(':checked');    // going straight on, no time passes: the world is not moved (D181)
     const replaceMemory = $p.find('.dooms-atlas-end-replace').is(':checked');
     // The phrases ticked on the sheet are the ones held against the next scenes (D179); with no count on the sheet, End chooses by itself.
     const counted = setup.prep.style && Array.isArray(setup.prep.style.phrases) ? setup.prep.style.phrases : null;
@@ -569,6 +569,16 @@ async function endSceneGo() {
     result = describeEndResult(r);
     render();    // the chat in front is an ended scene now: the map shows the world as it stands
     renderSetup();
+    if (!thenContinue) return;
+    // End and continue here (D181): the next scene opened straight on from this one, its first opening taken as it comes.
+    setup = { ...setup, error: '', going: 'Writing how the next scene opens…' };
+    renderSetup();
+    const c = await continueScene({ onStep: (word) => { if (setup && setup.end) { setup = { ...setup, going: word }; renderSetup(); } } });
+    if (!setup || !setup.end) return;
+    if (!c.ok) { setup = { ...setup, going: '', error: c.reason === 'openers' ? 'The scene is ended, but no opening came back for the next one. Open a place on the map and press Start scene here.' : `The scene is ended, but the next one could not be opened (${c.reason}). Open a place on the map and press Start scene here.` }; renderSetup(); return; }
+    setup = null;
+    renderSetup();
+    closeAtlas();    // the next scene's chat is in front
 }
 
 // ─── Playing the story as scenes (D172) ─────────────────────────────────────
@@ -804,6 +814,7 @@ function build() {
             if (act === 'setup-close') { if (endRunning()) return; if (setup && setup.start) cancelStart(); setup = null; renderSetup(); render(); return; }
             if (act === 'end-scene') { await openEndScene(); return; }
             if (act === 'end-go') { await endSceneGo(); return; }
+            if (act === 'end-continue') { await endSceneGo({ thenContinue: true }); return; }
             if (act === 'scene-start') { ev.stopPropagation(); openSceneStart(this.getAttribute('data-id') || ''); return; }
             if (act === 'scene-write') { await writeOpenings(); return; }
             if (act === 'scene-pick') { await openWith(Number(this.getAttribute('data-choice')) || 0); return; }

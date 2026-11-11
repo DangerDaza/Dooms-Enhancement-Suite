@@ -66,6 +66,7 @@ const CONFIG_DEFAULTS = Object.freeze({
     recapChars: RECAP_CHARS,
     closeOnStart: true,    // the hub closes when a scene opens
     styleLaw: false,       // the count of repeated phrases at a scene's end and the list held against the next (D179): off until switched on (the owner, D180)
+    nudgeAt: 60,           // messages after which a scene's strip suggests going on in a fresh chat (D181); 0 never
 });
 
 export function defaultHubConfig() {
@@ -81,6 +82,7 @@ export function hubConfig(settings) {
         recapChars: int(h.recapChars, 200, 1500, CONFIG_DEFAULTS.recapChars),
         closeOnStart: h.closeOnStart !== false,
         styleLaw: h.styleLaw === true,
+        nudgeAt: h.nudgeAt === undefined || h.nudgeAt === null || h.nudgeAt === '' ? CONFIG_DEFAULTS.nudgeAt : int(h.nudgeAt, 0, 500, CONFIG_DEFAULTS.nudgeAt),
     };
 }
 
@@ -716,6 +718,43 @@ export function sceneFileName(n, title, existing = []) {
     if (!taken.has(base.toLowerCase())) return base;
     for (let i = 2; i < 1000; i++) { const name = `${base} (${i})`; if (!taken.has(name.toLowerCase())) return name; }
     return `${base} (${Date.now()})`;
+}
+
+// ─── A scene's length, and going straight on (D181) ─────────────────────
+
+/** How long a scene has run: its messages, the player's and the narrator's, system ones aside. */
+export function sceneLength(chat) {
+    let n = 0;
+    for (const m of Array.isArray(chat) ? chat : []) if (m && typeof m === 'object' && !m.is_system && typeof m.mes === 'string') n++;
+    return n;
+}
+
+/** A scene has run long enough that a fresh chat is worth it: at the mark or past it; never with the mark at 0. */
+export function sceneIsLong(count, nudgeAt) {
+    return Number.isFinite(nudgeAt) && nudgeAt > 0 && Number.isFinite(count) && count >= nudgeAt;
+}
+
+/**
+ * What the next scene is told when it goes straight on from this one
+ * (D181), as its "what brought us here": that no time has passed and
+ * nobody has moved, and the words the last scene stopped on (the end of
+ * the narrator's last message, from the start of a sentence where one is
+ * near), so the opening picks the moment up instead of starting a new one.
+ */
+export function continuationSeed(chat) {
+    const list = Array.isArray(chat) ? chat : [];
+    let last = '';
+    for (let i = list.length - 1; i >= 0 && !last; i--) {
+        const m = list[i];
+        if (!m || typeof m !== 'object' || m.is_user || m.is_system || typeof m.mes !== 'string') continue;
+        last = clean(m.mes.replace(/<think>[\s\S]*?<\/think>/gi, ' ').replace(/<trackers?>[\s\S]*?<\/trackers?>/gi, ' ').replace(/```[\s\S]*?```/g, ' ').replace(/\[(ITEM|CHECK|SAVE)[^\]]*\]/g, ' ').replace(/[*_]+/g, ''), 4000);
+    }
+    const lead = 'The story goes straight on from the moment the last scene stopped: no time has passed and nobody has moved. Open on that moment; do not repeat it and do not skip ahead.';
+    if (!last) return lead;
+    const room = MAX_SEED - lead.length - 24;
+    let tail = last.length > room ? last.slice(last.length - room) : last;
+    if (tail.length < last.length) { const cut = tail.search(/[.!?…"”]\s+\S/); tail = cut >= 0 && cut < tail.length * 0.6 ? tail.slice(cut + 1).trim() : `…${tail.replace(/^\S*\s/, '')}`; }
+    return `${lead} It stopped on: ${tail}`;
 }
 
 /** A backup's name (D175): the chat's own with what it is said after it, safe for a file, free among `existing` (names with or without .jsonl). */

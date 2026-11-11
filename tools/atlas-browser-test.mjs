@@ -1087,11 +1087,11 @@ console.log('\n§5i ending a scene from the Atlas; the strip above a scene\'s ch
     const scene = { id: 's3', title: 'The gate at dusk' };
     await page.evaluate((sc) => window.__endScene({ prep: { scene: sc }, busy: true }), scene);
     let v = await panel();
-    check('opened, the sheet names the scene and says the record is being written; End waits for it', /End scene 3: The gate at dusk/.test(v.text) && /What happened \(being written…\)/.test(v.text) && v.readonly && v.acts.join() === 'end-go:off,setup-close', JSON.stringify(v.acts));
+    check('opened, the sheet names the scene and says the record is being written; End waits for it', /End scene 3: The gate at dusk/.test(v.text) && /What happened \(being written…\)/.test(v.text) && v.readonly && v.acts.join() === 'end-go:off,end-continue:off,setup-close', JSON.stringify(v.acts));
     const prep = { ok: true, scene, recap: 'They met at the gate in the fog; Kiyoha carried the new healer\'s pack and said nothing about it.', from: 'Day 42', to: 'Day 42, night', stale: false, canonDone: false, steps: { canon: true, world: true } };
     await page.evaluate((p) => window.__endScene({ prep: p }), prep);
     v = await panel();
-    check('the record is shown to be corrected, with what ending will do: the record, the ledger, the world, the memory; the ledger and the world can each be left out', v.recap.startsWith('They met at the gate') && !v.readonly && /From Day 42 to Day 42, night\./.test(v.text) && /Canon reads the whole scene/.test(v.text) && /the clocks tick and people move, by the time the scene took/.test(v.text) && /with the map, kept for the next scene/.test(v.text) && v.parts.join() === 'is-waiting=waiting,is-waiting=waiting,is-waiting=waiting,is-waiting=waiting' && v.skips === 2 && !v.replace && v.acts.join() === 'end-go,setup-close' && v.inside, JSON.stringify(v.parts));
+    check('the record is shown to be corrected, with what ending will do: the record, the ledger, the world, the memory; the ledger and the world can each be left out', v.recap.startsWith('They met at the gate') && !v.readonly && /From Day 42 to Day 42, night\./.test(v.text) && /Canon reads the whole scene/.test(v.text) && /the clocks tick and people move, by the time the scene took/.test(v.text) && /with the map, kept for the next scene/.test(v.text) && v.parts.join() === 'is-waiting=waiting,is-waiting=waiting,is-waiting=waiting,is-waiting=waiting' && v.skips === 2 && !v.replace && v.acts.join() === 'end-go,end-continue,setup-close' && v.inside, JSON.stringify(v.parts));
     await shot('7zf-end-sheet');
     // The style law (D179): what the narration leaned on, counted, each a tick; the worst ticked already.
     const style = { messages: 31, phrases: [{ phrase: 'sweetheart', kind: 'address', count: 17, inMessages: 15, ticked: true }, { phrase: 'slight knowing smile', kind: 'phrase', count: 10, inMessages: 10, ticked: true }, { phrase: 'nine years', kind: 'phrase', count: 6, inMessages: 6, ticked: false }] };
@@ -1103,27 +1103,44 @@ console.log('\n§5i ending a scene from the Atlas; the strip above a scene\'s ch
     check('a scene with no habit shows no such list', (await page.evaluate(() => !document.querySelector('.dooms-atlas-habits-field'))));
     await page.evaluate((p) => window.__endScene({ prep: { ...p, stale: true, steps: { canon: false, world: true } } }), prep);
     v = await panel();
-    check('a scene the world has moved past: the sheet says its End keeps the newer memory, with the tick to replace it; Canon off is shown as off', /began before a later one ended/.test(v.text) && v.replace && /Canon is off/.test(v.text) && v.parts[1] === 'is-off=off' && v.skips === 1);
+    check('a scene the world has moved past: the sheet says its End keeps the newer memory, with the tick to replace it; Canon off is shown as off; it cannot be gone straight on from', /began before a later one ended/.test(v.text) && v.replace && /Canon is off/.test(v.text) && v.parts[1] === 'is-off=off' && v.skips === 1 && v.acts.join() === 'end-go,end-continue:off,setup-close');
     await page.evaluate((p) => window.__endScene({ prep: p, states: { recap: 'ok', canon: 'running', world: 'waiting', snapshot: 'waiting' } }), prep);
     v = await panel();
-    check('while it runs each part shows its state, and neither button can be pressed', v.parts.join() === 'is-ok=done,is-running=running…,is-waiting=waiting,is-waiting=waiting' && v.skips === 0 && v.acts.join() === 'end-go:off,setup-close:off' && /Ending…/.test(v.text));
+    check('while it runs each part shows its state, and neither button can be pressed', v.parts.join() === 'is-ok=done,is-running=running…,is-waiting=waiting,is-waiting=waiting' && v.skips === 0 && v.acts.join() === 'end-go:off,end-continue:off,setup-close:off' && /Ending…/.test(v.text));
     await page.evaluate((p) => window.__endScene({ prep: p, states: { recap: 'ok', canon: 'ok', world: 'skipped', snapshot: 'ok' }, result: { ok: true } }), prep);
     v = await panel();
     check('ended: it says so and what the map shows now, the record can no longer be changed, and the one button goes to the map', /The scene is ended and remembered\. The map shows the world as it stands now: open a place to start the next scene\./.test(v.text) && v.readonly && v.parts.join() === 'is-ok=done,is-ok=done,is-skipped=left out,is-ok=done' && v.acts.join() === 'setup-close' && /To the map/.test(v.text));
     await shot('7zg-end-done');
+    await page.evaluate((p) => window.__endScene({ prep: p, states: { recap: 'ok', canon: 'ok', world: 'skipped', snapshot: 'ok' }, result: { ok: true }, going: 'Writing how the next scene opens…' }), prep);
+    v = await panel();
+    check('End and continue here: ended, the sheet says what is being done for the next scene and nothing can be pressed (D181)', /The scene is ended and remembered\. Writing how the next scene opens…/.test(v.text) && v.acts.join() === 'setup-close:off');
+    check('the sheet\'s End and continue here says what it does', await page.evaluate((p) => { window.__endScene({ prep: p }); const b = document.querySelector('.dooms-atlas-setup-card [data-act="end-continue"]'); return /End and continue here/.test(b.textContent) && /same place, the same people, no time passed, so the world is not moved/.test(b.getAttribute('title')); }, prep));
     await page.evaluate(() => window.__endScene({ prep: null, error: 'The scene is not open.' }));
     v = await panel();
-    check('a chat whose scene cannot be ended says why, and End cannot be pressed', /The scene is not open\./.test(v.text) && v.acts.join() === 'end-go:off,setup-close');
+    check('a chat whose scene cannot be ended says why, and End cannot be pressed', /The scene is not open\./.test(v.text) && v.acts.join() === 'end-go:off,end-continue:off,setup-close');
     await page.evaluate(() => window.__setup(''));
     await page.evaluate(() => window.__set({ ending: null }));
 
-    // The strip above a scene's chat: the scene, its place and date, the Atlas and End scene; ended, the Atlas and Reopen.
-    await page.evaluate(() => window.__strip({ mark: { scene: 's3', title: 'The gate at dusk', place: { label: 'Hask' }, startDate: 'Day 42' }, scene: null, ended: false }));
-    let st = await page.evaluate(() => { const el = document.getElementById('dooms-scene-strip'); return { text: el.querySelector('.dooms-strip-text').textContent.trim(), acts: [...el.querySelectorAll('[data-act]')].map(x => `${x.getAttribute('data-act')}=${x.textContent.trim()}`) }; });
-    check('the strip of a scene being played: the scene, its place and its date; the Atlas and End scene', st.text === 'Scene 3: The gate at dusk · Hask · Day 42' && st.acts.join() === 'atlas=Atlas,end=End scene', JSON.stringify(st));
-    await page.evaluate(() => window.__strip({ mark: { scene: 's3', title: 'The gate at dusk', place: { label: 'Hask' }, startDate: 'Day 42', endDate: 'Day 42, night', endedAt: 9 }, scene: null, ended: true }));
-    st = await page.evaluate(() => { const el = document.getElementById('dooms-scene-strip'); return { text: el.querySelector('.dooms-strip-text').textContent.trim(), acts: [...el.querySelectorAll('[data-act]')].map(x => `${x.getAttribute('data-act')}=${x.textContent.trim()}`) }; });
-    check('the strip of a scene that has ended: says so, with the Atlas (where the next one starts) and Reopen', st.text === 'Scene 3: The gate at dusk · ended · Day 42, night' && st.acts.join() === 'atlas=Atlas,reopen=Reopen', JSON.stringify(st));
+    // The strip above a scene's chat (D176, D181): the scene, its place, its date and its length; the Atlas, Continue fresh and End scene.
+    const strip = () => page.evaluate(() => { const el = document.getElementById('dooms-scene-strip'); const r = el.getBoundingClientRect(); return { text: el.querySelector('.dooms-strip-text span').textContent.trim(), nudge: (el.querySelector('.dooms-strip-nudge') || { textContent: '' }).textContent.trim(), note: (el.querySelector('.dooms-strip-note') || { textContent: '' }).textContent.trim(), acts: [...el.querySelectorAll('[data-act]')].map(x => `${x.getAttribute('data-act')}=${x.textContent.trim()}${x.disabled ? ':off' : ''}${x.classList.contains('is-nudged') ? ':lit' : ''}`), fits: el.scrollWidth <= el.clientWidth + 1, h: r.height }; });
+    const mark = { scene: 's3', title: 'The gate at dusk', place: { label: 'Hask' }, startDate: 'Day 42' };
+    await page.evaluate((m) => window.__strip({ mark: m, scene: null, ended: false, count: 37 }), mark);
+    let st = await strip();
+    check('the strip of a scene being played: the scene, its place, its date and how long it has run; the Atlas, Continue fresh and End scene', st.text === 'Scene 3: The gate at dusk · Hask · Day 42 · 37 messages' && st.nudge === '' && st.acts.join() === 'atlas=Atlas,continue=Continue fresh,end=End scene' && st.fits, JSON.stringify(st));
+    await page.evaluate((m) => window.__strip({ mark: m, scene: null, ended: false, count: 61, long: true }), mark);
+    st = await strip();
+    check('past the length the player set, the strip says a fresh chat is worth it and Continue fresh is lit', st.text === 'Scene 3: The gate at dusk · Hask · Day 42 · 61 messages' && st.nudge === 'a good place to go on in a fresh chat' && st.acts.join() === 'atlas=Atlas,continue=Continue fresh:lit,end=End scene' && st.fits, JSON.stringify(st));
+    check('Continue fresh says what it does', await page.evaluate(() => /End this scene and go straight on in a fresh chat: the same place, the same people, no time passed/.test(document.querySelector('#dooms-scene-strip [data-act="continue"]').getAttribute('title'))));
+    await shot('7zj-strip-long');
+    await page.evaluate((m) => window.__strip({ mark: m, scene: null, ended: false, count: 61, long: true, busy: 'Writing the record of the scene…' }), mark);
+    st = await strip();
+    check('while it goes on in a fresh chat the strip says what is being done and nothing can be pressed', st.text === 'Writing the record of the scene…' && st.nudge === '' && st.acts.join() === 'atlas=Atlas:off,continue=Continue fresh:off,end=End scene:off', JSON.stringify(st));
+    await page.evaluate((m) => window.__strip({ mark: m, scene: null, ended: false, count: 61, long: true, note: 'The record of the scene could not be written. Use End scene to write it yourself.' }), mark);
+    st = await strip();
+    check('when it stops the strip says why, on a line of its own', st.note === 'The record of the scene could not be written. Use End scene to write it yourself.' && st.acts.length === 3 && st.fits);
+    await page.evaluate((m) => window.__strip({ mark: { ...m, endDate: 'Day 42, night', endedAt: 9 }, scene: null, ended: true, count: 61 }), mark);
+    st = await strip();
+    check('the strip of a scene that has ended: says so, with the Atlas (where the next one starts), Continue fresh (straight on from it) and Reopen; its length is no longer told', st.text === 'Scene 3: The gate at dusk · ended · Day 42, night' && st.acts.join() === 'atlas=Atlas,continue=Continue fresh,reopen=Reopen', JSON.stringify(st));
     await page.evaluate(() => window.__strip(null));
 }
 

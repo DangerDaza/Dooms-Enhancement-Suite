@@ -19,7 +19,7 @@ import {
     sceneTranscript, sceneTranscriptPages, buildRecapPrompt, parseRecapReply, isStaleScene, markIsOfFile,
     openSceneOf, asideScenes, openScene, setSceneAside, resumeScene, endSceneRecord, reopenScene, sceneByChat, markChatGone, renameSceneChat, removeGoneScene, reconcileScenesWithChats, lastRecaps,
     hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE, backupFileName,
-    loreEntries, castLore, standingLore, LORE_PER_PERSON, LORE_STANDING,
+    loreEntries, castLore, standingLore, LORE_PER_PERSON, LORE_STANDING, sceneLength, sceneIsLong, continuationSeed,
 } from '../src/utils/hub.js';
 import { normalizePack, seedWorldState, countMessage, applyAdvance, reconcileWithChat, seenInScene } from '../src/utils/liveWorld.js';
 import { visitPlace, reconcileVisited } from '../src/utils/worldMap.js';
@@ -39,7 +39,8 @@ const clock = pack.clocks[0];
 
 console.log('\n§1 the rules');
 {
-    check('defaults: later that day, 600 characters, the hub closes on Start, the count of repeated phrases off', same(defaultHubConfig(), { gap: 'later', recapChars: 600, closeOnStart: true, styleLaw: false }));
+    check('defaults: later that day, 600 characters, the hub closes on Start, the count of repeated phrases off', same(defaultHubConfig(), { gap: 'later', recapChars: 600, closeOnStart: true, styleLaw: false, nudgeAt: 60 }));
+    check('a fresh chat is suggested after sixty messages unless the player says otherwise: any number from 0 (never) to 500', hubConfig({}).nudgeAt === 60 && hubConfig({ hub: { nudgeAt: 0 } }).nudgeAt === 0 && hubConfig({ hub: { nudgeAt: '80' } }).nudgeAt === 80 && hubConfig({ hub: { nudgeAt: 9999 } }).nudgeAt === 500 && hubConfig({ hub: { nudgeAt: -5 } }).nudgeAt === 0 && hubConfig({ hub: { nudgeAt: 'soon' } }).nudgeAt === 60 && hubConfig({ hub: { nudgeAt: '' } }).nudgeAt === 60);
     check('the count of repeated phrases is on only when switched on, by exactly that', hubConfig({}).styleLaw === false && hubConfig({ hub: { styleLaw: true } }).styleLaw === true && hubConfig({ hub: { styleLaw: 'yes' } }).styleLaw === false && hubConfig({ hub: { styleLaw: 1 } }).styleLaw === false);
     check('no settings: the defaults', same(hubConfig(null), defaultHubConfig()) && same(hubConfig({ hub: 'x' }), defaultHubConfig()));
     const c = hubConfig({ hub: { gap: 'when', recapChars: 9999, closeOnStart: false } });
@@ -308,6 +309,21 @@ console.log('\n§8c the people\'s own notes, from the lorebooks (D177)');
     const rich = buildOpenersPrompt({ ...base, lore: cast.found.slice(0, 2).map(f => ({ name: f.name, text: f.text })), standing });
     check('the openings\' request carries each person\'s notes under their name and the standing notes, and is told to write each person as their notes say, no two alike', rich.user.includes('Their own notes:\n[Kiyoha] KIYOHA — the company\'s front line') && rich.user.includes('[Lysandra Vale] LYSANDRA') && rich.user.includes('The story\'s standing notes:\nSTORY CANON: TAILS RULING') && rich.user.indexOf('Their own notes:') > rich.user.indexOf('People here:') && rich.user.indexOf('What brought us here:') > rich.user.indexOf('The story\'s standing notes:') && /their own manner and their own way of speaking, so that no two of them sound alike/.test(rich.system) && /standing notes hold over anything else/.test(rich.system));
     check('with no lorebook read the request is exactly as it was', !plain.user.includes('Their own notes') && !plain.user.includes('standing notes') && !/own notes/.test(plain.system) && same(buildOpenersPrompt({ ...base, lore: [], standing: '' }), plain));
+}
+
+console.log('\n§8d a scene\'s length, and going straight on (D181)');
+{
+    const chat = [
+        { is_user: false, mes: 'The opener.' }, { is_user: true, mes: 'I go down.' }, { is_user: false, is_system: true, mes: 'A picture.' },
+        { is_user: false, mes: `Kiyoha laughs. ${'She shoulders the axe and looks back down the stair. '.repeat(9)}<think>where next</think> "Well? Are you coming, healer?"` },
+        null, { is_user: true },
+    ];
+    check('a scene is as long as its messages, the player\'s and the narrator\'s; a system message is none', sceneLength(chat) === 3 && sceneLength([]) === 0 && sceneLength(null) === 0);
+    check('long enough for a fresh chat: at the mark or past it; never with the mark at 0', sceneIsLong(60, 60) && sceneIsLong(75, 60) && !sceneIsLong(59, 60) && !sceneIsLong(500, 0) && !sceneIsLong(NaN, 60));
+    const seed = continuationSeed(chat);
+    check('the next scene is told it goes straight on: no time passed, nobody moved, open on that moment', seed.startsWith('The story goes straight on from the moment the last scene stopped: no time has passed and nobody has moved. Open on that moment; do not repeat it and do not skip ahead.'));
+    check('and the words the last scene stopped on: the end of the narrator\'s last message, from the start of a sentence, thinking left out, within what a seed may hold', seed.endsWith('"Well? Are you coming, healer?"') && seed.includes('It stopped on: She shoulders the axe') && !seed.includes('where next') && seed.length <= 400, seed.slice(-220));
+    check('a short last message is given whole; a chat with no narrator\'s message gives the instruction alone', continuationSeed([{ is_user: false, mes: 'The door opens.' }]).endsWith('It stopped on: The door opens.') && !continuationSeed([{ is_user: true, mes: 'I wait.' }]).includes('It stopped on') && !continuationSeed(null).includes('It stopped on'));
 }
 
 console.log('\n§9 the lines');

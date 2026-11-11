@@ -14369,6 +14369,12 @@ body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0
 #dooms-scene-strip .dooms-strip-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #dooms-scene-strip .dooms-strip-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
 #dooms-scene-strip .rpg-accordion-action-btn { width: auto; flex: 0 0 auto; padding: 4px 10px; font-size: 0.9em; }
+/* A scene that has run long (docs/long-shot-plan.md D181): the strip says a fresh chat is worth it and Continue fresh is lit; a handover's own word, and why one stopped. */
+#dooms-scene-strip.is-long { border-color: var(--rpg-highlight, #e94560); }
+#dooms-scene-strip .dooms-strip-nudge { flex: 0 0 auto; color: #f2c14e; white-space: nowrap; }
+#dooms-scene-strip .rpg-accordion-action-btn.is-nudged { border-color: var(--rpg-highlight, #e94560); box-shadow: inset 0 0 0 1px var(--rpg-highlight, #e94560); }
+#dooms-scene-strip .rpg-accordion-action-btn:disabled { opacity: 0.5; cursor: default; }
+#dooms-scene-strip .dooms-strip-note { flex: 1 1 100%; color: #f2c14e; overflow-wrap: anywhere; }
 @media (max-width: 640px) {
     /* Full screen on a phone, the Workshop's rule: the containing block can collapse, so the viewport is named. */
     #rpg-hub-popup { padding: 0; width: 100vw; height: 100vh; height: 100dvh; }

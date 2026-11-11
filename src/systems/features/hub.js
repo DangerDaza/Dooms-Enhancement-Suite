@@ -36,14 +36,14 @@ import {
     sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, isStaleScene, markIsOfFile, sceneTranscriptPages, renameSceneChat,
-    adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS,
+    adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
 } from '../../utils/hub.js';
 import { normalizeBook } from '../../utils/atlas.js';
 import { narratorTexts, countStyle, applyStyle } from '../../utils/styleLaw.js';
 
 export const BRIEF_SLOT = 'dooms-scene-brief';
 import { ensureCss } from '../../core/cssLoader.js';
-import { isLiveWorldOn, loadPack, getWorldState, getActivePack, saveWorld, adoptWorld } from './liveWorld.js';
+import { isLiveWorldOn, loadPack, getWorldState, getActivePack, saveWorld, adoptWorld, presentNamesFromTracker } from './liveWorld.js';
 import { isCanonOn, updateCanon } from './canon.js';
 import { resolvePersonaName } from './diceRolls.js';
 
@@ -333,6 +333,7 @@ export function currentScene() {
 /** CHAT_CHANGED: the chat in front, a scene or not. */
 export function onHubChatChanged() {
     pending = null;
+    stripNote = '';
     const mark = extensionSettings.enabled ? readMark(meta()) : null;
     current = mark ? { worldId: mark.world, mark } : null;
     if (!current) setBriefSlot('');
@@ -1247,6 +1248,110 @@ export async function commitAdopt({ recap = '', replace = false } = {}) {
     }
 }
 
+// ─── Going straight on in a fresh chat (D181) ───────────────────────────
+
+let continuing = false;
+
+export function isContinuing() {
+    return continuing;
+}
+
+/** How long the scene in front has run and whether it is long enough to go on in a fresh chat; null when the chat is no scene. */
+export function sceneLengthNow() {
+    const cur = currentScene();
+    if (!cur) return null;
+    const count = sceneLength(chatArray() || []);
+    return { count, nudgeAt: cfg().nudgeAt, long: !cur.ended && sceneIsLong(count, cfg().nudgeAt), ended: cur.ended };
+}
+
+/** Where the scene in front stands now, for the one that goes straight on from it: its world, the place the story is at, who is there, and the words it stopped on. */
+function continuationOf(cur) {
+    const players = playerNames();
+    const at = factsNow().location || (cur.mark.place && cur.mark.place.label) || '';
+    const began = cur.mark.place || {};
+    const place = began.label && sameName(at, began.label) ? { id: began.id || '', label: began.label } : { label: at };
+    let cast = [];
+    try { cast = presentNamesFromTracker(); } catch (e) { cast = []; }
+    if (!cast.length) cast = Array.isArray(cur.mark.cast) ? cur.mark.cast : [];
+    cast = cast.filter(n => n && !players.some(p => sameName(p, n)));
+    return { worldId: cur.worldId, sceneId: cur.mark.scene, title: cur.mark.title || '', place, cast, seedText: continuationSeed(chatArray() || []) };
+}
+
+/**
+ * The scene in front ended and the next one opened straight on from it,
+ * in one go (D181): the same place, the same people, no time passed. The
+ * point of it is a fresh chat without a break in the story: the record
+ * is written, the scene remembered (the ledger read, the world not moved:
+ * no time passes), and the next scene's first opening is taken as it
+ * comes; the other two are its swipes. A scene that has ended already is
+ * only gone on from. It stops, with nothing more changed, when the record
+ * cannot be written (the End sheet is the way then), when the world has
+ * moved past the scene, or when no opening comes back (the scene is
+ * ended; the next is started from the map).
+ * @param {object} o
+ * @param {Function} o.onStep   told what is being done, in words
+ * @returns {Promise<{ ok: boolean, reason: string, stage: 'end'|'start', scene?: object, file?: string, error?: string }>}
+ */
+export async function continueScene({ onStep = null } = {}) {
+    const say = (word) => { if (typeof onStep === 'function') { try { onStep(word); } catch (e) { /* the caller's own */ } } };
+    if (continuing) return { ok: false, reason: 'running', stage: 'end' };
+    const cur = currentScene();
+    if (!cur) return { ok: false, reason: 'not-scene', stage: 'end' };
+    continuing = true;
+    try {
+        const next = continuationOf(cur);    // read while the scene's chat is in front and its tracker is the live one
+        if (!cur.ended) {
+            say('Writing the record of the scene…');
+            const p = await prepareEnd();
+            if (!p.ok) return { ok: false, reason: p.reason, stage: 'end' };
+            if (p.stale) return { ok: false, reason: 'stale', stage: 'end' };
+            if (p.error || !p.recap) return { ok: false, reason: 'no-recap', stage: 'end', error: p.error || '' };
+            say('Remembering the scene…');
+            const e = await commitEnd({ recap: p.recap, skipWorld: true });
+            if (!e.ok) return { ok: false, reason: e.reason, stage: 'end' };
+        }
+        say('Writing how the next scene opens…');
+        const p2 = await prepareScene({ worldId: next.worldId, seed: { kind: 'scene', id: next.sceneId, label: next.title, text: next.seedText }, place: next.place, cast: next.cast, gap: { id: 'now' } });
+        if (!p2.ok) return { ok: false, reason: p2.reason, stage: 'start' };
+        if (!p2.openers.length) { cancelStart(); return { ok: false, reason: 'openers', stage: 'start', error: (p2.errors || []).join(' ') }; }
+        say('Opening the next scene…');
+        const r = await commitScene(p2.token, { choice: 0 });
+        if (!r.ok) return { ok: false, reason: r.reason, stage: 'start' };
+        return { ok: true, reason: '', stage: 'start', scene: r.scene, file: r.file };
+    } catch (e) {
+        return { ok: false, reason: 'error', stage: 'end', error: String(e && e.message || e) };
+    } finally {
+        continuing = false;
+    }
+}
+
+/** Why a handover stopped, in words for the strip. */
+function continueRefusal(r) {
+    if (r.stage === 'start') return r.reason === 'openers' ? 'The scene is ended, but no opening came back for the next. Open the Atlas and start it from the map.' : `The scene is ended, but the next could not be opened (${describeStartWord(r)}). Open the Atlas and start it from the map.`;
+    if (r.reason === 'no-recap') return 'The record of the scene could not be written. Use End scene to write it yourself.';
+    if (r.reason === 'stale') return 'A later scene has ended since this one began. Use End scene to choose what is kept.';
+    if (r.reason === 'busy') return 'A reply is still being written. Try again when it is done.';
+    if (r.reason === 'running') return 'This is already being done.';
+    return `The scene could not be ended (${r.reason || 'unknown'}). Use End scene.`;
+}
+const describeStartWord = (r) => (r.reason === 'scene-open' ? 'another scene is open' : r.reason === 'busy' ? 'another request is running' : r.reason === 'card-gone' ? 'the narrator card is gone' : r.reason || 'unknown');
+
+/** The strip's own way of going on (D181): the handover run with its steps shown on the strip; when it stops, the strip says why. */
+async function continueFromStrip() {
+    if (continuing) return;
+    stripNote = '';
+    stripBusy = 'Going on in a fresh chat…';
+    mountStrip();
+    const r = await continueScene({ onStep: (word) => { stripBusy = word; mountStrip(); } });
+    stripBusy = '';
+    stripNote = r.ok ? '' : continueRefusal(r);
+    mountStrip();
+    // The record could not be written, or the world has moved past the scene: the End sheet is where that is settled.
+    if (!r.ok && r.stage === 'end' && (r.reason === 'no-recap' || r.reason === 'stale')) {
+        try { const m = await import('../ui/atlas.js'); await m.openAtlasEnd(); } catch (e) { log('the End sheet could not be opened', String(e && e.message || e)); }
+    }
+}
+
 // ─── The scene chat's own events ────────────────────────────────────────
 
 const OPENER = (m) => !!(m && !m.is_user && m.extra && m.extra[HUB_META_KEY] && m.extra[HUB_META_KEY].opener);
@@ -1268,6 +1373,7 @@ function seededTracker() {
  */
 export function onHubMessageReceived(messageId, type) {
     if (!extensionSettings.enabled) return;
+    try { mountStrip(); } catch (e) { /* no DOM */ }    // the scene is a reply longer: its count, and the nudge when it is due (D181)
     const list = chatArray();
     const m = list && list.length ? list[list.length - 1] : null;
     if (!OPENER(m) || (type !== 'first_message' && list.length > 1)) return;
@@ -1291,6 +1397,7 @@ export function onHubMessageReceived(messageId, type) {
  */
 export function onHubMessageDeleted() {
     if (!extensionSettings.enabled || !currentScene()) return;
+    try { mountStrip(); } catch (e) { /* no DOM */ }
     const list = chatArray() || [];
     if (list.some(x => x && !x.is_user && !x.is_system)) return;
     const seed = seededTracker();
@@ -1420,17 +1527,21 @@ function mountStrip() {
         if (token !== stripToken) return;
         const again = currentScene();
         if (!again) return;
-        const html = v.atlasStripHtml({ mark: again.mark, scene: again.scene, ended: again.ended });    // the Atlas is the scenes' window (D176)
+        const count = sceneLength(chatArray() || []);
+        const long = !again.ended && sceneIsLong(count, cfg().nudgeAt);    // the scene has run long enough that a fresh chat is worth it (D181)
+        const html = v.atlasStripHtml({ mark: again.mark, scene: again.scene, ended: again.ended, count, long, busy: stripBusy, note: stripNote });    // the Atlas is the scenes' window (D176)
         let el = document.getElementById(STRIP_DOM_ID);
         if (!el) {
             chatEl.insertAdjacentHTML('beforebegin', `<div id="${STRIP_DOM_ID}" class="dooms-scene-strip" role="region" aria-label="This scene"></div>`);
             el = document.getElementById(STRIP_DOM_ID);
         }
-        if (el) el.innerHTML = html;
+        if (el) { el.innerHTML = html; if (el.classList && typeof el.classList.toggle === 'function') { el.classList.toggle('is-long', long); el.classList.toggle('is-busy', !!stripBusy); } }
     }).catch(e => log('the strip could not be shown', String(e && e.message || e)));
 }
 
 const STRIP_DOM_ID = 'dooms-scene-strip';
+let stripBusy = '';    // what a handover is doing, shown on the strip in place of its text
+let stripNote = '';    // why the last handover stopped, shown on the strip until the chat changes or another is tried
 let stripToken = 0;
 
 /** The records against the card's chats (D128): gone files marked, marked chats the list lost brought back. */
@@ -1488,6 +1599,7 @@ export function initHub() {
             const act = this.getAttribute('data-act');
             ev.preventDefault();
             if (act === 'reopen') { const r = await reopenCurrentScene(); if (!r.ok) log('reopen refused', r.reason); return; }
+            if (act === 'continue') { await continueFromStrip(); return; }
             const m = await import('../ui/atlas.js');
             if (act === 'end') await m.openAtlasEnd();
             else await m.openAtlas();

@@ -754,5 +754,64 @@ console.log('\n§14 the style law: what the narrator leaned on is held against t
     hub.__setOpenersTransport(null);
 }
 
+console.log('\n§15 going straight on in a fresh chat (D181)');
+{
+    const W = 'first-descent';
+    let openersAsked = null;
+    let openerReply = '{"when":{"date":"Day 62","time":"dusk"},"openers":[{"title":"On the stair","text":"Kiyoha is still laughing when the lamp gutters.","who":["Kiyoha"]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}';
+    hub.__setOpenersTransport(async (p) => { openersAsked = p; return openerReply; });
+    let recapReply = '{"recap":"They went down to the third landing; Kiyoha took the front."}';
+    hub.__setRecapTransport(async () => recapReply);
+    let gapRuns = 0;
+    hub.__setGapTransport(async () => { gapRuns++; return '{"elapsed":"a day","now":{"date":"Day 63","time":"dawn"},"clocks":{},"moved":[],"blurb":"x","heard":[]}'; });
+    // §14 left an ended scene in front: going on from it starts the next and ends nothing.
+    const before = hub.worldEntry(W).scenes.length;
+    const steps0 = [];
+    const c0 = await hub.continueScene({ onStep: (w) => steps0.push(w) });
+    check('from a scene that has ended already, the next is opened straight on and nothing is ended again', c0.ok && c0.stage === 'start' && hub.worldEntry(W).scenes.length === before + 1 && same(steps0, ['Writing how the next scene opens…', 'Opening the next scene…']) && hub.isScene() && !hub.currentScene().ended, JSON.stringify([c0, steps0]));
+    // Played on: the tracker says where the story is and who is there now.
+    const box = JSON.stringify({ date: { value: 'Day 62' }, time: { start: 'dusk', end: 'night' }, location: { value: 'The Black Stair, third landing' }, weather: { emoji: '🕯', forecast: 'still air' } });
+    const thoughts = JSON.stringify({ characters: [{ name: 'Kiyoha', emoji: '🪓', thoughts: { content: 'x' } }, { name: 'Lysandra', emoji: '🦊', thoughts: { content: 'y' } }, { name: 'Jordan', emoji: '🙂', thoughts: { content: 'z' } }] });
+    for (let i = 0; i < 3; i++) { chat.push(user(`Down, ${i}.`)); chat.push(ai(`Landing ${i + 1}. Kiyoha takes the front.${i === 2 ? ' "Well? Are you coming, healer?"' : ''}`)); }
+    state.setLastGeneratedData({ ...state.lastGeneratedData, infoBox: box, characterThoughts: thoughts });
+    state.setCommittedTrackerData({ ...state.committedTrackerData, infoBox: box, characterThoughts: thoughts });
+    const len = hub.sceneLengthNow();
+    check('the scene in front knows how long it has run and whether that is long enough for a fresh chat', len.count === 7 && len.nudgeAt === 60 && len.long === false && len.ended === false, JSON.stringify(len));
+    extensionSettings.hub.nudgeAt = 5;
+    check('past the length the player set, it is', hub.sceneLengthNow().long === true);
+    extensionSettings.hub.nudgeAt = 60;
+    const playedFile = ctxTarget.chatId;
+    const playedId = hub.currentScene().mark.scene;
+    const steps = [];
+    gapRuns = 0;
+    const c = await hub.continueScene({ onStep: (w) => steps.push(w) });
+    const entry = hub.worldEntry(W);
+    const prev = entry.scenes.find(x => x.id === playedId);
+    const nextScene = entry.scenes[entry.scenes.length - 1];
+    check('one go: the scene is ended with its record and the next is opened, each step said', c.ok && same(steps, ['Writing the record of the scene…', 'Remembering the scene…', 'Writing how the next scene opens…', 'Opening the next scene…']) && prev.status === 'ended' && prev.recap.startsWith('They went down to the third landing') && nextScene.status === 'open' && nextScene.id !== playedId && ctxTarget.chatId === c.file && ctxTarget.chatId !== playedFile, JSON.stringify([c, steps]));
+    check('no time passes, so the world is not moved', gapRuns === 0);
+    check('the next scene is where the story stood and with who was there, not where the last one began', meta.dooms_hub.place.label === 'The Black Stair, third landing' && same(meta.dooms_hub.cast, ['Kiyoha', 'Lysandra']) && meta.dooms_hub.gap.id === 'now', JSON.stringify([meta.dooms_hub.place, meta.dooms_hub.cast]));
+    check('its opening is asked for as going straight on, with the words the last scene stopped on and the record of it', openersAsked.user.includes('What brought us here: The story goes straight on from the moment the last scene stopped') && openersAsked.user.includes('"Well? Are you coming, healer?"') && openersAsked.user.includes('this scene opens right after') && openersAsked.user.includes('Last scene: They went down to the third landing'), openersAsked.user.slice(0, 900));
+    check('the first opening is the first message and the other two are its swipes', chat.length === 1 && chat[0].mes.startsWith('Kiyoha is still laughing') && chat[0].swipes.length === 3);
+    // The record cannot be written: nothing is ended, and the End sheet is the way.
+    chat.push(user('On.'));
+    chat.push(ai('On, then.'));
+    recapReply = '';
+    const stuck = await hub.continueScene({});
+    check('when the record cannot be written nothing is ended and nothing is started', stuck.ok === false && stuck.stage === 'end' && stuck.reason === 'no-recap' && hub.currentScene().ended === false && hub.worldEntry(W).scenes.length === entry.scenes.length);
+    // No opening comes back: the scene is ended, the next is not started.
+    recapReply = '{"recap":"On they went."}';
+    openerReply = 'I would rather not.';
+    const half = await hub.continueScene({});
+    check('when no opening comes back the scene is ended and remembered, and the next is left to be started from the map', half.ok === false && half.stage === 'start' && half.reason === 'openers' && hub.currentScene().ended === true && hub.pendingStart() === null && hub.sceneStartPlan().ok === true, JSON.stringify(half));
+    ctxTarget.characterId = 0;
+    ctxTarget.name2 = 'Mara Vane';
+    await openPlain('Mara Vane - plain four');
+    check('a chat that is no scene has nothing to go on from, and no length', (await hub.continueScene({})).reason === 'not-scene' && hub.sceneLengthNow() === null);
+    hub.__setRecapTransport(null);
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

@@ -609,3 +609,23 @@ behind a switch for now." Built in "Atlas 23".
 The form the owner wants for it is not this one and is not yet said. D179
 stands as a working first form behind the switch; nothing more is built
 on it until he says what it should be.
+
+## 26. The scenes build, step 6: a scene's length, the nudge, and going straight on (2026-11-11, D181)
+
+The owner, asked what came first of what was left: "yes start on 1" (the
+message count, the nudge, and End and continue here). His reason for
+scenes at all (§16): characters are strongest at the start of a chat and
+flatten around message 100. Built in "Atlas 24".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D181 | The strip counts the scene, says when a fresh chat is worth it, and goes on in one click | **The length:** the strip above a scene's chat tells how long it has run ("Scene 3: The gate at dusk · Hask · Day 42 · 37 messages": the player's messages and the narrator's, system ones aside, `sceneLength`), kept up as replies come and go. **The nudge:** from the length the player set (`hub.nudgeAt`, sixty by default, 0 never; Settings, Live World, The Hub: "Suggest a fresh chat after this many messages") the strip says "a good place to go on in a fresh chat" and Continue fresh is lit. Nothing is done by itself. **Continue fresh** (the strip, any time; `continueScene`): the scene is ended and the next opened straight on from it in one go: the record is written, the scene remembered (the ledger read; **the world not moved**, since no time passes: D178's tick is for a scene that ends in the story, not for a change of chat), and the next scene is started at the place the story stands at now and with the people the tracker has there now (not where the scene began), right after, its openings asked for as going straight on with the words the last scene stopped on (`continuationSeed`: "no time has passed and nobody has moved. Open on that moment; do not repeat it and do not skip ahead. It stopped on: …"). The first opening is taken as it comes and the other two are its swipes, so nothing is asked of the player on the way. The strip says each step as it runs and nothing can be pressed meanwhile. It stops with nothing more changed when the record cannot be written or the world has moved past the scene (the End sheet opens: that is where either is settled), and when no opening comes back (the scene is ended; the strip says to start the next from the map). On a scene that has ended already it only opens the next. **End and continue here** is the same from the End sheet, for the player who wants to correct the record first: the sheet's second button, not offered for a scene the world has moved past. |
+
+It costs what an End and a Start cost: the record (one request a page of
+the scene, one to four), the ledger (one, when Canon is on), the openings
+(one). A scene of sixty messages is about five.
+
+Not done here: Travel here inside a scene stays in the same chat, as it
+was; "End and start a scene here" on a place's card (end this scene and
+open one elsewhere, with the journey's time) is not built: ending and then
+starting from the map does it in two steps.
