@@ -27,8 +27,8 @@ import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHAN
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
 import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml } from './atlasViews.js';
-import { scenesPlan, prepareAdopt, commitAdopt, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, hubWorldIds, cardOf, refreshScenes, setSceneAside, resumeScene, removeGoneScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
-import { describeStartResult, describeEndResult, gapOf, hubConfig } from '../../utils/hub.js';
+import { scenesPlan, prepareAdopt, commitAdopt, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, hubWorldIds, cardOf, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
+import { describeStartResult, describeEndResult, describeDeleteResult, gapOf, hubConfig } from '../../utils/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
 
@@ -96,6 +96,8 @@ let picked = '';
 let pickedPack = null;    // its pack, loaded when it is picked
 let worlds = [];          // the worlds that can be picked: [{ id, name, card }]
 let worldsToken = 0;
+let deleting = '';        // the scene whose Delete was pressed and waits for "Delete scene N" or "Keep it" (D197)
+let deletingNow = '';     // the scene being deleted
 /** The pack the Atlas draws: the picked world's, else the chat's. */
 const thePack = () => (picked ? pickedPack : getActivePack());
 let startPlan = { ok: false, reason: '' };    // whether a scene can be started from here, and in which world (D174); read anew on every draw
@@ -396,7 +398,7 @@ function tabBody({ state, pack, cfg }) {
         const entry = id ? worldEntry(id) : null;
         let front = '';
         try { const cur = currentScene(); if (cur && cur.worldId === id) front = cur.mark.scene; } catch (e) { front = ''; }
-        return atlasSceneListHtml({ scenes: entry ? entry.scenes : [], plan: startPlan, why: whyNoStart(), front });
+        return atlasSceneListHtml({ scenes: entry ? entry.scenes : [], plan: startPlan, why: whyNoStart(), front, deleting, busy: deletingNow });
     }
     // Under the hooks, the quests completed in this chat (the old Map window's own panel; the owner kept it, 2026-11-10).
     if (tab === 'hooks') {
@@ -1161,6 +1163,7 @@ async function pickWorld(id) {
     arm(null);
     picked = next;
     pickedPack = pack;
+    deleting = '';
     layer = '';
     result = '';
     render();
@@ -1228,7 +1231,7 @@ function build() {
             if (act === 'party') { if (!(model && model.partyId && showAnywhere(model.partyId))) { result = 'The party is nowhere on a map yet.'; render(); } return; }
             if (act === 'layer') { setLayer(this.getAttribute('data-id') || ''); return; }
             if (act === 'enter') { ev.stopPropagation(); enter(this.getAttribute('data-id') || ''); return; }
-            if (act === 'tab') { closeFacePopover(); const next = this.getAttribute('data-tab') || ''; if (next !== tab) { tab = ATLAS_TABS.some(t => t.id === next) ? next : ATLAS_TABS[0].id; keep(TAB_KEY, tab); render(); } return; }
+            if (act === 'tab') { closeFacePopover(); deleting = ''; const next = this.getAttribute('data-tab') || ''; if (next !== tab) { tab = ATLAS_TABS.some(t => t.id === next) ? next : ATLAS_TABS[0].id; keep(TAB_KEY, tab); render(); } return; }
             if (act === 'kind') { const k = this.getAttribute('data-kind') || ''; setHidden(hidden.includes(k) ? hidden.filter(x => x !== k) : [...hidden, k]); return; }
             if (act === 'kinds-on') { setHidden([]); return; }
             if (act === 'kinds-off') { setHidden(ATLAS_KINDS.map(k => k.id)); return; }
@@ -1289,6 +1292,25 @@ function build() {
                     render();
                 }
                 await openEndScene();
+                return;
+            }
+            // Delete (D197): asked for, then confirmed on the scene's own row; the record and the chat go together.
+            if (act === 'sc-delete') { deleting = sid; render(); return; }
+            if (act === 'sc-delete-no') { deleting = ''; render(); return; }
+            if (act === 'sc-delete-go') {
+                if (deletingNow) return;
+                const world = hubWorld();
+                deleting = '';
+                deletingNow = sid;
+                result = '';
+                render();
+                let r = null;
+                try { r = await deleteScene(world, sid); } catch (e) { r = { ok: false, reason: 'error', error: String(e && e.message || e) }; }
+                deletingNow = '';
+                // The scene in front was deleted and another chat is open in its place: the Atlas stays on the world whose scene it was.
+                if (r && r.ok && r.opened) { try { await pickWorld(world); } catch (e) { /* the chat's own world is shown */ } }
+                result = describeDeleteResult(r);
+                render();
                 return;
             }
             if (act === 'sc-aside') { result = setSceneAside(hubWorld(), sid) ? 'Set aside: nothing of it is remembered until it is ended. Another scene can be started.' : 'That scene could not be set aside.'; render(); return; }
@@ -1610,6 +1632,7 @@ export function closeAtlas() {
     undoBook = null;
     picked = '';         // the Atlas opens on the chat in front again
     pickedPack = null;
+    deleting = '';
     pickToken++;
     $(`${root()} .dooms-atlas-setup`).prop('hidden', true).empty();
     $(root()).removeClass('is-open is-armed is-roading has-sheet').css('display', 'none');

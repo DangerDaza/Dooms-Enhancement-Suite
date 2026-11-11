@@ -961,3 +961,47 @@ the phone's sidebar, tools at three widths, a place's card, the End
 sheet scrolled to its end, Start a scene, World gen; the window held by
 something half the screen tall; a wide screen unchanged). Every one of
 §8's checks but the last fails on the styles before this.
+
+## 36. A scene deleted (2026-11-11, D197)
+
+The owner: "What does set aside do for scenes and we need a delete scene
+button." Until now a scene left the list one way only: its chat deleted
+in SillyTavern's own chat list, then Remove on the record that was left.
+Asked what Delete should do, the owner chose: the chat goes with the
+scene, and an ended scene is not deleted. Built in "Atlas 36".
+
+What Set aside does (it has since the Hub, D123; said here because it
+was asked): the scene stops being the world's open scene and nothing
+else. Nothing of it is remembered: no record, the ledger not read, the
+world not moved, the memory not written. Its chat stays as it is. The
+world is then free for another scene (one scene of a world is open at a
+time; starting a new one sets an open one aside by itself). Later,
+Resume makes it the open scene again and opens its chat, and End scene
+opens its chat and ends it. If other scenes have ended in between, its
+End keeps its record but leaves the world's newer memory alone unless
+the sheet is told to replace it (D123).
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D197 | Delete is for a scene that never ended, and takes its chat with it | **Which scenes.** One that is open or set aside and was never ended (`canDeleteScene`). An ended scene stays: the world remembers it, its record is told to the scenes after it, and taking it out would leave the world remembering something with no record. So does one that was ended and reopened. A scene whose chat is gone keeps Remove. **Where.** A Delete button on the scene's row in the Scenes tab; pressed, the row asks ("Delete scene 4 and its chat? … This cannot be undone") with Delete scene 4 and Keep it. **What goes.** The record, and the chat file, through SillyTavern's own server route (`/api/chats/delete`, by the file's name and the card's avatar), then SillyTavern and its extensions are told the chat is gone (`CHAT_DELETED`). The record goes only once the file has: a chat SillyTavern would not delete keeps its scene, and the Atlas says so. **The chat in front.** When the scene deleted is the chat in front, another chat is opened first, so nothing is left saving into a file that is gone: the world's latest other scene's chat, else any other chat of the card, else a new chat on the card (as SillyTavern does when a card's only chat is deleted). The Atlas stays on the world. **The card.** When the card only points at the deleted chat (it was the last one opened on it), the card is pointed at another and SillyTavern is told (`/api/characters/merge-attributes`), or it would make an empty chat of the old name the next time the card is opened. **The number.** When it was the last scene started, its number is free for the next: delete scene 5, and the next scene is scene 5 |
+
+What stays, because a scene that never ended wrote nothing to put back:
+the world as it stands; what the world moved by for the time before the
+scene began; a hook the scene was started from (it stays played); and
+the map as it was edited while the scene was the open one, since map
+edits are the world's as they are made (D173).
+
+What it is not: there is no undo, and the chat is not kept anywhere; an
+ended scene has no delete at all (the owner's choice over deleting its
+record alone, or rolling the world back for the latest one); a scene is
+not deleted from the strip above its chat or by a command, only from the
+Scenes tab; and the calls to SillyTavern's server were read from its
+source (`src/endpoints/chats.js`, `characters.js`) and run against a
+stand-in, not a real SillyTavern.
+
+Tests: `tools/hub-test.mjs` §8a (which scenes, what the record's going
+changes, the number, the Atlas's line), `tools/hub-flow-test.mjs` §20
+(the real module: the card pointing at the chat, the scene in front with
+and without other chats, an ended scene, SillyTavern refusing, a chat
+already gone), `tools/atlas-browser-test.mjs` §5k (the button and the
+question on the row).

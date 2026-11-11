@@ -997,6 +997,59 @@ export function renameSceneChat(entry, oldFile, newFile) {
     return withScene(entry, s.id, x => ({ ...x, chat: String(newFile || '').replace(/\.jsonl$/i, '') }));
 }
 
+/**
+ * Whether a scene can be deleted (docs/long-shot-plan.md D197): one that
+ * is open or set aside and was never ended. An ended scene has been
+ * remembered by the world (its record is told to the scenes after it;
+ * where people stand, the ledger and the clocks moved on from it), and so
+ * has one that was ended and then reopened: those stay in the list.
+ * @returns {{ ok: boolean, reason: '' | 'no-scene' | 'ended' | 'remembered' }}
+ */
+export function canDeleteScene(scene) {
+    if (!scene) return { ok: false, reason: 'no-scene' };
+    if (scene.status === 'ended') return { ok: false, reason: 'ended' };
+    if (scene.reopened) return { ok: false, reason: 'remembered' };
+    return { ok: true, reason: '' };
+}
+
+/**
+ * A scene's record deleted (D197), when canDeleteScene allows it. Nothing
+ * of the world's memory is touched: a scene that never ended left none.
+ * When it was the last scene started, its number is free for the next.
+ * @returns {{ entry: object, removed: boolean, reason: string, scene: object|null }}
+ */
+export function deleteSceneRecord(entry, id) {
+    const next = touch(normalizeWorldEntry(entry));
+    const s = next.scenes.find(x => x.id === id) || null;
+    const can = canDeleteScene(s);
+    if (!can.ok) return { entry: next, removed: false, reason: can.reason, scene: null };
+    next.scenes = next.scenes.filter(x => x.id !== id);
+    if (id === `s${next.seq}`) next.seq = next.scenes.reduce((n, x) => { const m = /^s(\d+)$/.exec(x.id); return m ? Math.max(n, Number(m[1])) : n; }, 0);
+    return { entry: next, removed: true, reason: '', scene: s };
+}
+
+/** One line for the Atlas after a scene was deleted, or was not. */
+export function describeDeleteResult(r) {
+    if (!r) return '';
+    const n = String(r.scene && r.scene.id || '').replace(/^s/, '');
+    if (r.ok) {
+        const went = r.chat === 'gone' ? 'its chat was gone already' : 'its chat is deleted';
+        const moved = r.opened ? (r.opened.fresh ? ` A new chat is open on ${r.opened.card || 'the card'}.` : ` "${r.opened.name}" is open in its place.`) : '';
+        return `Scene ${n} is deleted, and ${went}.${moved}`;
+    }
+    const why = {
+        'no-scene': 'That scene is no longer in the list.',
+        ended: 'An ended scene is not deleted: the world remembers it.',
+        remembered: 'That scene was ended once and the world remembers it: it is not deleted.',
+        'no-world': 'No world to delete it from.',
+        'card-gone': 'The narrator card is gone, so its chat cannot be reached.',
+        busy: 'A reply or a request is running; try again when it is done.',
+        switch: `The scene's chat is in front and another could not be opened in its place${r.error ? ` (${r.error})` : ''}. Nothing was deleted.`,
+        file: `SillyTavern did not delete the chat${r.error ? ` (${r.error})` : ''}. The scene is still in the list.`,
+    };
+    return why[r.reason] || `Nothing was deleted: ${r.error || r.reason || 'unknown'}.`;
+}
+
 /** A record removed, only when its chat is gone (nothing else leaves the list). */
 export function removeGoneScene(entry, id) {
     const next = touch(normalizeWorldEntry(entry));

@@ -314,8 +314,10 @@ function sceneFromLine(from) {
  * @param {{ ok: boolean, number?: number }} o.plan  whether a scene can be started
  * @param {string} o.why       why not, in words ('' when one can)
  * @param {string} o.front     the id of the scene whose chat is in front ('' when none is)
+ * @param {string} o.deleting  the id of the scene whose Delete was pressed and waits to be confirmed (D197)
+ * @param {string} o.busy      the id of the scene being deleted now
  */
-export function atlasSceneListHtml({ scenes = [], plan = { ok: false }, why = '', front = '' } = {}) {
+export function atlasSceneListHtml({ scenes = [], plan = { ok: false }, why = '', front = '', deleting = '', busy = '' } = {}) {
     const list = Array.isArray(scenes) ? scenes : [];
     const can = !!(plan && plan.ok);
     const top = can
@@ -323,7 +325,11 @@ export function atlasSceneListHtml({ scenes = [], plan = { ok: false }, why = ''
         : `<p class="dooms-atlas-start-note">${e(why || 'A scene cannot be started from here.')}</p>`;
     if (!list.length) return `<div class="dooms-atlas-scenes"><div class="dooms-atlas-scenes-top">${top}</div><p class="dooms-atlas-none">No scene has been played in this world yet. A scene is a fresh chat that knows what happened before; when it ends, the world remembers it.</p></div>`;
     const order = [...list.filter(s => s.status === 'open'), ...list.filter(s => s.status === 'aside').reverse(), ...list.filter(s => s.status === 'ended').reverse()];
-    const btn = (act, id, icon, label, title = '', off = false) => `<button type="button" class="dooms-atlas-btn" data-act="${act}" data-id="${attr(id)}"${title ? ` title="${attr(title)}"` : ''}${off ? ' disabled' : ''}><i class="fa-solid ${icon}" aria-hidden="true"></i> <span>${e(label)}</span></button>`;
+    const btn = (act, id, icon, label, title = '', off = false, cls = '') => `<button type="button" class="dooms-atlas-btn${cls}" data-act="${act}" data-id="${attr(id)}"${title ? ` title="${attr(title)}"` : ''}${off ? ' disabled' : ''}><i class="fa-solid ${icon}" aria-hidden="true"></i> <span>${e(label)}</span></button>`;
+    // Delete (D197) is for a scene that never ended: the world remembers nothing of it, so its record and its chat can go.
+    // An ended scene stays, and so does one that was ended and then reopened.
+    const deletable = (s) => !s.gone && s.status !== 'ended' && !s.reopened;
+    const del = (s) => btn('sc-delete', s.id, 'fa-trash', 'Delete', 'Delete this scene and its chat. Nothing of it was remembered, so nothing else changes.', !!busy, ' is-danger');
     const items = order.map(s => {
         const here = !!front && s.id === front;
         const tag = s.gone ? 'chat gone' : s.status === 'open' ? (here ? 'being played' : 'open') : s.status === 'aside' ? 'set aside' : 'ended';
@@ -336,9 +342,11 @@ export function atlasSceneListHtml({ scenes = [], plan = { ok: false }, why = ''
             if (!here) acts.push(btn('sc-resume', s.id, 'fa-arrow-right-to-bracket', 'Go to it', 'Opens its chat'));
             acts.push(btn('sc-end', s.id, 'fa-flag-checkered', 'End scene', here ? 'Write the record of this scene and remember it' : 'Opens its chat and ends it'));
             acts.push(btn('sc-aside', s.id, 'fa-pause', 'Set aside', 'Leave it for later: nothing is remembered until it is ended, and another scene can be started'));
+            if (deletable(s)) acts.push(del(s));
         } else if (s.status === 'aside') {
             acts.push(btn('sc-resume', s.id, 'fa-arrow-right-to-bracket', 'Resume', 'It is the open scene again, and its chat opens'));
             acts.push(btn('sc-end', s.id, 'fa-flag-checkered', 'End scene', 'Opens its chat and ends it'));
+            if (deletable(s)) acts.push(del(s));
         } else {
             acts.push(btn('sc-open', s.id, 'fa-comments', 'Open the chat', here ? 'It is the chat in front' : 'Read it again', here));
             acts.push(btn('sc-continue', s.id, 'fa-forward', 'Go on from here', can ? 'A new scene at the same place with the same people' : (why || 'A scene cannot be started now'), !can));
@@ -347,7 +355,13 @@ export function atlasSceneListHtml({ scenes = [], plan = { ok: false }, why = ''
             <div class="dooms-atlas-scene-head"><span class="dooms-atlas-scene-no">Scene ${e(sceneNoOf(s.id))}</span><span class="dooms-atlas-scene-title">${e(s.title || 'Untitled')}</span><span class="dooms-atlas-scene-tag">${e(tag)}</span>${s.reopened ? '<span class="dooms-atlas-scene-tag">reopened</span>' : ''}${against ? `<span class="dooms-atlas-scene-tag is-against" title="What its record found against what was established">${against} against canon</span>` : ''}</div>
             ${meta ? `<div class="dooms-atlas-scene-meta">${e(meta)}</div>` : ''}
             ${s.status === 'ended' ? `<p class="dooms-atlas-scene-recap">${s.recap ? e(s.recap) : '<span class="dooms-atlas-none">No record was kept.</span>'}</p>` : ''}
-            <div class="dooms-atlas-scene-actions">${acts.join('')}</div>
+            ${deleting === s.id && deletable(s)
+        ? `<div class="dooms-atlas-scene-confirm" role="alertdialog" aria-label="Delete scene ${attr(sceneNoOf(s.id))}?">
+                <p>Delete scene ${e(sceneNoOf(s.id))} and its chat? The chat is removed from SillyTavern${here ? ', and another chat opens in its place' : ''}. Nothing of this scene was remembered, so the world stays as it is. This cannot be undone.</p>
+                <div class="dooms-atlas-scene-actions">${btn('sc-delete-go', s.id, 'fa-trash', `Delete scene ${sceneNoOf(s.id)}`, '', false, ' is-danger is-sure')}${btn('sc-delete-no', s.id, 'fa-xmark', 'Keep it')}</div>
+            </div>`
+        : busy === s.id ? '<p class="dooms-atlas-scene-confirm" role="status">Deleting…</p>'
+        : `<div class="dooms-atlas-scene-actions">${acts.join('')}</div>`}
         </li>`;
     });
     return `<div class="dooms-atlas-scenes"><div class="dooms-atlas-scenes-top">${top}</div><ul class="dooms-atlas-scene-list">${items.join('')}</ul></div>`;

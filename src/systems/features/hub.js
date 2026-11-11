@@ -35,7 +35,7 @@ import {
     buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle, hubMark, readMark, markEnded, sceneHeader,
     sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
-    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, isStaleScene, markIsOfFile, sceneTranscriptPages, renameSceneChat,
+    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
     readConflicts, mergeConflicts, normalizeConflicts,
 } from '../../utils/hub.js';
@@ -222,6 +222,14 @@ function defaultBridge() {
             const res = await post('/api/characters/create', fields);
             return String(await res.text()).trim();
         },
+        // A chat file deleted (D197), as SillyTavern's own chat list deletes one: its server route, by the card's avatar.
+        deleteChatFile: async ({ avatar, fileName }) => { await post('/api/chats/delete', { chatfile: `${fileName}.jsonl`, avatar_url: avatar }); return true; },
+        // The chat a card opens on, kept on the card itself (SillyTavern does this when the chat a card points at is deleted).
+        setCardChat: async ({ avatar, fileName }) => { await post('/api/characters/merge-attributes', { avatar, chat: fileName }); return true; },
+        // SillyTavern and its extensions are told a chat is gone, as they are when its own list deletes one.
+        chatDeleted: async (fileName) => { try { const c = ctx(); const types = c.eventTypes || c.event_types; if (c.eventSource && types && types.CHAT_DELETED) await c.eventSource.emit(types.CHAT_DELETED, fileName); } catch (e) { /* nobody to tell */ } },
+        // A name for a new chat on a card, the way SillyTavern names one.
+        freshChatName: (name) => { let stamp = ''; try { const c = ctx(); if (typeof c.humanizedDateTime === 'function') stamp = String(c.humanizedDateTime()); } catch (e) { stamp = ''; } return `${name} - ${stamp || new Date().toISOString().slice(0, 19).replace('T', '@').replace(/:/g, '-')}`; },
         timestamp: () => { try { return getMessageTimeStamp(); } catch (e) { return new Date().toISOString(); } },
         userAvatar: () => { try { return typeof user_avatar === 'string' ? user_avatar : ''; } catch (e) { return ''; } },
         uuid: () => { try { return crypto.randomUUID(); } catch (e) { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; } },
@@ -1896,6 +1904,87 @@ export function removeGoneScene(worldId, id) {
     if (!r.removed) return false;
     putEntry(String(worldId), r.entry, { source: 'remove', world: String(worldId) });
     return true;
+}
+
+/**
+ * A scene deleted (D197): its record and its chat file, for a scene that
+ * is open or set aside and was never ended (canDeleteScene). Nothing of
+ * the world's memory is put back, because such a scene left none: what
+ * the world moved by before it began, a hook it was started from and the
+ * map as it was edited in it stay as they are.
+ *
+ * The chat file is deleted through SillyTavern's own server route. When
+ * that chat is the one in front, another is opened first (the world's
+ * latest other scene, else any other chat of the card, else a new one),
+ * so nothing is left saving into a file that is gone. When the card only
+ * points at it, the card is pointed at another, or SillyTavern would make
+ * an empty chat of that name the next time the card is opened. The record
+ * goes only once the file has: a chat that could not be deleted keeps its
+ * scene. A scene whose chat is gone already loses its record alone.
+ * @returns {Promise<{ ok: boolean, reason?: string, error?: string, scene?: object, chat?: 'deleted'|'gone', opened?: { name: string, fresh: boolean, card: string }|null }>}
+ */
+export async function deleteScene(worldId, id) {
+    const world = String(worldId || '').trim();
+    const e = world ? store().worlds[world] : null;
+    if (!e) return { ok: false, reason: 'no-world' };
+    const scene = e.scenes.find(x => x.id === id) || null;
+    const can = canDeleteScene(scene);
+    if (!can.ok) return { ok: false, reason: can.reason, scene: scene ? JSON.parse(JSON.stringify(scene)) : null };
+    if (ST.is_send_press === true || ending || isContinuing()) return { ok: false, reason: 'busy', scene };
+    const finish = (chat, opened) => {
+        const latest = store().worlds[world];
+        const r = deleteSceneRecord(latest, id);
+        if (!r.removed) return { ok: false, reason: r.reason || 'no-scene', scene };
+        if (pending && pending.worldId === world) pending = null;    // a Start waiting on the world as it was is let go
+        putEntry(world, r.entry, { source: 'delete', world });
+        log(`scene ${id} deleted`, { chat, opened: opened ? opened.name : '' });
+        return { ok: true, scene: JSON.parse(JSON.stringify(scene)), chat, opened: opened || null };
+    };
+    if (scene.gone || !scene.chat) return finish('gone', null);
+    const card = cardOf(world);
+    if (!card) return { ok: false, reason: 'card-gone', scene };
+    const b = bridge();
+    const file = scene.chat;
+    const same = (a, c) => String(a || '').replace(/\.jsonl$/i, '').toLowerCase() === String(c || '').replace(/\.jsonl$/i, '').toLowerCase();
+    const inFront = String(b.characterId()) === String(card.index) && !b.groupId() && same(chatId(), file);
+    const pointed = same(card.chat, file);
+    // The chat to stand in for it, where one is needed: the world's latest other scene whose chat is there, else any
+    // other chat of the card, else a new one.
+    let other = null;
+    if (inFront || pointed) {
+        let names = [];
+        try { names = (await b.listChats(card.avatar)).map(c => String(c.file_name || c.file_id || '').replace(/\.jsonl$/i, '')).filter(n => n && !same(n, file)); } catch (err) { log('the card\'s chats could not be listed', String(err && err.message || err)); }
+        const ofScene = e.scenes.slice().reverse().find(x => x.id !== id && !x.gone && x.chat && names.some(n => same(n, x.chat)));
+        other = ofScene ? { name: ofScene.chat, fresh: false, card: card.name } : names.length ? { name: names[names.length - 1], fresh: false, card: card.name } : { name: b.freshChatName(card.name), fresh: true, card: card.name };
+    }
+    let opened = null;
+    if (inFront) {
+        if (!(await flushChat())) log('the chat in front could not be flushed before it is deleted');
+        try {
+            await b.openCharacterChat(other.name);
+            if (same(chatId(), file)) throw new Error('the scene\'s chat is still in front');
+        } catch (err) {
+            const error = String(err && err.message || err);
+            log('another chat could not be opened in place of the scene\'s', error);
+            return { ok: false, reason: 'switch', error, scene };
+        }
+        opened = other;
+    }
+    try {
+        await b.deleteChatFile({ avatar: card.avatar, fileName: file });
+    } catch (err) {
+        const error = String(err && err.message || err);
+        log('the scene\'s chat could not be deleted', error);
+        return { ok: false, reason: 'file', error, scene, opened };
+    }
+    if (pointed && !inFront) {
+        const cards = b.characters();
+        if (cards[card.index]) cards[card.index].chat = other.name;
+        try { await b.setCardChat({ avatar: card.avatar, fileName: other.name }); } catch (err) { log('the card could not be pointed at another chat; SillyTavern may open an empty one of the old name', String(err && err.message || err)); }
+    }
+    const out = finish('deleted', opened);
+    if (out.ok) await b.chatDeleted(file);    // after the record has gone: DES's own listener finds nothing left to mark
+    return out;
 }
 
 // ─── The strip (D121) ───────────────────────────────────────────────────

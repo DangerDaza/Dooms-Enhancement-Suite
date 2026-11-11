@@ -627,6 +627,14 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-scene-recap:hover { -webkit-line-clamp: unset; }
 .dooms-atlas-scene-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
 .dooms-atlas-scene-actions .dooms-atlas-btn { font-size: 0.78em; padding: 4px 8px; }
+/* Delete (D197): the one button that takes something away, and the question it asks on the scene's own row. */
+.dooms-atlas-btn.is-danger { border-color: color-mix(in srgb, #e0524d 70%, var(--atlas-line)); color: #e8746f; }
+.dooms-atlas-btn.is-danger:hover, .dooms-atlas-btn.is-danger:focus-visible { background: color-mix(in srgb, #e0524d 18%, transparent); }
+.dooms-atlas-btn.is-danger.is-sure { background: #c9403b; border-color: #c9403b; color: #fff; }
+.dooms-atlas-scene-actions .dooms-atlas-btn.is-danger:not(.is-sure) { margin-left: auto; }
+.dooms-atlas-scene-confirm { margin: 8px 0 0; padding: 8px 10px; border: 1px solid color-mix(in srgb, #e0524d 60%, var(--atlas-line)); border-radius: var(--atlas-radius); font-size: 0.82em; line-height: 1.45; color: var(--atlas-text); }
+.dooms-atlas-scene-confirm p { margin: 0; }
+.dooms-atlas-scene-confirm .dooms-atlas-scene-actions .dooms-atlas-btn { font-size: 0.95em; padding: 6px 10px; }
 /* A line of News or Rumours as a way into a scene (D193). */
 .dooms-atlas-ways[data-way="news"] .dooms-map-changes li, .dooms-atlas-ways[data-way="rumour"] .dooms-world-effects li { cursor: pointer; border-radius: 4px; }
 .dooms-atlas-ways[data-way="news"] .dooms-map-changes li:hover, .dooms-atlas-ways[data-way="rumour"] .dooms-world-effects li:hover { background: color-mix(in srgb, var(--atlas-accent) 16%, transparent); }

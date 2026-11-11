@@ -115,6 +115,21 @@ globalThis.fetch = async (url, init) => {
         if (!Object.keys(list).length) return { ok: true, status: 200, json: async () => ({ error: true }) };    // a card never opened: no chats folder
         return { ok: true, status: 200, json: async () => list };
     }
+    if (url === '/api/chats/delete') {
+        // SillyTavern's own route: the file named with its extension, under the card's avatar; 400 when it is not there.
+        const name = String(body.chatfile || '').replace(/\.jsonl$/i, '');
+        const f = files.get(name);
+        if (globalThis.__DES_DELETE_FAILS__ || !f || f.avatar !== body.avatar_url) return { ok: false, status: 400, json: async () => ({}), text: async () => '' };
+        files.delete(name);
+        opens.push(`delete:${name}`);
+        return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '' };
+    }
+    if (url === '/api/characters/merge-attributes') {
+        const card = ctxTarget.characters.find(c => c.avatar === body.avatar);
+        if (!card) return { ok: false, status: 400, json: async () => ({}), text: async () => '' };
+        opens.push(`point:${body.avatar}:${body.chat}`);
+        return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+    }
     if (url === '/api/characters/create') {
         ctxTarget.characters.push({ name: body.ch_name, avatar: `${body.ch_name}.png`, chat: `${body.ch_name} - new` });
         return { ok: true, status: 200, text: async () => body.ch_name, json: async () => ({}) };
@@ -1228,6 +1243,104 @@ console.log('\n§19 a world picked in the Atlas: shown and started whatever chat
     ctxTarget.characterId = 0;
     ctxTarget.name2 = 'Mara Vane';
     await openPlain('Mara Vane - plain nine');
+}
+
+console.log('\n§20 a scene deleted: its record and its chat, for one that never ended (D197)');
+{
+    const W = 'first-descent';
+    const cardIndex = (avatar) => ctxTarget.characters.findIndex(c => c.avatar === avatar);
+    const newlandCard = hub.cardOf('newland');
+    const scenesOf = (w) => hub.worldEntry(w).scenes;
+    // SillyTavern as it opens a chat that is not there: it makes one, with the card's greeting.
+    const openWas = ctxTarget.openCharacterChat;
+    ctxTarget.openCharacterChat = async (file) => {
+        if (!files.has(file)) { const c = ctxTarget.characters[ctxTarget.characterId]; files.set(file, { header: { chat_metadata: {} }, messages: [ai('Hello, traveller.')], avatar: c.avatar, chName: c.name }); }
+        return openWas(file);
+    };
+    const emitted = [];
+    ctxTarget.eventTypes = { CHAT_DELETED: 'chat_deleted' };
+    ctxTarget.eventSource = { emit: async (type, name) => { emitted.push([type, name]); if (type === 'chat_deleted') hub.onHubChatDeleted(name); } };    // DES's own listener, as index.js wires it
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 1","time":"dawn"},"openers":[{"title":"Landfall","text":"The boat grounds on shingle.","who":[]},{"title":"Fog","text":"Fog on the water.","who":[]},{"title":"Gulls","text":"Gulls wheel.","who":[]}]}');
+    hub.__setGapTransport(async () => '{}');
+
+    // §19 left Newland's first scene open, its chat not in front, and the card pointing at it.
+    const s1 = scenesOf('newland')[0];
+    const mapBefore = JSON.stringify(hub.worldEntry('newland').memory.stores.dooms_atlas);
+    check('the fixture: scene 1 of a world is open, another card\'s chat is in front, and the world\'s card points at the scene\'s chat', s1.status === 'open' && files.has(s1.chat) && hub.currentScene() === null && ctxTarget.characters[newlandCard.index].chat === s1.chat);
+    opens.length = 0;
+    const calledBefore = calls.length;
+    const d1 = await hub.deleteScene('newland', 's1');
+    const sent = calls.slice(calledBefore).filter(c => c.url === '/api/chats/delete');
+    check('deleted: the chat file through SillyTavern\'s own route, by its name and the card\'s avatar', d1.ok && d1.chat === 'deleted' && d1.opened === null && sent.length === 1 && same(sent[0].body, { chatfile: `${s1.chat}.jsonl`, avatar_url: newlandCard.avatar }) && !files.has(s1.chat), JSON.stringify([d1, sent]));
+    check('its record is gone, the number is free again, and a scene can be started', scenesOf('newland').length === 0 && hub.worldEntry('newland').seq === 0 && hub.startPlanFor('newland').ok && hub.startPlanFor('newland').number === 1);
+    check('the world itself is as it was: the map made before the scene is still its map', JSON.stringify(hub.worldEntry('newland').memory.stores.dooms_atlas) === mapBefore);
+    const pointedAt = ctxTarget.characters[newlandCard.index].chat;
+    check('the card no longer points at the deleted chat: at a new one, told to SillyTavern, so no empty chat of the old name is made', pointedAt !== s1.chat && pointedAt.startsWith(`${newlandCard.name} - `) && opens.includes(`point:${newlandCard.avatar}:${pointedAt}`) && opens.indexOf(`delete:${s1.chat}`) < opens.indexOf(`point:${newlandCard.avatar}:${pointedAt}`), JSON.stringify(opens));
+    check('SillyTavern is told the chat is gone, after the record has gone', same(emitted, [['chat_deleted', s1.chat]]) && scenesOf('newland').length === 0, JSON.stringify(emitted));
+    check('the chat in front was not touched', ctxTarget.chatId === 'Mara Vane - plain nine' && !opens.some(o => o.startsWith('open:')));
+
+    // The scene in front, on a card with no other chat: a new chat is opened first, then the file goes.
+    const p2 = await hub.prepareScene({ worldId: 'newland', seed: { kind: 'anywhere', text: 'Again.' }, place: { label: 'Landfall' }, cast: [], gap: { id: 'now' } });
+    const c2 = await hub.commitScene(p2.token, { choice: 0 });
+    check('started again: scene 1 once more, and in front', c2.ok && c2.scene.id === 's1' && hub.currentScene() && hub.currentScene().worldId === 'newland' && ctxTarget.chatId === c2.file);
+    files.delete(pointedAt);    // the new chat the card was pointed at was never opened, so SillyTavern never made it
+    opens.length = 0;
+    emitted.length = 0;
+    const d2 = await hub.deleteScene('newland', 's1');
+    const opened2 = opens.find(o => o.startsWith('open:'));
+    check('deleted while in front: another chat is opened before the file is deleted, so nothing is left saving into it', d2.ok && d2.chat === 'deleted' && !!opened2 && opens.indexOf(opened2) < opens.indexOf(`delete:${c2.file}`) && !files.has(c2.file), JSON.stringify(opens));
+    check('with no other chat on the card it is a new one, and the result says so', d2.opened && d2.opened.fresh === true && d2.opened.name.startsWith(`${newlandCard.name} - `) && ctxTarget.chatId === d2.opened.name && files.has(d2.opened.name) && new RegExp(`A new chat is open on ${newlandCard.name}\\.`).test((await import(`${DES}/src/utils/hub.js`)).describeDeleteResult(d2)), JSON.stringify(d2.opened));
+    check('the chat in front is no scene any more, and the world has none', hub.currentScene() === null && scenesOf('newland').length === 0 && same(emitted, [['chat_deleted', c2.file]]));
+
+    // The scene in front, in a world with other scenes: the world's latest other scene's chat is opened in its place.
+    const before = scenesOf(W);
+    const aside = before.filter(x => x.status === 'aside' && !x.gone).pop();
+    const ended = before.filter(x => x.status === 'ended' && !x.gone && x.chat && files.has(x.chat)).pop();
+    const p3 = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'now' } });
+    const c3 = await hub.commitScene(p3.token, { choice: 0 });
+    const seqWith = hub.worldEntry(W).seq;
+    opens.length = 0;
+    const d3 = await hub.deleteScene(W, c3.scene.id);
+    const latestOther = scenesOf(W).slice().reverse().find(x => !x.gone && x.chat && files.has(x.chat));
+    check('deleted while in front in a world with other scenes: the latest other scene\'s chat is open in its place', c3.ok && d3.ok && d3.opened && d3.opened.fresh === false && d3.opened.name === latestOther.chat && ctxTarget.chatId === latestOther.chat && !files.has(c3.file), JSON.stringify([d3.opened, latestOther && latestOther.chat]));
+    check('the others are as they were, and the number it had is free', same(scenesOf(W).map(x => [x.id, x.status]), before.map(x => [x.id, x.status])) && hub.worldEntry(W).seq === seqWith - 1 && hub.startPlanFor(W).number === seqWith);
+    const refreshed = await hub.refreshScenes(W);
+    check('reading the card\'s chats again does not bring it back', refreshed.ok && !scenesOf(W).some(x => x.chat === c3.file));
+
+    // What is not deleted.
+    const callsBefore = calls.length;
+    const no1 = await hub.deleteScene(W, ended.id);
+    check('an ended scene is not deleted: the world remembers it; nothing is sent and its chat stays', no1.ok === false && no1.reason === 'ended' && files.has(ended.chat) && scenesOf(W).some(x => x.id === ended.id) && calls.length === callsBefore);
+    check('no such scene, no such world: nothing happens', (await hub.deleteScene(W, 's999')).reason === 'no-scene' && (await hub.deleteScene('nowhere', 's1')).reason === 'no-world' && (await hub.deleteScene('', 's1')).reason === 'no-world');
+
+    // SillyTavern refuses the delete: the scene stays, and says so.
+    await openPlain('Mara Vane - plain ten');
+    ctxTarget.characterId = 0;
+    globalThis.__DES_DELETE_FAILS__ = true;
+    const no2 = await hub.deleteScene(W, aside.id);
+    globalThis.__DES_DELETE_FAILS__ = false;
+    check('when SillyTavern does not delete the chat the scene stays in the list', no2.ok === false && no2.reason === 'file' && /400/.test(no2.error) && files.has(aside.chat) && scenesOf(W).some(x => x.id === aside.id && x.status === 'aside'), JSON.stringify(no2));
+    // A set-aside scene, not in front and not what the card points at: the file and the record, nothing else.
+    opens.length = 0;
+    const pointedBefore = ctxTarget.characters[cardIndex('The Redward.png')] ? ctxTarget.characters[cardIndex('The Redward.png')].chat : '';
+    const d4 = await hub.deleteScene(W, aside.id);
+    check('a set-aside scene deleted from another chat: its file and its record go, nothing is opened', d4.ok && d4.chat === 'deleted' && d4.opened === null && !files.has(aside.chat) && !scenesOf(W).some(x => x.id === aside.id) && !opens.some(o => o.startsWith('open:')) && ctxTarget.chatId === 'Mara Vane - plain ten', JSON.stringify([d4, opens, pointedBefore]));
+    // A scene whose chat is gone already loses its record alone.
+    const p5 = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'Once more.' }, place: null, cast: [], gap: { id: 'now' } });
+    const c5 = await hub.commitScene(p5.token, { choice: 0 });
+    ctxTarget.characterId = 0;
+    ctxTarget.name2 = 'Mara Vane';
+    await openPlain('Mara Vane - plain eleven');
+    files.delete(c5.file);
+    hub.onHubChatDeleted(c5.file);
+    const sentBefore = calls.filter(c => c.url === '/api/chats/delete').length;
+    const d5 = await hub.deleteScene(W, c5.scene.id);
+    check('a scene whose chat is gone already: its record goes and nothing is asked of SillyTavern', c5.ok && d5.ok && d5.chat === 'gone' && !scenesOf(W).some(x => x.id === c5.scene.id) && calls.filter(c => c.url === '/api/chats/delete').length === sentBefore);
+    ctxTarget.openCharacterChat = openWas;
+    delete ctxTarget.eventSource;
+    delete ctxTarget.eventTypes;
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
