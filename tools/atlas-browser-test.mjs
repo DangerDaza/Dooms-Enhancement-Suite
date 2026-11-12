@@ -1284,6 +1284,18 @@ console.log('\n§5h starting a scene from a place (D174)');
         check('the pick says which of the scene before\'s own lines the openings were shown, and what for', await tailText({ messages: 15, scene: 's3', right: true }) === 'Shown the last 15 messages of scene 3 as they were played, to carry straight on from.' && await tailText({ messages: 8, scene: 's0', right: false }) === 'Shown the last 8 messages of the chat before the scenes as they were played, to know how things were left.');
         check('or that it had only the record, where the chat could not be read; and nothing where there was no scene before', /The messages of scene 3 could not be read, so these are written from its record alone and may not pick up where it stopped\./.test(await tailText({ messages: 0, scene: 's3', right: true })) && await tailText({ messages: 0, scene: '', right: true }) === '' && await tailText(undefined) === '');
     }
+    // When the scene before stopped, as the openings were told it (D210): the tracker of its last message.
+    {
+        const thenLine = async (tail) => { await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { ...pending, tail } }); return page.evaluate(() => { const el = document.querySelector('.dooms-atlas-setup-card .dooms-atlas-then-line'); const c = document.querySelector('.dooms-atlas-setup-card'); return el ? { text: el.textContent.replace(/\s+/g, ' ').trim(), fits: el.getBoundingClientRect().right <= c.getBoundingClientRect().right + 1 } : null; }); };
+        let tl = await thenLine({ messages: 15, scene: 's3', right: true, then: { date: '14th of Frostfall', time: '21:40', weather: '🌫 sea fog, 4°C', fromTracker: true } });
+        check('the pick says the date, the time of day and the weather the scene opens in, and that they are the tracker\'s at the last message of the scene before', !!tl && tl.text === 'Opens at the moment it stopped, by the tracker of its last message: 14th of Frostfall · 21:40 · 🌫 sea fog, 4°C.' && tl.fits, JSON.stringify(tl));
+        await shot('7zh2-scene-openings-then');
+        tl = await thenLine({ messages: 8, scene: 's3', right: false, then: { date: '14th of Frostfall', time: '21:40', weather: 'rain', fromTracker: false } });
+        check('when time has passed it says the openings are counted on from there, and when it is the world\'s memory that said so', tl.text === 'Counted on from where it stopped, by the world\'s memory: 14th of Frostfall · 21:40 · rain.', JSON.stringify(tl));
+        tl = await thenLine({ messages: 0, scene: 's3', right: true, then: { date: '', time: 'Dusk', weather: '', fromTracker: true } });
+        check('what is not known is left out; the line stands though the messages could not be read', tl.text === 'Opens at the moment it stopped, by the tracker of its last message: Dusk.' && /could not be read/.test((await panel()).text));
+        check('with nothing known of when it stopped there is no such line', (await thenLine({ messages: 15, scene: 's3', right: true })) === null);
+    }
     await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { ...pending, lore: { found: [], missing: [], standing: false, books: [] } } });
     check('with no lorebook read it says nothing of them', !/lorebook/.test((await panel()).text));
     await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { when: null, openers: [] }, error: 'The narrator wrote no usable opener; write your own, ask again, or start without one.' });

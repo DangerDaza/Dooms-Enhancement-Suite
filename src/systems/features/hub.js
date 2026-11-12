@@ -33,7 +33,7 @@ import { buildHooksPrompt, parseHooksReply, validateHooks, proposeRound, failRou
 import {
     HUB_META_KEY, hubConfig, normalizeHub, normalizeWorldEntry, gapOf, gapMoves, takeSnapshot, seedStores, personLine, buildBrief,
     buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle, hubMark, readMark, markEnded, sceneHeader,
-    sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, ledgerOfReply, sceneCardFields, sceneCardTag, markCardsGone, SCENE_NARRATOR_NAME, openSceneOf, openScene, setSceneAside as setAsidePure,
+    sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, ledgerOfReply, sceneCardFields, sceneCardTag, markCardsGone, SCENE_NARRATOR_NAME, lastTrackerFacts, timeReached, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
@@ -900,7 +900,7 @@ async function moveWorldByGap(worldId, pack, memory, gap, recaps, { mode = 'betw
  * @returns {Promise<{ text: string, messages: number, scene: string }>}
  */
 async function lastLinesFor(worldId, entry, seed, gap, players) {
-    const none = { text: '', messages: 0, scene: '' };
+    const none = { text: '', messages: 0, scene: '', facts: null };
     try {
         const named = seed && typeof seed === 'object' && seed.kind === 'scene' && seed.id ? String(seed.id) : '';
         const made = entry && entry.memory && entry.memory.scene ? String(entry.memory.scene) : '';
@@ -915,7 +915,9 @@ async function lastLinesFor(worldId, entry, seed, gap, players) {
         const inFront = String(b.characterId()) === String(card.index) && !b.groupId() && same(chatId(), s.chat);
         const messages = inFront ? (chatArray() || []) : await b.readChat({ chName: card.name, avatar: card.avatar, fileName: s.chat });
         const t = sceneTail(messages, { count: gap && gap.id === 'now' ? TAIL.now : TAIL.later, persona: players[0] || 'Player' });
-        return { text: t.text, messages: t.messages, scene: s.id };
+        // The tracker as it stood at the last of those messages (D210): the lines have their tracker blocks taken out, so
+        // the time of day and the weather they were played in are read from the message's own copy of the tracker.
+        return { text: t.text, messages: t.messages, scene: s.id, facts: lastTrackerFacts(messages) };
     } catch (e) {
         log('the last lines of the scene before could not be read; the openings are written from its record', String(e && e.message || e));
         return none;
@@ -932,6 +934,7 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     pending = null;
     const theGap = gapOf(gap && gap.id, gap && gap.words);
     let memory = memoryFor(g.entry, pack, g.id);
+    const stoodAt = memory.facts;    // the world's date, time and weather as the last End left them, before any gap moves them on
     const recaps = lastRecaps(g.entry, 2);
     const notes = [];
     let movedMemory = null;    // the gap run's result is held with the Start and written with the record (a Start backed out of moves nothing)
@@ -951,7 +954,7 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     for (const n of Array.isArray(cast) ? cast : []) { const c = String(n || '').trim(); if (c && !players.some(p => sameName(p, c)) && !names.some(x => sameName(x, c))) names.push(c); }
     const lines = castLines(names, worldState);
     const seedText = seed && typeof seed === 'object' ? String(seed.text || seed.label || '') : String(seed || '');
-    const weather = label && memory.facts.location && sameName(label, memory.facts.location) ? memory.facts.weather : '';
+    let weather = label && memory.facts.location && sameName(label, memory.facts.location) ? memory.facts.weather : '';
     const canonBlock = memory.stores.dooms_canon ? buildCanonBlock(normalizeCanon(memory.stores.dooms_canon), { maxChars: 1200 }) : '';
     const quests = memory.stores.dooms_tracker && memory.stores.dooms_tracker.quests ? memory.stores.dooms_tracker.quests : { main: 'None', optional: [] };
     // The people's own entries and the campaign's standing notes, read from its lorebooks (D177): the request sees no lorebook otherwise.
@@ -967,7 +970,23 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     // The last lines of the scene before, as they were played (D205): the record says what happened, not where it stopped.
     const lastLines = await lastLinesFor(g.id, g.entry, seed, theGap, players);
     if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
-    const prompt = buildOpenersPrompt({ tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads });
+    // When the scene before stopped (D210): by the tracker of its last message, where its chat could be read and has one;
+    // else by the world's memory as its End left it. The opening is written for that moment (right after) or counted
+    // on from it; where the gap moved the world, the date and time it came to are said too.
+    // A tracker some messages behind the end of the scene whose End made the world's memory is older than that memory:
+    // the End read the tracker as it then stood. The memory's word is taken there.
+    const ofMemory = !!(g.entry.memory && g.entry.memory.scene && lastLines.scene && g.entry.memory.scene === lastLines.scene);
+    const lf = lastLines.facts && !(lastLines.facts.back > 0 && ofMemory && (stoodAt.date || stoodAt.time || stoodAt.weather)) ? lastLines.facts : null;
+    const then = {
+        date: (lf && lf.date) || stoodAt.date || '', time: (lf && lf.time) || timeReached(stoodAt.time) || '', location: (lf && lf.location) || stoodAt.location || '',
+        weather: (lf && lf.weather) || stoodAt.weather || '', temperature: (lf && lf.temperature) || '', back: lf ? lf.back : 0,
+    };
+    const rightAfter = theGap.id === 'now' || !theGap.words;    // the request's own rule: no words for the gap is no gap
+    // The weather the scene is seeded with and its openers are told: right after, the weather it stopped in, wherever the
+    // scene opens (no time has passed); later, that weather only where the place is the same, as before.
+    if (rightAfter && then.weather) weather = then.weather;
+    else if (!rightAfter && lf && lf.weather && label && then.location && sameName(label, then.location)) weather = lf.weather;
+    const prompt = buildOpenersPrompt({ then, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads });
     let openers = [];
     let when = null;
     let errors = [];
@@ -978,6 +997,10 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
         else {
             const v = validateOpeners(parseOpenersReply(r.text), { cast: names, known: Object.keys(worldState.known || {}) });
             if (v.ok) { openers = v.clean.openers; when = v.clean.when; } else errors = v.errors;
+            // Right after, the scene opens at the moment the one before stopped: its date and time are the tracker's, not
+            // the narrator's to choose (D210). A tracker that is some messages behind the end is told to the request and
+            // not held to.
+            if (v.ok && rightAfter && !then.back && (then.date || then.time)) when = { date: then.date || (when && when.date) || '', time: then.time || (when && when.time) || '' };
             if (!v.ok) log('the openers were discarded', { errors: v.errors, reply: r.text.slice(0, 300) });
         }
     } catch (e) {
@@ -988,9 +1011,10 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     pending = {
         token, worldId: g.id, pack, card: g.card, memory, seed: seed && typeof seed === 'object' ? seed : { kind: 'anywhere', text: seedText }, place: { id: placeId, label, region }, cast: names, lines, gap: theGap, note: String(note || ''),
         weather, since, recaps, player: players, openers, when, errors, notes, prompt, movedMemory,
+        heldWhen: rightAfter && !then.back && (then.date || then.time) ? { date: then.date, time: then.time } : null,
         lore: { found: notesOf.found, missing: notesOf.missing, standing: !!notesOf.standing, books: notesOf.books },
         stand, threads, continuity: { stand: stand.map(x => x.name), threads: threads.length },
-        tail: { messages: lastLines.messages, scene: lastLines.scene, right: theGap.id === 'now' },
+        tail: { messages: lastLines.messages, scene: lastLines.scene, right: theGap.id === 'now', ...(then.date || then.time || then.weather ? { then: { date: then.date, time: then.time, weather: [then.weather, then.temperature].filter(Boolean).join(', '), fromTracker: !!lf } } : {}) },
     };
     return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes, lore: pending.lore, continuity: pending.continuity, tail: pending.tail };
 }
@@ -1101,7 +1125,7 @@ export async function askOpenersAgain(token) {
         const v = validateOpeners(parseOpenersReply(r.text), { cast: p.cast, known: Object.keys(normalizeWorldState(p.memory.stores.dooms_world).known || {}) });
         if (!v.ok) return { ok: false, reason: 'openers', errors: v.errors, openers: p.openers };
         p.openers = v.clean.openers;
-        p.when = v.clean.when || p.when;
+        p.when = p.heldWhen || v.clean.when || p.when;    // right after, the date and time are the tracker's (D210), asked again or not
         p.errors = [];
         return { ok: true, openers: p.openers, when: p.when };
     } catch (e) {

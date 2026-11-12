@@ -1488,3 +1488,50 @@ elsewhere, a card that cannot be made, a file that cannot be written,
 no other scene to go to, a card deleted in SillyTavern, straight on);
 `tools/atlas-browser-test.mjs` §5h (the sheet and the pick), §5k (the
 question).
+
+## 49. The openings are told the tracker of the last message (2026-11-12, D210)
+
+The owner, with the scene cards in hand: "The scene opening needs to be
+fed the tracker data from the last messages as well. It is working well
+now but it doesn't get the time of day or weather right." Three things
+were behind it. The request was told the weather only where the scene's
+place had the same name as the tracker's place, so a scene opened
+somewhere else was written under whatever sky the narrator chose. It was
+told the time as the tracker keeps it, a span ("20:00 → 21:40"), under
+the heading "the story's date at the last scene". And the new scene's
+own date and time were the narrator's answer even where the scene opens
+right after, so a wrong guess became the scene's tracker. The last
+lines (D205) could not put it right: the tracker's blocks are taken out
+of them.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D210 | The opening is told when the scene before stopped, by the tracker of its last message, and a scene right after opens at that moment | **Read** (`lastTrackerFacts`). Every reply keeps its own copy of the tracker, for the swipe in front (`extra.dooms_tracker_swipes`, or under the swipe's record in a chat read from its file). From the chat the last lines are read from (D205), the last reply's is read: the date, the time it had reached (the end of a span, `timeReached`), the place, the weather, the temperature. The last six replies are looked through for one that has it, and how many messages lie after that one is kept. Where the chat cannot be read or has none, the world's memory as its End left it is used (the same tracker, as the End read it); where the tracker found is some messages behind the end of the very scene whose End made the memory, the memory's word is the newer and is taken. **Told** (`buildOpenersPrompt`, `then`, `now`). In place of "the story's date at the last scene": when the scene before stopped, by its tracker at its last message, with the place and "Weather then"; and then, right after, "the same date, the same time of day and the same weather", wherever the scene opens; with time passed, that it opens that much later, and what the date and time have come to where the gap's run moved the world (before this that later date was given as the last scene's, with the gap on top of it). The narrator is told that "when" is that date and time of day and that no opener opens at another hour or under another sky; with time passed, that the weather follows from what it was. A tracker some messages behind the end is told as that, and the lines are what the hour and the sky are taken from first. With nothing known the request is as it was. **Held to.** Right after, with the tracker of the very last message (or the memory's), the scene's date and time are the tracker's and not the narrator's answer, asked again or not; the scene's own tracker starts at that date, that time and that weather. With time passed the narrator's "when" stands. **Shown.** The pick says what the openings were told under the line about the last messages: "Opens at the moment it stopped, by the tracker of its last message: 14th of Frostfall · 21:40 · sea fog, 4°C" (or "Counted on from where it stopped", or "by the world's memory"). |
+
+What it does not do. Only the info box is fed: the date, the time, the
+place, the weather and the temperature. Who the tracker had as present
+and what they were thinking is not; the people of a scene are chosen on
+the sheet and where they stand comes from the record (D188). With time
+passed the weather is left to the narrator, told what it was: the world
+keeps no weather of its own to move. A chat whose replies carry no
+tracker (the tracker off, or its runs failed) falls back to the world's
+memory, which is the tracker as the last End found it. The opening's
+prose is still the narrator's: it is told the hour and the sky, and a
+model can still write against them; what cannot go wrong any more is
+the scene's own tracker. Run in the real SillyTavern at a phone's
+width with a stand-in narrator that always answered the wrong date and
+"bright morning": a scene played with a tracker on its last reply and
+ended; from another chat, the lines and the tracker read from the
+scene's file and the request's three lines as above; through the panel,
+the pick's line, and the scene started at 14th of Frostfall, 21:40, in
+sea fog.
+
+Tests: `tools/hub-test.mjs` (the time reached, the last reply's
+tracker in each place it is kept and each shape, one behind, none, the
+request right after, with time passed, behind, with nothing known);
+`tools/hub-flow-test.mjs` §28 (a world's first scene, the message's
+tracker over the chat's latest, the weather at a place of another name,
+the date and time held to, asked again, the new scene's tracker, the
+memory's word over an older message's, the next day with the world
+moved, later that day without); `tools/atlas-browser-test.mjs` §5h
+(the pick's line).

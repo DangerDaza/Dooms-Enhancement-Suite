@@ -883,7 +883,7 @@ console.log('\n§15 going straight on in a fresh chat (D181)');
     check('one go: the scene is ended with its record and the next is opened, each step said', c.ok && same(steps, ['Writing the record of the scene…', 'Remembering the scene…', 'Writing how the next scene opens…', 'Opening the next scene…']) && prev.status === 'ended' && prev.recap.startsWith('They went down to the third landing') && nextScene.status === 'open' && nextScene.id !== playedId && ctxTarget.chatId === c.file && ctxTarget.chatId !== playedFile, JSON.stringify([c, steps]));
     check('no time passes, so the world is not moved', gapRuns === 0);
     check('the next scene is where the story stood and with who was there, not where the last one began', meta.dooms_hub.place.label === 'The Black Stair, third landing' && same(meta.dooms_hub.cast, ['Kiyoha', 'Lysandra']) && meta.dooms_hub.gap.id === 'now', JSON.stringify([meta.dooms_hub.place, meta.dooms_hub.cast]));
-    check('its opening is asked for as going straight on, with the words the last scene stopped on and the record of it', openersAsked.user.includes('What brought us here: The story goes straight on from the moment the last scene stopped') && openersAsked.user.includes('"Well? Are you coming, healer?"') && openersAsked.user.includes('this scene opens right after') && openersAsked.user.includes('Last scene: They went down to the third landing'), openersAsked.user.slice(0, 900));
+    check('its opening is asked for as going straight on, with the words the last scene stopped on and the record of it', openersAsked.user.includes('What brought us here: The story goes straight on from the moment the last scene stopped') && openersAsked.user.includes('"Well? Are you coming, healer?"') && /this scene opens right after/i.test(openersAsked.user) && openersAsked.user.includes('Last scene: They went down to the third landing'), openersAsked.user.slice(0, 900));
     check('the first opening is the first message and the other two are its swipes', chat.length === 1 && chat[0].mes.startsWith('Kiyoha is still laughing') && chat[0].swipes.length === 3);
     // The record cannot be written: nothing is ended, and the End sheet is the way.
     chat.push(user('On.'));
@@ -2181,6 +2181,79 @@ console.log('\n§27 a narrator card of its own for every scene: made at Start, i
     check('a scene gone straight on from: the one before is ended on its card, and the next is opened on a new card of its own', c6.ok && on.ok && sceneOf(c6.scene.id).status === 'ended' && !!nextId && sceneOf(nextId).ownCard === true && sceneOf(nextId).card !== sceneOf(c6.scene.id).card && cardsNow().includes(sceneOf(nextId).card) && cardsNow().includes(sceneOf(c6.scene.id).card) && ctxTarget.characterId === at(sceneOf(nextId).card), JSON.stringify([c6.ok, on.ok, on.reason, on.stage, nextId, cardsNow()]));
 
     extensionSettings.hub.sceneCards = false;
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+    hub.__setRecapTransport(null);
+}
+
+console.log('\n§28 the openings are told the tracker of the last message: the time of day and the weather the scene before stopped in (D210)');
+{
+    const W = 'clockland';
+    extensionSettings.liveWorld.customPacks[W] = JSON.stringify({ ...example, id: W, name: 'Clockland' });
+    ctxTarget.characters.push({ name: 'Keeper', avatar: 'Keeper.png', chat: 'Keeper - plain' });
+    ctxTarget.characterId = ctxTarget.characters.findIndex(c => c.avatar === 'Keeper.png');
+    ctxTarget.name2 = 'Keeper';
+    files.set('Keeper - plain', { header: { chat_metadata: {} }, messages: [], avatar: 'Keeper.png', chName: 'Keeper' });
+    await openPlain('Keeper - plain');
+    extensionSettings.hub.styleLaw = false;
+    hub.__setBookApi(shelfApi);
+    check('(a world with its own narrator)', hub.bindCard(W, 'Keeper.png').ok);
+    let asked = null;
+    let says = { date: 'Day 9', time: 'morning' };    // what the narrator answers for "when": never what the tracker had
+    hub.__setOpenersTransport(async (prompt) => { asked = prompt; return JSON.stringify({ when: says, openers: [{ title: 'a', text: 'The lamps gutter.', who: [] }, { title: 'b', text: 'Second.', who: [] }, { title: 'c', text: 'Third.', who: [] }] }); });
+    hub.__setGapTransport(async () => '{"elapsed":"a night","now":{"date":"Day 6","time":"dawn"},"clocks":{},"moved":[],"blurb":"x","heard":[]}');
+    hub.__setRecapTransport(async () => '{"recap":"They talked on the quay.","people":[],"threads":{"closed":[],"opened":[]}}');
+    const box = (o) => JSON.stringify({ date: { value: 'Day 5' }, time: { start: '20:00', end: '21:40' }, location: { value: 'Saltport, the quay' }, weather: { emoji: '🌫', forecast: 'sea fog' }, temperature: { value: 4, unit: '°C' }, ...o });
+    const setTracker = (b) => { state.setLastGeneratedData({ ...state.lastGeneratedData, infoBox: b }); state.setCommittedTrackerData({ ...state.committedTrackerData, infoBox: b }); };
+    const prep = (gap, place = { id: '', label: 'The Rusty Anchor' }) => hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place, cast: [], gap });
+    const boxOf = (file) => { const m = files.get(file).messages[0]; return JSON.parse(m.extra.dooms_tracker_swipes[0].infoBox); };
+    const valOf = (v) => (v && typeof v === 'object' ? (v.value ?? v.forecast ?? '') : v);
+
+    // The first scene of a world: nothing came before it, so there is nothing to tell.
+    const p1 = await prep({ id: 'now' });
+    check('a world\'s first scene has no scene before it: the request is as it was, and the narrator\'s "when" stands', p1.ok && !/by its tracker/.test(asked.user) && asked.user.includes('The story\'s date at the last scene:') && same(p1.when, { date: 'Day 9', time: 'morning' }) && p1.tail.then === undefined, JSON.stringify([p1.when, p1.tail]));
+    const c1 = await hub.commitScene(p1.token, { choice: 0 });
+    // Played: the last reply carries its own tracker, as every reply does. The chat's latest (what an End reads) is set to
+    // something else here, to tell the two apart: the message's own is the one the lines were played in.
+    chat.push(user('We wait on the quay.'));
+    chat.push({ is_user: false, name: 'Keeper', mes: 'The fog comes in off the water as the ninth bell rings.', swipe_id: 0, swipes: [], extra: { dooms_tracker_swipes: { 0: { infoBox: box({}) } } } });
+    setTracker(box({ time: { start: 'noon', end: 'noon' }, weather: { emoji: '☀', forecast: 'clear' }, temperature: undefined }));
+    const e1 = await hub.endScene({ skipCanon: true, skipWorld: true });
+    check('(the scene is ended; the world\'s memory holds what the chat\'s tracker last said)', c1.ok && e1.ok && hub.worldEntry(W).memory.facts.time === 'noon' && /clear/.test(hub.worldEntry(W).memory.facts.weather), JSON.stringify(hub.worldEntry(W).memory.facts));
+
+    // Right after, somewhere whose name is not the tracker's place.
+    says = { date: 'Day 9', time: 'morning' };
+    const p2 = await prep({ id: 'now' });
+    check('started right after, the request is told when the scene before stopped by the tracker of its last message: the date, the time it had reached, the place, the weather', p2.ok && asked.user.includes('When the scene before stopped, by its tracker at its last message: Day 5, 21:40, at Saltport, the quay. Weather then: 🌫 sea fog, 4°C.') && asked.user.includes('This scene opens right after: the same date, the same time of day and the same weather.'), asked.user.split('\n').slice(1, 4).join(' | '));
+    check('the weather is told though the scene opens at a place of another name: no time has passed, so it is the same sky', !asked.user.includes('. Weather: ') && /every opener is written for that time of day and that weather/.test(asked.system));
+    check('the scene opens at the tracker\'s date and time, whatever the narrator answered for "when"', same(p2.when, { date: 'Day 5', time: '21:40' }), JSON.stringify(p2.when));
+    check('the Start says what the openings were told, and that it is the tracker\'s word; the sheet is drawn from the same', same(p2.tail.then, { date: 'Day 5', time: '21:40', weather: '🌫 sea fog, 4°C', fromTracker: true }) && same(hub.pendingStart().tail, p2.tail), JSON.stringify(p2.tail));
+    says = { date: 'Day 12', time: 'noon' };
+    const again = await hub.askOpenersAgain(p2.token);
+    check('asked again, the date and time are still the tracker\'s', again.ok && same(again.when, { date: 'Day 5', time: '21:40' }) && same(hub.pendingStart().when, { date: 'Day 5', time: '21:40' }), JSON.stringify(again.when));
+    const c2 = await hub.commitScene(p2.token, { choice: 0 });
+    const b2 = c2.ok ? boxOf(c2.file) : {};
+    check('the new scene\'s own tracker starts there: that date, that time, that weather, at the new place', c2.ok && valOf(b2.date) === 'Day 5' && valOf(b2.time.end) === '21:40' && valOf(b2.time.start) === '21:40' && /sea fog/.test(JSON.stringify(b2.weather)) && valOf(b2.location) === 'The Rusty Anchor' && hub.worldEntry(W).scenes.find(x => x.id === c2.scene.id).startDate === 'Day 5', JSON.stringify(b2));
+
+    // A reply with no tracker of its own after the opening: the scene's End read the chat's latest, and that is newer than the opening's.
+    chat.push(user('We go in.'));
+    chat.push({ is_user: false, name: 'Keeper', mes: 'Rain starts on the shutters.', swipe_id: 0, swipes: [], extra: {} });
+    setTracker(box({ time: { start: '21:40', end: '23:10' }, weather: { emoji: '🌧', forecast: 'rain' }, temperature: undefined, location: { value: 'The Rusty Anchor' } }));
+    const e2 = await hub.endScene({ skipCanon: true, skipWorld: true });
+    says = { date: 'Day 9', time: 'morning' };
+    const p3 = await prep({ id: 'now' }, { id: '', label: 'The Rusty Anchor' });
+    check('where the last reply has no tracker of its own, an older message\'s is not taken over what the scene\'s End read: the memory\'s word, the time it had reached', e2.ok && p3.ok && asked.user.includes(': Day 5, 23:10, at The Rusty Anchor. Weather then: 🌧 rain.') && same(p3.when, { date: 'Day 5', time: '23:10' }) && p3.tail.then.fromTracker === false && p3.tail.then.time === '23:10', JSON.stringify([p3.when, p3.tail, asked.user.split('\n').slice(2, 4)]));
+    hub.cancelStart();
+
+    // Time has passed: counted on from where it stopped; where the gap moved the world, what it came to is said.
+    says = { date: 'Day 6', time: 'dawn' };
+    const p4 = await prep({ id: 'tomorrow' }, { id: '', label: 'The mill' });
+    check('started the next day, the request is told what the scene before stopped at and what the gap moved the world to; "when" is the narrator\'s', p4.ok && asked.user.includes(': Day 5, 23:10, at The Rusty Anchor. Weather then: 🌧 rain.') && asked.user.includes('This scene opens the next day after that: it is now Day 6, dawn.') && /"when" is the date and time given for this scene/.test(asked.system) && same(p4.when, { date: 'Day 6', time: 'dawn' }) && p4.tail.right === false, JSON.stringify([p4.when, asked.user.split('\n').slice(2, 4)]));
+    hub.cancelStart();
+    hub.__setGapTransport(async () => 'no');
+    const p5 = await prep({ id: 'later' }, { id: '', label: 'The mill' });
+    check('where the gap did not move the world, the request is told to count on from where it stopped', p5.ok && asked.user.includes('This scene opens later that day after that.') && !asked.user.includes('it is now') && /"when" is counted on from that by later that day/.test(asked.system), asked.user.split('\n').slice(2, 4).join(' | '));
+    hub.cancelStart();
     hub.__setOpenersTransport(null);
     hub.__setGapTransport(null);
     hub.__setRecapTransport(null);

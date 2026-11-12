@@ -390,6 +390,52 @@ export function weatherText(box) {
     return [emoji, text].filter(Boolean).join(' ');
 }
 
+/** The moment a tracker's time had reached: the end of "start → end" (or of { start, end }), else the one time it gives. */
+export function timeReached(time) {
+    const val = (v) => (isObj(v) ? clean(v.value ?? v.text ?? '', 80) : clean(v, 80));
+    if (isObj(time) && ('start' in time || 'end' in time)) return val(time.end) || val(time.start);
+    const parts = val(time).split(/\s*(?:→|->)\s*/).map(x => x.trim()).filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : '';
+}
+
+/**
+ * What the tracker said at the last reply of a chat (D210): the date, the
+ * time it had reached, the place, the weather and the temperature. Read
+ * from the message's own copy of the tracker, which is kept with every
+ * reply for the swipe in front, so it is that message's and not the
+ * chat's latest. The last few replies are looked through for one that has
+ * it; `back` is how many of the chat's messages come after that one (0:
+ * it is the last message's own).
+ * @returns {{ date: string, time: string, location: string, weather: string, temperature: string, back: number }|null}
+ */
+export function lastTrackerFacts(chat, { reach = 6 } = {}) {
+    const list = (Array.isArray(chat) ? chat : []).filter(m => m && typeof m === 'object' && !m.is_system && typeof m.mes === 'string');
+    let replies = 0;
+    for (let i = list.length - 1; i >= 0 && replies < reach; i--) {
+        const m = list[i];
+        if (m.is_user) continue;
+        replies++;
+        const id = Number.isInteger(m.swipe_id) && m.swipe_id >= 0 ? m.swipe_id : 0;
+        const own = isObj(m.extra) && isObj(m.extra.dooms_tracker_swipes) ? m.extra.dooms_tracker_swipes[id] : null;
+        const kept = Array.isArray(m.swipe_info) && isObj(m.swipe_info[id]) && isObj(m.swipe_info[id].extra) && isObj(m.swipe_info[id].extra.dooms_tracker_swipes) ? m.swipe_info[id].extra.dooms_tracker_swipes[id] : null;
+        const data = isObj(own) && own.infoBox ? own : isObj(kept) && kept.infoBox ? kept : null;
+        if (!data) continue;
+        const box = parseLoose(data.infoBox);
+        const f = sceneFactsFrom(box || data.infoBox);
+        const t = isObj(box) ? box.temperature : null;
+        const out = {
+            date: clean(f.date, 80),
+            time: timeReached(isObj(box) && box.time !== undefined ? box.time : f.time),
+            location: clean(f.location, 80),
+            weather: weatherText(box),
+            temperature: isObj(t) ? clean([t.value, t.unit].filter(v => v !== undefined && v !== null && v !== '').join(''), 24) : clean(t, 24),
+            back: list.length - 1 - i,
+        };
+        if (out.date || out.time || out.location || out.weather) return out;
+    }
+    return null;
+}
+
 function parseLoose(v) {
     if (isObj(v)) return v;
     if (typeof v !== 'string') return null;
@@ -654,8 +700,14 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
  * the narrator's template; and the exact JSON asked for.
  * @returns {{ system: string, user: string }}
  */
-export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [], tail = '' } = {}) {
+export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [], tail = '', then = null, now = null } = {}) {
     const name = clean(world.name, 80) || 'the world';
+    // When the scene before stopped, by its tracker at its last message (D210): the date, the time it had reached, the
+    // place, the weather. The opening is written for that moment or counted on from it; before this the request was told
+    // the weather only where the place's name matched, and the time as a span.
+    const t = isObj(then) ? { date: clean(then.date, 80), time: clean(then.time, 80), location: clean(then.location, 80), weather: clean(then.weather, 120), temperature: clean(then.temperature, 24), back: Number(then.back) > 0 ? Math.floor(Number(then.back)) : 0 } : null;
+    const known = !!(t && (t.date || t.time || t.weather));
+    const opensAt = isObj(now) && (clean(now.date, 80) || clean(now.time, 80)) ? [clean(now.date, 80), clean(now.time, 80)].filter(Boolean).join(', ') : '';
     // The last lines of the scene before, as they were played (D205): what the scene carries on from, or how things were left.
     const lastLines = String(tail || '').trim();
     const rightAfter = !gapWords;
@@ -670,7 +722,13 @@ export function buildOpenersPrompt({ world = {}, place = '', region = '', weathe
     const law = styleLawText(style, { max: 500 });
     const system = `You are the narrator of ${name}. A new scene is about to open and you write its first message: how the scene opens, before ${who} has done anything. You answer with one JSON object and nothing else, in exactly this shape:
 {"when": {"date": "<the story's date when the scene opens>", "time": "<the time of day>"}, "openers": [{"title": "<four words at most>", "text": "<the opening narration>", "who": ["<names of the people present>"]}]}
-Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording. ${lastLines
+Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording. ${known
+        ? (!gapWords
+            ? (t.back
+                ? `You are told the date, the time of day and the weather as the tracker of the scene before last had them, a few messages before it stopped. This scene opens right after its last lines: the time of day and the weather are as those lines leave them, and as the tracker had them where the lines do not say; "when" is the date and the time of day it has come to, and every opener is written for that hour and that weather. `
+                : `You are told when the scene before stopped, by its tracker: its date, the time of day it had reached and the weather. This scene opens at that same moment: "when" is that date and that time of day, and every opener is written for that time of day and that weather (the light, the sky, what people are doing at that hour); none of them opens at another hour or under another sky. `)
+            : `You are told when the scene before stopped, by its tracker: its date, the time of day it had reached and the weather. ${opensAt ? '"when" is the date and time given for this scene' : `"when" is counted on from that by ${clean(gapWords, 80)}`}, and every opener is written for the time of day it comes to; the weather follows from what it was, changed only as that much time would change it. `)
+        : ''}${lastLines
         ? (rightAfter
             ? `The last lines of the scene before are given as they were played, and this scene opens right after them: it carries straight on from that very moment. No time is skipped, nobody has moved unless those lines moved them, and nothing in them is told again or changed. Each opener is the next thing that happens there, and it stops with the next move still ${who}'s. `
             : `The last lines of the scene before are given as they were played, so that you know how things were left. This scene opens ${clean(gapWords, 80)} after them: do not carry that conversation on. Each opener is a new moment that follows from how things were left: the place as ${who} finds it now, who is there, the first thing that happens, and it stops with the first move still ${who}'s. `)
@@ -680,8 +738,11 @@ Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording
     const people = cast.length ? cast.map(c => (typeof c === 'string' ? clean(c, 260) : personLine(c.name, c))).join('\n- ') : 'no one in particular';
     const q = [quests && quests.main && quests.main !== 'None' ? `Main: ${clean(quests.main, 200)}` : '', ...((quests && Array.isArray(quests.optional)) ? quests.optional.map(x => clean(x, 200)).filter(Boolean).slice(0, 6) : [])].filter(Boolean);
     const user = `World: ${name}${world.blurb ? `. ${clean(world.blurb, 600)}` : ''}
-Where the scene opens: ${clean(place, 80) || 'anywhere that fits'}${region && !sameName(region, place) ? ` (${clean(region, 80)})` : ''}${weather ? `. Weather: ${clean(weather, 120)}` : ''}
-The story's date at the last scene: ${[date, time].map(s => clean(s, 80)).filter(Boolean).join(', ') || 'unknown'}${gapWords ? `; this scene opens ${clean(gapWords, 80)}` : '; this scene opens right after'}.
+Where the scene opens: ${clean(place, 80) || 'anywhere that fits'}${region && !sameName(region, place) ? ` (${clean(region, 80)})` : ''}${!known && weather ? `. Weather: ${clean(weather, 120)}` : ''}
+${known
+        ? `When the scene before stopped, by its tracker${t.back ? ` (${t.back} ${t.back === 1 ? 'message' : 'messages'} before its last, the latest it has)` : ' at its last message'}: ${[t.date, t.time].filter(Boolean).join(', ') || 'the date and time unknown'}${t.location ? `, at ${t.location}` : ''}.${t.weather || t.temperature ? ` Weather then: ${[t.weather, t.temperature].filter(Boolean).join(', ')}.` : ''}
+${!gapWords ? (t.back ? 'This scene opens right after the last lines: the time of day and the weather are as those lines leave them, and as the tracker had them where the lines do not say.' : `This scene opens right after: the same date, the same time of day${t.weather ? ' and the same weather' : ''}.`) : opensAt ? `This scene opens ${clean(gapWords, 80)} after that: it is now ${opensAt}.` : `This scene opens ${clean(gapWords, 80)} after that.`}`
+        : `The story's date at the last scene: ${[date, time].map(s => clean(s, 80)).filter(Boolean).join(', ') || 'unknown'}${gapWords ? `; this scene opens ${clean(gapWords, 80)}` : '; this scene opens right after'}.`}
 People here:
 - ${people}
 ${notes.length ? `Their own notes:\n${notes.map(l => `[${l.name}] ${l.text}`).join('\n')}\n` : ''}${standNow.length ? `Where they stand now:\n${standNow.join('\n')}\n` : ''}${standingText ? `The story's standing notes:\n${standingText}\n` : ''}What brought us here: ${clean(seed, MAX_SEED) || 'nothing in particular; the world as it is'}

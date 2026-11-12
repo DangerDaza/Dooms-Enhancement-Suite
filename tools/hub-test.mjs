@@ -16,7 +16,7 @@ import {
     sealStores, takeSnapshot, sealSnapshot, factsFrom, weatherText, seedStores,
     personLine, buildBrief, buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle,
     hubMark, readMark, markEnded, sceneHeader, sceneFileName,
-    sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, buildOpenersPrompt as openersPromptOf, buildRecapPrompt, parseRecapReply, ledgerOfReply, LEDGER_ADDS, LEDGER_DROPS, sceneCardFields, sceneCardTag, markCardsGone, SCENE_NARRATOR_NAME, isStaleScene, markIsOfFile,
+    sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, buildOpenersPrompt as openersPromptOf, buildRecapPrompt, parseRecapReply, ledgerOfReply, LEDGER_ADDS, LEDGER_DROPS, sceneCardFields, sceneCardTag, markCardsGone, SCENE_NARRATOR_NAME, lastTrackerFacts, timeReached, isStaleScene, markIsOfFile,
     openSceneOf, asideScenes, openScene, setSceneAside, resumeScene, endSceneRecord, reopenScene, sceneByChat, markChatGone, renameSceneChat, removeGoneScene, reconcileScenesWithChats, lastRecaps,
     canDeleteScene, deleteKind, deleteSceneRecord, describeDeleteResult,
     hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE, backupFileName,
@@ -550,6 +550,41 @@ console.log('\na scene\'s own narrator card (D209)');
     check('a card that would not go while the scene was in front', /did not delete the scene's narrator card \(no\)\. The scene is still in the list\./.test(describeDeleteResult({ ok: false, reason: 'card', error: 'no', scene: sc })));
     check('a card that could not be made', describeStartResult({ ok: false, reason: 'card', error: 'x' }) === 'SillyTavern could not make the scene\'s narrator card, so nothing was started.');
     check('the status line: with a card for every scene a world needs no narrator to be played', hubStatusLine({ worldName: 'The Eld', entry: null, sceneCards: true }) === 'The Eld: every scene gets a narrator card of its own; no scene played yet.' && /^The Eld: every scene gets a narrator card of its own; /.test(hubStatusLine({ worldName: 'The Eld', entry: e, sceneCards: true })) && hubStatusLine({ worldName: 'The Eld', entry: null }) === 'The Eld: no narrator card yet; pick one to play it from the hub.');
+}
+
+console.log('\nthe tracker of the last message, for the openings (D210)');
+{
+    check('the moment a time had reached is the end of a span, in either form; a single time is itself', timeReached('14:10 → 14:45') === '14:45' && timeReached('20:00 -> 21:40') === '21:40' && timeReached({ start: 'noon', end: 'dusk' }) === 'dusk' && timeReached({ start: 'noon' }) === 'noon' && timeReached({ start: { value: '20:00' }, end: { value: '21:40' } }) === '21:40' && timeReached('Dusk') === 'Dusk' && timeReached({ value: 'Dusk' }) === 'Dusk' && timeReached('') === '' && timeReached(null) === '');
+    const box = (o) => JSON.stringify({ date: { value: 'Day 5' }, time: { start: '20:00', end: '21:40' }, location: { value: 'Saltport, the quay' }, weather: { emoji: '🌫', forecast: 'sea fog' }, temperature: { value: 4, unit: '°C' }, ...o });
+    const you = (mes) => ({ is_user: true, name: 'Jordan', mes });
+    const it = (mes, tracker, extra = {}) => ({ is_user: false, name: 'Narrator', mes, swipe_id: 0, ...(tracker ? { extra: { dooms_tracker_swipes: { 0: { infoBox: tracker } } } } : { extra: {} }), ...extra });
+    const f = lastTrackerFacts([it('One.', box({ time: { start: '08:00', end: '09:00' } })), you('Go.'), it('Two.', box({}))]);
+    check('the last reply\'s own tracker is read: its date, the time it had reached, the place, the weather and the temperature', same(f, { date: 'Day 5', time: '21:40', location: 'Saltport, the quay', weather: '🌫 sea fog', temperature: '4°C', back: 0 }), JSON.stringify(f));
+    check('it is the swipe in front that counts, not the first', lastTrackerFacts([{ is_user: false, mes: 'x', swipe_id: 1, extra: { dooms_tracker_swipes: { 0: { infoBox: box({ time: 'dawn' }) }, 1: { infoBox: box({ time: 'midnight' }) } } } }]).time === 'midnight');
+    check('a chat read from its file has the tracker under the swipe\'s own record: read from there', lastTrackerFacts([{ is_user: false, mes: 'x', swipe_id: 0, extra: {}, swipe_info: [{ extra: { dooms_tracker_swipes: { 0: { infoBox: box({ time: 'noon' }) } } } }] }]).time === 'noon');
+    check('an info box kept as an object, weather as plain text, a temperature as plain text', same(lastTrackerFacts([{ is_user: false, mes: 'x', extra: { dooms_tracker_swipes: { 0: { infoBox: { date: 'Day 2', time: 'Dusk', location: 'The mill', weather: 'clear', temperature: '12C' } } } } }]), { date: 'Day 2', time: 'Dusk', location: 'The mill', weather: 'clear', temperature: '12C', back: 0 }));
+    const behind = lastTrackerFacts([it('One.', box({})), you('Go.'), it('Two.', null), you('And?')]);
+    check('where the last reply has none, the one before it is read, and it says how many messages lie after it', !!behind && behind.time === '21:40' && behind.back === 3, JSON.stringify(behind));
+    check('the player\'s messages and system messages are not looked in; a chat with no tracker anywhere has none', lastTrackerFacts([you('x'), { is_system: true, mes: 'y', extra: { dooms_tracker_swipes: { 0: { infoBox: box({}) } } } }]) === null && lastTrackerFacts([it('a', null), it('b', null)]) === null && lastTrackerFacts([]) === null && lastTrackerFacts(null) === null);
+    check('only the last few replies are looked through: one further back than that is too old to speak for the end', lastTrackerFacts([it('old', box({})), ...Array.from({ length: 6 }, (x, k) => it(`r${k}`, null))]) === null && lastTrackerFacts([it('old', box({})), ...Array.from({ length: 5 }, (x, k) => it(`r${k}`, null))]).back === 5);
+    check('a tracker with nothing in it is passed over for the one before', lastTrackerFacts([it('One.', box({})), it('Two.', '{}')]).back === 1);
+
+    // The request.
+    const base = { world: { name: 'The Eld' }, place: 'The Rusty Anchor', cast: [], seed: 'On.', player: 'Jordan', tail: 'Narrator: The lamps gutter.' };
+    const then = { date: '14th of Frostfall', time: '21:40', location: 'Saltport, the quay', weather: '🌫 sea fog', temperature: '4°C', back: 0 };
+    const now = buildOpenersPrompt({ ...base, gapWords: '', then, weather: 'ignored', date: 'old', time: 'old' });
+    check('right after: the request is told when the scene before stopped by its tracker, with the place and the weather, and that this scene opens at the same date, time of day and weather', now.user.includes('When the scene before stopped, by its tracker at its last message: 14th of Frostfall, 21:40, at Saltport, the quay. Weather then: 🌫 sea fog, 4°C.\nThis scene opens right after: the same date, the same time of day and the same weather.'), now.user.split('\n').slice(1, 4).join(' | '));
+    check('the old line and the weather beside the place are not there as well: one word on it, not two', !now.user.includes('The story\'s date at the last scene') && !now.user.includes('Weather: ignored') && now.user.includes('Where the scene opens: The Rusty Anchor\n'));
+    check('it is told that "when" is that date and time of day, and that no opener opens at another hour or under another sky', /This scene opens at that same moment: "when" is that date and that time of day, and every opener is written for that time of day and that weather/.test(now.system) && /none of them opens at another hour or under another sky/.test(now.system));
+    const later = buildOpenersPrompt({ ...base, gapWords: 'the next day', then, now: { date: '15th of Frostfall', time: 'morning' } });
+    check('time has passed and the world was moved by it: the request is told what it stopped at and what it is now', later.user.includes('This scene opens the next day after that: it is now 15th of Frostfall, morning.') && /"when" is the date and time given for this scene/.test(later.system) && /the weather follows from what it was, changed only as that much time would change it/.test(later.system));
+    const count = buildOpenersPrompt({ ...base, gapWords: 'later that day', then });
+    check('time has passed and nothing says what it came to: "when" is counted on from where it stopped', count.user.includes('This scene opens later that day after that.') && !count.user.includes('it is now') && /"when" is counted on from that by later that day/.test(count.system));
+    const stale = buildOpenersPrompt({ ...base, gapWords: '', then: { ...then, back: 3 } });
+    check('a tracker some messages behind the end is told as that, and the lines are what the time of day and the weather are taken from first', stale.user.includes('by its tracker (3 messages before its last, the latest it has): 14th of Frostfall, 21:40') && stale.user.includes('This scene opens right after the last lines: the time of day and the weather are as those lines leave them, and as the tracker had them where the lines do not say.') && /as the tracker of the scene before last had them, a few messages before it stopped/.test(stale.system) && !/none of them opens at another hour/.test(stale.system));
+    const none = buildOpenersPrompt({ ...base, gapWords: '', weather: 'rain', date: 'Day 1', time: 'noon' });
+    check('with no tracker to go by the request is as it was: the date at the last scene, the weather beside the place', none.user.includes('Where the scene opens: The Rusty Anchor. Weather: rain\nThe story\'s date at the last scene: Day 1, noon; this scene opens right after.') && !/by its tracker/.test(none.system) && same(buildOpenersPrompt({ ...base, gapWords: '', weather: 'rain', date: 'Day 1', time: 'noon', then: { date: '', time: '', weather: '' } }), none));
+    check('no weather known: it is not promised', buildOpenersPrompt({ ...base, gapWords: '', then: { date: 'Day 1', time: 'noon' } }).user.includes('This scene opens right after: the same date, the same time of day.'));
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
