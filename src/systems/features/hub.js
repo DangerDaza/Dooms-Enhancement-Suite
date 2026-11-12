@@ -272,6 +272,25 @@ export function cardOf(worldId) {
     return { index, avatar: e.card, name: String(list[index].name || ''), chat: String(list[index].chat || '') };
 }
 
+/**
+ * The card a scene's chat is on (D204): the scene's own, where its record
+ * names one, else the world's narrator. They differ for the long chat
+ * taken as scene 0 of a world that already had a narrator (D114: the
+ * world keeps its narrator, the chat stays on its own card), and for the
+ * scenes of a world whose narrator was changed since. A chat is under
+ * its card's folder and nowhere else: asked for under another card,
+ * SillyTavern finds nothing and makes an empty chat of that name there.
+ * Null when that card is gone.
+ */
+export function cardOfScene(worldId, scene) {
+    const avatar = scene && scene.card ? String(scene.card) : '';
+    if (!avatar) return cardOf(worldId);
+    const list = bridge().characters();
+    const index = list.findIndex(c => c && c.avatar === avatar);
+    if (index < 0) return null;
+    return { index, avatar, name: String(list[index].name || ''), chat: String(list[index].chat || '') };
+}
+
 /** The world a card narrates, or ''. */
 export function worldOfCard(avatar) {
     for (const [id, e] of Object.entries(store().worlds)) if (e.card && e.card === avatar) return id;
@@ -2102,7 +2121,7 @@ export function setSceneAside(worldId, id) {
 }
 
 /**
- * A scene's chat put in front (D123). The file is looked for first (D202):
+ * A scene's chat put in front (D123), on the card its chat is on (D204). The file is looked for first (D202):
  * SillyTavern asked to open a chat that is not there makes an empty one of
  * that name and shows it, which reads as a scene that lost its messages.
  * A scene whose file is gone is marked so and not opened. The card is
@@ -2114,7 +2133,7 @@ export async function openSceneChat(worldId, id) {
     const e = store().worlds[String(worldId || '')];
     const s = e ? e.scenes.find(x => x.id === id) : null;
     if (!s || !s.chat || s.gone) return { ok: false, reason: 'chat-gone' };
-    const card = cardOf(worldId);
+    const card = cardOfScene(worldId, s);    // the card the chat is on, which is not always the world's narrator (D204)
     if (!card) return { ok: false, reason: 'card-gone' };
     const b = bridge();
     if (ST.is_send_press === true) return { ok: false, reason: 'busy' };
@@ -2218,7 +2237,7 @@ export async function deleteScene(worldId, id) {
         return { ok: true, scene: JSON.parse(JSON.stringify(scene)), chat, opened: opened || null };
     };
     if (scene.gone || !scene.chat) return finish('gone', null);
-    const card = cardOf(world);
+    const card = cardOfScene(world, scene);    // the file is under the card the chat is on (D204)
     if (!card) return { ok: false, reason: 'card-gone', scene };
     const b = bridge();
     const file = scene.chat;
@@ -2329,7 +2348,7 @@ export function sceneAway() {
         let best = null;
         for (const id of Object.keys(worlds)) {
             const s = (worlds[id].scenes || []).find(x => x.status === 'open' && !x.gone && x.chat);
-            if (!s || !cardOf(id)) continue;
+            if (!s || !cardOfScene(id, s)) continue;
             if (!best || (Number(s.startedAt) || 0) > (Number(best.scene.startedAt) || 0)) best = { worldId: id, scene: JSON.parse(JSON.stringify(s)) };
         }
         return best;

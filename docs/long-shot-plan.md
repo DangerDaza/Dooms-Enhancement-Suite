@@ -1235,3 +1235,46 @@ repository.
 Tests: `tools/hub-test.mjs` (the entry for a scene not in front),
 `tools/hub-flow-test.mjs` §22 (nothing being played, a scene left for
 another chat, pressed, Live World off); the real SillyTavern, by hand.
+
+## 43. A scene is opened on the card its chat is on (2026-11-12, D204)
+
+The cause of the owner's empty chat (§41), found from what the model in
+that chat said it had been given, and reproduced in the real
+SillyTavern (§42). The owner's world had a narrator card of its own
+before the long chat was played as scenes. D114 keeps a world's
+narrator, so the long chat, on the story's own card, became scene 0
+with its record naming that card, and new scenes were made on the
+narrator's. But a scene was opened, and deleted, by the world's
+narrator card whatever card its record named. Scene 0 opened from the
+Scenes list therefore asked SillyTavern for the long chat's file under
+the narrator card. It is not there; SillyTavern made an empty chat of
+that name on the narrator card, showed it, and kept it as the chat that
+card opens on, so a reload came back to it.
+
+What the model in that chat reported is what such a chat is: no opening
+and no scene brief (it is no scene), the default persona and not the
+one the story is locked to, an empty inventory, and Live World started
+afresh from the pack, its clocks and "last seen" at their beginning,
+beside the continuity book's entries for the story as it stands now,
+which fire in any chat. Asked for a reply, the model wrote the run's
+first morning again from the lore.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D204 | A scene's chat is on the card its record names | `cardOfScene(world, scene)`: the scene's own card where its record has one, else the world's narrator; null when that card is gone. `openSceneChat` (the Scenes list's Open, Go to it, Resume, End for a scene not in front, the Doom button's Go to scene) looks for the file under that card, selects that card and records it as the one in front. `deleteScene` deletes the file under it. `sceneAway` asks for it. The Scenes list's reading of the narrator's chats already left scenes on other cards alone (`reconcileScenesWithChats`). |
+
+What it does not do. It does not remove the empty chat the old code had
+SillyTavern make under the narrator card, named as the long chat is: it
+is harmless and is the owner's to delete from that card's chat list. A
+world's narrator is still kept when a chat on another card is taken
+(D114): scene 0 stays on its card and new scenes go on the narrator's.
+Whether the long chat's card or the narrator should narrate the scenes
+that follow is the owner's to say.
+
+Tests: `tools/hub-flow-test.mjs` §23 (a world with its narrator, a long
+chat on another card taken, scene 0 opened from the narrator's card and
+a narrator's scene opened from the long chat, the card gone; the first
+of these fails on the old lookup). The real SillyTavern: the old lookup
+gives the owner's empty chat and a reload comes back to it; with D204
+scene 0 opens on its card with its messages and Go to scene opens the
+scene.

@@ -1617,5 +1617,54 @@ console.log('\n§22 a scene opened from the list: its file looked for first, its
     files.set(sc.chat, kept);
 }
 
+console.log('\n§23 a world with a narrator of its own, a long chat on another card taken as its scene 0 (D204: the owner\'s report)');
+{
+    // Harbourside has had its narrator, Mara Vane, since §1. A long chat on another card, on that world, is played as scenes.
+    const W = 'harbourside';
+    const third = ctxTarget.characters.findIndex(c => c.avatar === 'Third.png');
+    ctxTarget.characterId = third;
+    ctxTarget.name2 = 'Third';
+    const was = extensionSettings.liveWorld.pack;
+    extensionSettings.liveWorld.pack = W;
+    const long = 'Third - the long chat';
+    files.set(long, { header: { chat_metadata: {} }, messages: [], avatar: 'Third.png', chName: 'Third' });
+    resetMeta();
+    chat.length = 0;
+    chat.push(ai('The harbour is quiet.'));
+    for (let i = 1; i <= 3; i++) { chat.push(user(`Day ${i}.`)); chat.push({ is_user: false, name: 'Third', mes: `The tide turns on day ${i}.`, extra: {} }); }
+    ctxTarget.chatId = long;
+    ctxTarget.characters[third].chat = long;
+    await loaders();
+    lw.recordCurrentScene();
+    await persistence.saveChatData({ immediate: true });
+    extensionSettings.liveWorld.pack = was;
+    const plan = hub.scenesPlan();
+    check('the world keeps the narrator it has: the chat\'s own card is not made its narrator', plan.ok && plan.world.id === W && plan.card.avatar === 'Mara Vane.png' && hub.cardOf(W).avatar === 'Mara Vane.png', JSON.stringify([plan.ok, plan.reason, plan.card, plan.world]));
+    const done = await hub.commitAdopt({ recap: 'Three days in the harbour.', replace: true });
+    const s0 = done.ok ? hub.worldEntry(W).scenes.find(x => x.id === 's0') : null;
+    check('taken, scene 0 is the long chat and its record names the card the chat is on, not the narrator', done.ok && !!s0 && s0.chat === long && s0.card === 'Third.png' && hub.worldEntry(W).card === 'Mara Vane.png', JSON.stringify([done.ok, done.reason, s0 && [s0.chat, s0.card]]));
+    check('the card of a scene is its own where it has one, the world\'s narrator where it has none', hub.cardOfScene(W, s0).avatar === 'Third.png' && hub.cardOfScene(W, { id: 'sx', chat: 'x' }).avatar === 'Mara Vane.png' && hub.cardOfScene(W, { id: 'sx', chat: 'x', card: 'Nobody.png' }) === null);
+    // From the narrator's card (a scene of the world, or any chat of it), scene 0 is opened.
+    const mara = ctxTarget.characters.findIndex(c => c.avatar === 'Mara Vane.png');
+    ctxTarget.characterId = mara;
+    ctxTarget.name2 = 'Mara Vane';
+    await openPlain('Mara Vane - between');
+    globalThis.__DES_ACTIVE__ = [];
+    opens.length = 0;
+    const r0 = await hub.openSceneChat(W, 's0');
+    check('opened from the narrator\'s card, scene 0 comes up on the card its chat is on, with its messages: its file is not looked for under the narrator', r0.ok && r0.empty === false && r0.messages === 7 && ctxTarget.characters[ctxTarget.characterId].avatar === 'Third.png' && ctxTarget.chatId === long && same(globalThis.__DES_ACTIVE__, ['Third.png']) && !files.has('Mara Vane - the long chat'), JSON.stringify([r0, ctxTarget.characters[ctxTarget.characterId].avatar, ctxTarget.chatId, opens]));
+    check('nothing was made under the narrator\'s card in its name, and scene 0 is not marked gone', ![...files.entries()].some(([n, f]) => n === long && f.avatar === 'Mara Vane.png') && hub.worldEntry(W).scenes.find(x => x.id === 's0').gone !== true);
+    // And a scene on the narrator's card is opened there, from the long chat.
+    const onNarrator = hub.worldEntry(W).scenes.find(x => x.id !== 's0' && !x.gone && x.chat && x.card === 'Mara Vane.png' && files.has(x.chat));
+    const r1 = onNarrator ? await hub.openSceneChat(W, onNarrator.id) : { ok: false, reason: 'none' };
+    check('a scene on the narrator\'s card is opened on the narrator\'s card, from the long chat', r1.ok && ctxTarget.characters[ctxTarget.characterId].avatar === 'Mara Vane.png' && ctxTarget.chatId === onNarrator.chat, JSON.stringify([r1, onNarrator && onNarrator.id]));
+    // The card of scene 0 gone: said, not opened on another.
+    const keptCard = ctxTarget.characters[third];
+    ctxTarget.characters[third] = { name: 'Gone', avatar: 'Gone.png', chat: '' };
+    const noCard = await hub.openSceneChat(W, 's0');
+    ctxTarget.characters[third] = keptCard;
+    check('with the card of its chat gone, a scene is not opened on another card', noCard.ok === false && noCard.reason === 'card-gone');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);
