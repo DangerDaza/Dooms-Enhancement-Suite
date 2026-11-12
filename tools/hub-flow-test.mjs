@@ -117,6 +117,12 @@ globalThis.fetch = async (url, init) => {
         if (!Object.keys(list).length) return { ok: true, status: 200, json: async () => ({ error: true }) };    // a card never opened: no chats folder
         return { ok: true, status: 200, json: async () => list };
     }
+    if (url === '/api/chats/get') {
+        // SillyTavern's own route: the header and the messages of the file under the card's avatar; nothing when it is not there.
+        const f = files.get(String(body.file_name || ''));
+        const data = f && f.avatar === body.avatar_url ? [f.header, ...f.messages] : [];
+        return { ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(data)) };
+    }
     if (url === '/api/chats/delete') {
         // SillyTavern's own route: the file named with its extension, under the card's avatar; 400 when it is not there.
         const name = String(body.chatfile || '').replace(/\.jsonl$/i, '');
@@ -1664,6 +1670,64 @@ console.log('\n§23 a world with a narrator of its own, a long chat on another c
     const noCard = await hub.openSceneChat(W, 's0');
     ctxTarget.characters[third] = keptCard;
     check('with the card of its chat gone, a scene is not opened on another card', noCard.ok === false && noCard.reason === 'card-gone');
+}
+
+console.log('\n§24 the openings are shown the last lines of the scene before, as they were played (D205)');
+{
+    const W = 'harbourside';
+    const longChat = 'Third - the long chat';
+    const reads = () => calls.filter(c => c.url === '/api/chats/get').length;
+    let asked = null;
+    hub.__setOpenersTransport(async (prompt) => { asked = prompt; return '{"when":{"date":"Day 9","time":"dusk"},"openers":[{"title":"The tide","text":"The tide is still turning.","who":[]},{"title":"B","text":"Two.","who":[]},{"title":"C","text":"Three.","who":[]}]}'; });
+    hub.__setGapTransport(async () => '{"elapsed":"an evening","now":{"date":"Day 9","time":"dusk"},"clocks":{},"moved":[],"blurb":"Quiet.","heard":[]}');
+    for (const sc of hub.worldEntry(W).scenes.filter(x => x.status === 'open')) hub.setSceneAside(W, sc.id);
+    // From a chat on the narrator's card: scene 0 is the long chat, on another card. Its file is read, not opened.
+    const mara = ctxTarget.characters.findIndex(c => c.avatar === 'Mara Vane.png');
+    ctxTarget.characterId = mara;
+    ctxTarget.name2 = 'Mara Vane';
+    await openPlain('Mara Vane - between two');
+    check('(the world\'s memory was made by scene 0, the long chat)', hub.worldEntry(W).memory.scene === 's0' && hub.worldEntry(W).scenes.find(x => x.id === 's0').chat === longChat);
+    let before = reads();
+    opens.length = 0;
+    const now = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'now' } });
+    check('started right after, the request is shown the last lines of the scene before as they were played, read from its file on the card it is on', now.ok && asked.user.includes('The last lines of the scene before, as they were played (this scene carries straight on from the last of them):') && asked.user.includes('Third: The tide turns on day 3.') && asked.user.includes('Jordan: Day 3.') && asked.user.includes('Mara Vane: The harbour is quiet.') && reads() === before + 1 && !opens.some(o => o.startsWith('open:') || o.startsWith('select:')), JSON.stringify([now.ok, now.reason, reads() - before, opens]));
+    check('it is told to carry straight on from that moment and to write as the narrator wrote there, and no longer told "plain prose"', /opens right after them: it carries straight on from that very moment\. No time is skipped/.test(asked.system) && /Write as the narrator wrote in those lines: the same person and tense/.test(asked.system) && /Make nothing up that those lines, the record or the notes do not give you/.test(asked.system) && !/plain prose, no markup/.test(asked.system));
+    check('the Start says which lines it showed', same(now.tail, { messages: 7, scene: 's0', right: true }), JSON.stringify(now.tail));
+    hub.cancelStart();
+    // Time has passed: fewer lines, and it is told not to carry the conversation on.
+    const later = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'tomorrow' } });
+    check('started the next day, it is shown how things were left and told to open on a new moment, not to carry the conversation on', later.ok && /This scene opens the next day after them: do not carry that conversation on\. Each opener is a new moment that follows from how things were left/.test(asked.system) && asked.user.includes('(this scene opens the next day after them):') && asked.user.includes('Third: The tide turns on day 3.') && later.tail.right === false && later.tail.messages === 7, JSON.stringify([later.ok, later.reason, later.tail]));
+    hub.cancelStart();
+    // The long chat in front: its lines are the chat's own, and no file is read.
+    ctxTarget.characterId = ctxTarget.characters.findIndex(c => c.avatar === 'Third.png');
+    ctxTarget.name2 = 'Third';
+    await openFile(longChat);
+    for (let i = 4; i <= 12; i++) { chat.push(user(`Day ${i}.`)); chat.push({ is_user: false, name: 'Third', mes: `The tide turns on day ${i}.`, extra: {} }); }
+    before = reads();
+    const front = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'now' } });
+    check('with the scene before in front its lines are the chat\'s own as it stands, the last fifteen of them, and no file is read', front.ok && reads() === before && front.tail.messages === 15 && asked.user.includes('Third: The tide turns on day 12.') && asked.user.includes('Jordan: Day 6.') && !asked.user.includes('Jordan: Day 5.'), JSON.stringify([front.ok, front.reason, front.tail, reads() - before]));
+    hub.cancelStart();
+    const eight = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'days' } });
+    check('when time has passed it is the last eight', eight.ok && eight.tail.messages === 8 && asked.user.includes('Third: The tide turns on day 12.') && asked.user.includes('Jordan: Day 9.') && !asked.user.includes('Jordan: Day 8.'), JSON.stringify(eight.tail));
+    hub.cancelStart();
+    // Going on from a scene that is named: its own lines, from its own card.
+    const named = hub.worldEntry(W).scenes.find(x => x.id !== 's0' && !x.gone && x.chat && files.has(x.chat) && files.get(x.chat).messages.filter(m => !m.is_system && String(m.mes || '').trim()).length);
+    const lastOf = named ? files.get(named.chat).messages.filter(m => !m.is_system).pop() : null;
+    const from = named ? await hub.prepareScene({ worldId: W, seed: { kind: 'scene', id: named.id, label: 'x', text: '' }, place: null, cast: [], gap: { id: 'now' } }) : { ok: false };
+    check('going on from a named scene, the lines are that scene\'s, read from its file', !!named && from.ok && from.tail.scene === named.id && from.tail.messages >= 1 && asked.user.includes(String(lastOf.mes).replace(/\s+/g, ' ').slice(0, 40)), JSON.stringify([named && named.id, from.ok, from.reason, from.tail]));
+    hub.cancelStart();
+    // The file gone: the record stands alone, and the Start says so.
+    ctxTarget.characterId = mara;
+    ctxTarget.name2 = 'Mara Vane';
+    await openPlain('Mara Vane - between two');
+    const keptLong = files.get(longChat);
+    files.delete(longChat);
+    const gone = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'now' } });
+    check('where the chat of the scene before cannot be read the openings are written from its record as before, and the Start says it had no lines', gone.ok && !asked.user.includes('The last lines of the scene before') && /plain prose, no markup/.test(asked.system) && same(gone.tail, { messages: 0, scene: 's0', right: true }), JSON.stringify([gone.ok, gone.reason, gone.tail]));
+    hub.cancelStart();
+    files.set(longChat, keptLong);
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

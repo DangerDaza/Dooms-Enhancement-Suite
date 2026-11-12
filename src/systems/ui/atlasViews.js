@@ -232,12 +232,13 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
         return `<div class="dooms-atlas-setup-card is-review is-scene">
             <h3>How does ${sceneNo ? `scene ${sceneNo}` : 'the scene'} open?</h3>
             <p>${e(where)}${when ? ` · ${e(when)}` : ''}. Pick one; the other two stay as swipes on the first message.</p>
+            ${tailLine(p.tail)}
             ${loreLine(p.lore)}
             ${contLine(p.continuity)}
             ${err}
             <ul class="dooms-atlas-openers">${openers || '<li class="dooms-atlas-none">No opening was written. Write your own below, or ask again.</li>'}</ul>
             <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">Or write the opening yourself</span>
-                <textarea class="dooms-atlas-input dooms-atlas-scene-own" maxlength="1500" placeholder="The first message of the scene, in the narrator's voice."></textarea></label>
+                <textarea class="dooms-atlas-input dooms-atlas-scene-own" maxlength="4000" placeholder="The first message of the scene, in the narrator's voice."></textarea></label>
             <div class="dooms-atlas-setup-actions">
                 <button type="button" class="dooms-atlas-btn" data-act="scene-own"><i class="fa-solid fa-pen" aria-hidden="true"></i> <span>Open with mine</span></button>
                 <button type="button" class="dooms-atlas-btn" data-act="scene-again"><i class="fa-solid fa-rotate" aria-hidden="true"></i> <span>Ask again</span></button>
@@ -423,6 +424,15 @@ function contLine(c) {
     if (!stand.length && !threads) return '';
     const parts = [stand.length ? `where ${e(listOf(stand))} ${stand.length === 1 ? 'stands' : 'stand'} now` : '', threads ? `${threads} open ${threads === 1 ? 'thread' : 'threads'}` : ''].filter(Boolean);
     return `<p class="dooms-atlas-start-note"><i class="fa-solid fa-link" aria-hidden="true"></i> Told ${parts.join(' and ')}, as the scenes before left them.</p>`;
+}
+
+/** Which of the scene before's own lines the openings were shown (D205), or that they had only its record. */
+function tailLine(t) {
+    const k = t && typeof t === 'object' ? t : null;
+    if (!k) return '';
+    const of = k.scene ? (k.scene === 's0' ? 'the chat before the scenes' : `scene ${sceneNoOf(k.scene)}`) : 'the scene before';
+    if (k.messages > 0) return `<p class="dooms-atlas-start-note dooms-atlas-tail-line"><i class="fa-solid fa-quote-left" aria-hidden="true"></i> Shown the last ${k.messages} ${k.messages === 1 ? 'message' : 'messages'} of ${of} as ${k.messages === 1 ? 'it was' : 'they were'} played${k.right ? ', to carry straight on from' : ', to know how things were left'}.</p>`;
+    return k.scene ? `<p class="dooms-atlas-start-note dooms-atlas-tail-line"><i class="fa-solid fa-quote-left" aria-hidden="true"></i> The messages of ${of} could not be read, so these are written from its record alone and may not pick up where it stopped.</p>` : '';
 }
 
 function loreLine(lore) {

@@ -16,7 +16,7 @@ import {
     sealStores, takeSnapshot, sealSnapshot, factsFrom, weatherText, seedStores,
     personLine, buildBrief, buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle,
     hubMark, readMark, markEnded, sceneHeader, sceneFileName,
-    sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, buildRecapPrompt, parseRecapReply, isStaleScene, markIsOfFile,
+    sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, buildOpenersPrompt as openersPromptOf, buildRecapPrompt, parseRecapReply, isStaleScene, markIsOfFile,
     openSceneOf, asideScenes, openScene, setSceneAside, resumeScene, endSceneRecord, reopenScene, sceneByChat, markChatGone, renameSceneChat, removeGoneScene, reconcileScenesWithChats, lastRecaps,
     canDeleteScene, deleteSceneRecord, describeDeleteResult,
     hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE, backupFileName,
@@ -240,6 +240,29 @@ console.log('\n§7 the recap');
     check('the lead is at least one line however long that line is, and no more than fits', sceneTranscriptParts(talk, { budget: 2000, maxPages: 99, leadChars: 10 }).slice(1).every(x => x.lead.split('\n').length === 1) && sceneTranscriptParts(talk, { budget: 2000, maxPages: 99, leadLines: 2 }).slice(1).every(x => x.lead.split('\n').length === 2));
     const lastTwo = sceneTranscriptParts(talk, { budget: 2000, maxPages: 2 });
     check('with the oldest parts not read, the first one read still has what led into it', lastTwo.length === 2 && lastTwo[0].lead === parts[parts.length - 2].lead && lastTwo[1].text === parts[parts.length - 1].text);
+    // The last lines of a scene, for the openings of the next (D205).
+    {
+        const long = [];
+        for (let i = 1; i <= 20; i++) { long.push({ name: 'Jordan', is_user: true, mes: `ask ${i}` }); long.push({ name: 'Mara', is_user: false, mes: `answer ${i}` }); }
+        const t15 = sceneTail(long);
+        check('the last fifteen messages of a scene, a line each, the newest last', t15.messages === TAIL.now && t15.text.split('\n').length === 15 && t15.text.endsWith('Mara: answer 20') && t15.text.startsWith('Mara: answer 13') && !t15.text.includes('ask 13'), t15.text.split('\n')[0]);
+        check('eight when asked for eight; all of a short scene', sceneTail(long, { count: TAIL.later }).messages === 8 && sceneTail(long.slice(0, 3)).messages === 3 && sceneTail([]).messages === 0 && sceneTail(null).text === '');
+        const messy = [{ name: 'Mara', is_user: false, mes: 'Seen. <think>hidden</think> ```json\n{"a":1}\n``` <trackers>x</trackers> [ITEM: key] The door.' }, { name: 'Sys', is_system: true, is_user: false, mes: 'A hidden line.' }, { name: 'Jordan', is_user: true, mes: '   ' }];
+        check('the model\'s thinking, tracker blocks, code and dice marks are left out, as are hidden and empty messages', sceneTail(messy).text === 'Mara: Seen. The door.');
+        const big = [{ name: 'Mara', is_user: false, mes: `EARLY-START ${'e'.repeat(3000)} EARLY-END` }, { name: 'Jordan', is_user: true, mes: 'I wait.' }, { name: 'Mara', is_user: false, mes: `LAST-START ${'x'.repeat(5000)} and she turns to you, the key in her hand.` }];
+        const tb = sceneTail(big).text.split('\n');
+        check('a long earlier message is cut from its end; the last ones keep their end, where the scene stopped', tb[0].startsWith('Mara: EARLY-START') && !tb[0].includes('EARLY-END') && tb[0].length <= TAIL.each + 10 && tb[2].endsWith('the key in her hand.') && !tb[2].includes('LAST-START') && tb[2].startsWith('Mara: …') && tb[2].length <= TAIL.last + 10, JSON.stringify(tb.map(x => x.length)));
+        const many = Array.from({ length: 15 }, (_, i) => ({ name: 'Mara', is_user: false, mes: `line ${i} ${'y'.repeat(2500)} end ${i}.` }));
+        const tm = sceneTail(many, { budget: 6000 });
+        check('over the whole budget the oldest lines go first, and the last two always stay', tm.text.length <= 6000 + 100 && tm.messages >= 2 && tm.messages < 15 && tm.text.endsWith('end 14.') && tm.text.includes('end 13.') && !tm.text.includes('line 0 '), JSON.stringify([tm.messages, tm.text.length]));
+        const base = { world: { name: 'The Eld' }, place: 'The kitchen', date: 'Day 3', time: 'morning', cast: [], recaps: ['They ate.'], player: 'Morzan' };
+        const plain = openersPromptOf(base);
+        const right = openersPromptOf({ ...base, tail: 'Solveig: "Chew it."\nMorzan: I chew.' });
+        const days = openersPromptOf({ ...base, gapWords: 'some days later', tail: 'Solveig: "Chew it."' });
+        check('with no lines to show, the openings are asked for as before', /a paragraph or two, plain prose, no markup/.test(plain.system) && !plain.user.includes('The last lines of the scene before'));
+        check('right after: the lines are given last, and the openings carry straight on from them in the narrator\'s own voice', right.user.includes('The last lines of the scene before, as they were played (this scene carries straight on from the last of them):\nSolveig: "Chew it."\nMorzan: I chew.\nThe player: Morzan') && /it carries straight on from that very moment\. No time is skipped/.test(right.system) && /stops with the next move still Morzan's/.test(right.system) && /speech set out the same way \(its marks and any colour tags\)/.test(right.system) && !/plain prose, no markup/.test(right.system));
+        check('time passed: the lines say how things were left, and the openings are a new moment', days.user.includes('(this scene opens some days later after them):') && /This scene opens some days later after them: do not carry that conversation on/.test(days.system) && /a new moment that follows from how things were left/.test(days.system) && !/carries straight on from that very moment/.test(days.system));
+    }
     check('a short scene is one part with nothing before it', same(sceneTranscriptParts(chat, { persona: 'Jordan' }), [{ text: t, lead: '' }]));
     const led = buildRecapPrompt({ transcript: parts[1].text, soFar: 'They talked at the gate.', lead: parts[1].lead, last: false });
     check('a pass that continues is told those lines apart from its own part, as already recorded', led.user.includes(`The lines just before this part, already in the record so far (to read on from, not to record again):\n${parts[1].lead}\n\nThe scene, continued:\n${parts[1].text}`) && !buildRecapPrompt({ transcript: parts[0].text, lead: 'x' }).user.includes('The lines just before'));

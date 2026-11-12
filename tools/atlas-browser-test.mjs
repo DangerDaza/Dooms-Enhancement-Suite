@@ -1182,6 +1182,12 @@ console.log('\n§5h starting a scene from a place (D174)');
     v = await panel();
     check('the sheet says whose lorebook entries the openings were written with, and who had none and how one is found (D177)', /Written with the lorebook entries of Kiyoha and Lysandra and the story's standing notes\./.test(v.text) && /No entry was found for Dagger: the opening has only a line about them\. An entry whose title begins with the name, or that has the name among its keywords, is found\./.test(v.text) && v.inside && !v.overflow, v.text.slice(0, 400));
     await shot('7zh-scene-openings-lore');
+    // What the openings were shown of the scene before (D205).
+    {
+        const tailText = async (tail) => { await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { ...pending, tail } }); return page.evaluate(() => { const el = document.querySelector('.dooms-atlas-setup-card .dooms-atlas-tail-line'); return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; }); };
+        check('the pick says which of the scene before\'s own lines the openings were shown, and what for', await tailText({ messages: 15, scene: 's3', right: true }) === 'Shown the last 15 messages of scene 3 as they were played, to carry straight on from.' && await tailText({ messages: 8, scene: 's0', right: false }) === 'Shown the last 8 messages of the chat before the scenes as they were played, to know how things were left.');
+        check('or that it had only the record, where the chat could not be read; and nothing where there was no scene before', /The messages of scene 3 could not be read, so these are written from its record alone and may not pick up where it stopped\./.test(await tailText({ messages: 0, scene: 's3', right: true })) && await tailText({ messages: 0, scene: '', right: true }) === '' && await tailText(undefined) === '');
+    }
     await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { ...pending, lore: { found: [], missing: [], standing: false, books: [] } } });
     check('with no lorebook read it says nothing of them', !/lorebook/.test((await panel()).text));
     await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { when: null, openers: [] }, error: 'The narrator wrote no usable opener; write your own, ask again, or start without one.' });

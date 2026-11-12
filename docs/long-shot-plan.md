@@ -1278,3 +1278,41 @@ of these fails on the old lookup). The real SillyTavern: the old lookup
 gives the owner's empty chat and a reload comes back to it; with D204
 scene 0 opens on its card with its messages and Go to scene opens the
 scene.
+
+## 44. The openings are shown how the scene before ended (2026-11-12, D205)
+
+The owner started a scene "Right after" and the three openings "did not
+seem to know what was going on and just kind of made things up". They
+asked that the request be given the last fifteen messages of the scene
+before, or of scene 0 when no scene has been played yet, and did not
+know what the other gaps should get. (They spoke of a narrator card
+being made with three starting messages: what is made is a chat on the
+world's narrator card, whose first message has the three openings as
+its swipes.)
+
+The request for the openings (D116, D177, D188) was told the world, the
+place, who is there, their notes, where they stand, the open threads,
+the ledger and the last two records, seven hundred characters each. It
+was shown no message. "This scene opens right after" was said of a
+moment it had a paragraph about.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D205 | The openings' request is shown the last lines of the scene before, as they were played | **Which scene.** The one the Start goes on from where it names one (Go on from here, Continue fresh); else the scene whose End made the world's memory, which is scene 0, the long chat, until a scene has ended; else the last that ended (`lastLinesFor`). **Which lines.** The last fifteen messages when the scene opens right after, the last eight when time has passed (`sceneTail`, `TAIL`): the player's and the narrator's, a line each, thinking, tracker blocks and dice marks taken out. An earlier message is cut at 1,000 characters; the last two keep 2,400 from their end, because a scene stops at the end of its last message. 16,000 characters in all, the oldest lines going first. **From where.** The chat in front where that is the scene; else its file, read through SillyTavern's own route on the card its chat is on (D204), without opening it. Where it cannot be read the request is as it was, and the pick says so. **What it is told.** Right after: the scene carries straight on from that very moment, no time skipped, nobody moved unless the lines moved them, nothing told again, the next move the player's. Time passed: how things were left, and the scene is a new moment that follows from it, the conversation not carried on. Both: write as the narrator wrote in those lines (the person and tense, speech set out the same way with its marks and colour tags, about that length), and make nothing up that the lines, the record and the notes do not give. With lines to follow, "plain prose, no markup, a paragraph or two" is no longer said, and an opening may run to 4,000 characters (it was 1,500). **Said on the pick.** "Shown the last 15 messages of scene 3 as they were played, to carry straight on from", or that the messages could not be read. Ask again uses the same request. |
+
+What it does not do. The request is still DES's own and not the chat's
+preset: the roleplay frame a preset carries (the person and tense rules,
+banned words) reaches it only through the lines it is told to write
+like. The count is not a setting. For a gap of weeks the last eight
+messages may matter less than the record; they are given all the same.
+It was run in the real SillyTavern with a stand-in for the model: that
+the lines are read from the file on the right card and are in the
+request is confirmed there, that a model writes a better opening from
+them is not.
+
+Tests: `tools/hub-test.mjs` (the lines: count, what is left out, the
+cuts, the budget; the request with and without them, right after and
+later), `tools/hub-flow-test.mjs` §24 (read from the file on another
+card and nothing opened, the next day, the chat in front and no file
+read, fifteen and eight, a named scene, the file gone),
+`tools/atlas-browser-test.mjs` §5h (the pick's line).

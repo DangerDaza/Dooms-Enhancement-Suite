@@ -30,7 +30,7 @@ export const ADOPTED_ID = 's0';        // the chat a world's scenes began from (
 export const ADOPTED_TITLE = 'Before the scenes';
 export const OPENERS = 3;
 export const MAX_OPENER_TITLE = 60;
-export const MAX_OPENER_TEXT = 1500;
+export const MAX_OPENER_TEXT = 4000;    // an opening may be as long as one of the narrator's own messages (D205); it was 1500
 export const MAX_BRIEF = 3600;         // the brief carries where the scene's people stand and the open threads too (D188)
 export const MAX_LINE = 200;           // a person's line in the brief
 export const MAX_SEED = 400;           // what brought us here
@@ -648,8 +648,11 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
  * the narrator's template; and the exact JSON asked for.
  * @returns {{ system: string, user: string }}
  */
-export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [] } = {}) {
+export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [], tail = '' } = {}) {
     const name = clean(world.name, 80) || 'the world';
+    // The last lines of the scene before, as they were played (D205): what the scene carries on from, or how things were left.
+    const lastLines = String(tail || '').trim();
+    const rightAfter = !gapWords;
     // Where the people here stand now and what the story has left open (D188): the last scenes' own word on it.
     const standNow = (Array.isArray(stand) ? stand : []).filter(p => p && p.name && p.now).slice(0, MAX_CAST).map(p => `- ${clean(p.name, 60)}: ${clean(p.now, CONT.personChars)}`);
     const open = (Array.isArray(threads) ? threads : []).map(t => clean(t, CONT.threadChars)).filter(Boolean).slice(0, CONT.briefThreads + 2);
@@ -661,7 +664,13 @@ export function buildOpenersPrompt({ world = {}, place = '', region = '', weathe
     const law = styleLawText(style, { max: 500 });
     const system = `You are the narrator of ${name}. A new scene is about to open and you write its first message: how the scene opens, before ${who} has done anything. You answer with one JSON object and nothing else, in exactly this shape:
 {"when": {"date": "<the story's date when the scene opens>", "time": "<the time of day>"}, "openers": [{"title": "<four words at most>", "text": "<the opening narration>", "who": ["<names of the people present>"]}]}
-Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording. Each opener: the place as ${who} finds it, who is there, the first thing that happens, and it stops with the first move still ${who}'s; a paragraph or two, plain prose, no markup, no headings, no dice, nothing resolved or decided. Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standNow.length ? 'Where it is said how a person stands now, that is how the story left them: they pick up from there, and it holds over older notes where the two differ. ' : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${law ? `${law} ` : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
+Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording. ${lastLines
+        ? (rightAfter
+            ? `The last lines of the scene before are given as they were played, and this scene opens right after them: it carries straight on from that very moment. No time is skipped, nobody has moved unless those lines moved them, and nothing in them is told again or changed. Each opener is the next thing that happens there, and it stops with the next move still ${who}'s. `
+            : `The last lines of the scene before are given as they were played, so that you know how things were left. This scene opens ${clean(gapWords, 80)} after them: do not carry that conversation on. Each opener is a new moment that follows from how things were left: the place as ${who} finds it now, who is there, the first thing that happens, and it stops with the first move still ${who}'s. `)
+        : `Each opener: the place as ${who} finds it, who is there, the first thing that happens, and it stops with the first move still ${who}'s; `}${lastLines
+        ? `Write as the narrator wrote in those lines: the same person and tense, speech set out the same way (its marks and any colour tags), about as long as one of the narrator's own messages there; no headings, no dice, no tracker or status block, nothing resolved or decided. Make nothing up that those lines, the record or the notes do not give you: where you do not know, stay with what is there. `
+        : 'a paragraph or two, plain prose, no markup, no headings, no dice, nothing resolved or decided. '}Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standNow.length ? 'Where it is said how a person stands now, that is how the story left them: they pick up from there, and it holds over older notes where the two differ. ' : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${law ? `${law} ` : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
     const people = cast.length ? cast.map(c => (typeof c === 'string' ? clean(c, 260) : personLine(c.name, c))).join('\n- ') : 'no one in particular';
     const q = [quests && quests.main && quests.main !== 'None' ? `Main: ${clean(quests.main, 200)}` : '', ...((quests && Array.isArray(quests.optional)) ? quests.optional.map(x => clean(x, 200)).filter(Boolean).slice(0, 6) : [])].filter(Boolean);
     const user = `World: ${name}${world.blurb ? `. ${clean(world.blurb, 600)}` : ''}
@@ -670,7 +679,7 @@ The story's date at the last scene: ${[date, time].map(s => clean(s, 80)).filter
 People here:
 - ${people}
 ${notes.length ? `Their own notes:\n${notes.map(l => `[${l.name}] ${l.text}`).join('\n')}\n` : ''}${standNow.length ? `Where they stand now:\n${standNow.join('\n')}\n` : ''}${standingText ? `The story's standing notes:\n${standingText}\n` : ''}What brought us here: ${clean(seed, MAX_SEED) || 'nothing in particular; the world as it is'}
-${canonBlock ? `What the story has established:\n${clean(canonBlock, 1200)}\n` : ''}${recaps.length ? `Last time:\n${recaps.map(r => clean(r, 700)).filter(Boolean).slice(0, 2).map((r, i) => `${i ? 'Before that' : 'Last scene'}: ${r}`).join('\n')}\n` : ''}${q.length ? `Open quests: ${q.join('; ')}\n` : ''}${open.length ? `Left open by the story so far (a scene may pick one up; none has to be):\n${open.map(t => `- ${t}`).join('\n')}\n` : ''}${note ? `${who} wants from this scene: ${clean(note, MAX_NOTE)}\n` : ''}The player: ${who} (never written for).
+${canonBlock ? `What the story has established:\n${clean(canonBlock, 1200)}\n` : ''}${recaps.length ? `Last time:\n${recaps.map(r => clean(r, 700)).filter(Boolean).slice(0, 2).map((r, i) => `${i ? 'Before that' : 'Last scene'}: ${r}`).join('\n')}\n` : ''}${q.length ? `Open quests: ${q.join('; ')}\n` : ''}${open.length ? `Left open by the story so far (a scene may pick one up; none has to be):\n${open.map(t => `- ${t}`).join('\n')}\n` : ''}${note ? `${who} wants from this scene: ${clean(note, MAX_NOTE)}\n` : ''}${lastLines ? `The last lines of the scene before, as they were played (${rightAfter ? 'this scene carries straight on from the last of them' : `this scene opens ${clean(gapWords, 80)} after them`}):\n${lastLines}\n` : ''}The player: ${who} (never written for).
 
 Answer with the JSON object only.`;
     return { system, user };
@@ -875,13 +884,52 @@ export function sceneTranscript(chat, { budget = RECAP_BUDGET, persona = 'Player
     return out.join('\n');
 }
 
+/** A message's text as a request reads it: the model's thinking, the tracker's blocks, code and the dice's marks taken out, on one line. */
+const messageText = (mes) => String(mes ?? '').replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<trackers?>[\s\S]*?<\/trackers?>/gi, '').replace(/```[\s\S]*?```/g, '').replace(/\[(ITEM|CHECK|SAVE)[^\]]*\]/g, '').replace(/\s+/g, ' ').trim();
+
+/** How much of the scene before the request for a scene's openings is shown (D205). */
+export const TAIL = Object.freeze({
+    now: 15,        // messages, when the scene opens right after
+    later: 8,       // messages, when time has passed: enough to know how things were left
+    each: 1000,     // an earlier message is cut here, from its end
+    last: 2400,     // the last two keep this much, from their end: how a scene ended is at the end of its last messages
+    budget: 16000,  // all of it together; the oldest lines go first
+});
+
+/**
+ * The last lines of a scene as they were played (D205), for the request
+ * that writes how the next one opens. The record of a scene is a few
+ * lines: it says what happened, not the moment it stopped on, and an
+ * opening written from it alone makes that moment up. A long message is
+ * cut, the last two from their start (they keep their end).
+ * @returns {{ text: string, messages: number }}
+ */
+export function sceneTail(chat, { count = TAIL.now, persona = 'Player', each = TAIL.each, last = TAIL.last, budget = TAIL.budget } = {}) {
+    const list = [];
+    for (const m of Array.isArray(chat) ? chat : []) {
+        if (!m || typeof m !== 'object' || m.is_system || typeof m.mes !== 'string') continue;
+        const text = messageText(m.mes);
+        if (text) list.push({ who: m.is_user ? (m.name || persona) : (m.name || 'Narrator'), text });
+    }
+    const tail = list.slice(-Math.max(1, count | 0));
+    const lines = tail.map((m, i) => {
+        let text = m.text;
+        if (tail.length - 1 - i < 2) { if (text.length > last) text = `…${text.slice(text.length - last + 1).trimStart()}`; }
+        else if (text.length > each) text = `${text.slice(0, each - 1).trimEnd()}…`;
+        return `${m.who}: ${text}`;
+    });
+    let used = lines.reduce((n, l) => n + l.length + 1, 0);
+    while (lines.length > 2 && used > budget) { used -= lines[0].length + 1; lines.shift(); }
+    return { text: lines.join('\n'), messages: lines.length };
+}
+
 /** A chat's messages as a record reads them: one line each, the tracker's blocks and the dice's marks taken out, a long one cut. */
 function transcriptLines(chat, { persona = 'Player', truncation = 1200 } = {}) {
     const list = Array.isArray(chat) ? chat : [];
     const lines = [];
     for (const m of list) {
         if (!m || typeof m !== 'object' || m.is_system || typeof m.mes !== 'string') continue;
-        let text = m.mes.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<trackers?>[\s\S]*?<\/trackers?>/gi, '').replace(/```[\s\S]*?```/g, '').replace(/\[(ITEM|CHECK|SAVE)[^\]]*\]/g, '').replace(/\s+/g, ' ').trim();
+        let text = messageText(m.mes);
         if (!text) continue;
         if (text.length > truncation) text = `${text.slice(0, truncation - 1).trimEnd()}…`;
         lines.push({ user: !!m.is_user, text: `${m.is_user ? (m.name || persona) : (m.name || 'Narrator')}: ${text}` });

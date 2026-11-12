@@ -35,7 +35,7 @@ import {
     buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle, hubMark, readMark, markEnded, sceneHeader,
     sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
-    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, renameSceneChat,
+    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
     readConflicts, mergeConflicts, normalizeConflicts,
 } from '../../utils/hub.js';
@@ -232,6 +232,12 @@ function defaultBridge() {
         createCharacter: async (fields) => {
             const res = await post('/api/characters/create', fields);
             return String(await res.text()).trim();
+        },
+        // A chat's messages read from its file without opening it (D205), as SillyTavern reads one: its server route, by the card's avatar.
+        readChat: async ({ chName, avatar, fileName }) => {
+            const res = await post('/api/chats/get', { ch_name: chName, file_name: fileName, avatar_url: avatar });
+            const data = await res.json();
+            return Array.isArray(data) ? data.filter(m => m && typeof m === 'object' && typeof m.mes === 'string') : [];
         },
         // A chat file deleted (D197), as SillyTavern's own chat list deletes one: its server route, by the card's avatar.
         deleteChatFile: async ({ avatar, fileName }) => { await post('/api/chats/delete', { chatfile: `${fileName}.jsonl`, avatar_url: avatar }); return true; },
@@ -758,6 +764,40 @@ async function moveWorldByGap(worldId, pack, memory, gap, recaps, { mode = 'betw
  * file and opens it. One pending Start at a time.
  * @param {{ worldId: string, seed?: object, place?: { id?: string, label?: string }, cast?: string[], gap?: { id: string, words?: string }, note?: string, hookId?: string }} args
  */
+/**
+ * The last lines of the scene a new one follows (D205), as they were
+ * played: the scene it goes on from where the Start names one (Go on from
+ * here, Continue fresh), else the scene whose End made the world's
+ * memory (scene 0, the long chat, when no scene has been played yet),
+ * else the last one that ended. Its messages are the chat in front where
+ * that is the scene, else read from its file on the card its chat is on.
+ * Fifteen messages when the scene opens right after, eight when time has
+ * passed. Nothing where the chat cannot be read: the record stands alone.
+ * @returns {Promise<{ text: string, messages: number, scene: string }>}
+ */
+async function lastLinesFor(worldId, entry, seed, gap, players) {
+    const none = { text: '', messages: 0, scene: '' };
+    try {
+        const named = seed && typeof seed === 'object' && seed.kind === 'scene' && seed.id ? String(seed.id) : '';
+        const made = entry && entry.memory && entry.memory.scene ? String(entry.memory.scene) : '';
+        const scenes = entry && Array.isArray(entry.scenes) ? entry.scenes : [];
+        const ok = (x) => !!x && !x.gone && !!x.chat;
+        const s = [scenes.find(x => x.id === named), scenes.find(x => x.id === made), scenes.slice().reverse().find(x => x.status === 'ended')].find(ok);
+        if (!s) return none;
+        const card = cardOfScene(worldId, s);
+        if (!card) return { ...none, scene: s.id };
+        const b = bridge();
+        const same = (a, c) => String(a || '').replace(/\.jsonl$/i, '').toLowerCase() === String(c || '').replace(/\.jsonl$/i, '').toLowerCase();
+        const inFront = String(b.characterId()) === String(card.index) && !b.groupId() && same(chatId(), s.chat);
+        const messages = inFront ? (chatArray() || []) : await b.readChat({ chName: card.name, avatar: card.avatar, fileName: s.chat });
+        const t = sceneTail(messages, { count: gap && gap.id === 'now' ? TAIL.now : TAIL.later, persona: players[0] || 'Player' });
+        return { text: t.text, messages: t.messages, scene: s.id };
+    } catch (e) {
+        log('the last lines of the scene before could not be read; the openings are written from its record', String(e && e.message || e));
+        return none;
+    }
+}
+
 export async function prepareScene({ worldId, seed = null, place = null, cast = [], gap = null, note = '', hookId = '' } = {}) {
     const g = guardStart(worldId);
     if (!g.ok) return g;
@@ -800,7 +840,10 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     const contNow = entryOf(g.id).continuity;
     const stand = standingLines(contNow, names);
     const threads = threadLines(contNow);
-    const prompt = buildOpenersPrompt({ world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads });
+    // The last lines of the scene before, as they were played (D205): the record says what happened, not where it stopped.
+    const lastLines = await lastLinesFor(g.id, g.entry, seed, theGap, players);
+    if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
+    const prompt = buildOpenersPrompt({ tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads });
     let openers = [];
     let when = null;
     let errors = [];
@@ -823,8 +866,9 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
         weather, since, recaps, player: players, openers, when, errors, notes, prompt, movedMemory,
         lore: { found: notesOf.found, missing: notesOf.missing, standing: !!notesOf.standing, books: notesOf.books },
         stand, threads, continuity: { stand: stand.map(x => x.name), threads: threads.length },
+        tail: { messages: lastLines.messages, scene: lastLines.scene, right: theGap.id === 'now' },
     };
-    return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes, lore: pending.lore, continuity: pending.continuity };
+    return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes, lore: pending.lore, continuity: pending.continuity, tail: pending.tail };
 }
 
 // ─── Hooks over the memory (§4.4) ────────────────────────────────────────
