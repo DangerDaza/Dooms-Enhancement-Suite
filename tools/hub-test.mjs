@@ -16,7 +16,7 @@ import {
     sealStores, takeSnapshot, sealSnapshot, factsFrom, weatherText, seedStores,
     personLine, buildBrief, buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle,
     hubMark, readMark, markEnded, sceneHeader, sceneFileName,
-    sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, buildRecapPrompt, parseRecapReply, isStaleScene, markIsOfFile,
+    sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, buildRecapPrompt, parseRecapReply, isStaleScene, markIsOfFile,
     openSceneOf, asideScenes, openScene, setSceneAside, resumeScene, endSceneRecord, reopenScene, sceneByChat, markChatGone, renameSceneChat, removeGoneScene, reconcileScenesWithChats, lastRecaps,
     canDeleteScene, deleteSceneRecord, describeDeleteResult,
     hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE, backupFileName,
@@ -40,10 +40,25 @@ const clock = pack.clocks[0];
 
 console.log('\n§1 the rules');
 {
-    check('defaults: later that day, 600 characters, the count of repeated phrases off', same(defaultHubConfig(), { gap: 'later', recapChars: 600, styleLaw: false, nudgeAt: 60 }));
+    check('defaults: later that day, 600 characters, the count of repeated phrases off, no bar above a scene\'s chat', same(defaultHubConfig(), { gap: 'later', recapChars: 600, styleLaw: false, nudgeAt: 60, strip: false }));
     check('a fresh chat is suggested after sixty messages unless the player says otherwise: any number from 0 (never) to 500', hubConfig({}).nudgeAt === 60 && hubConfig({ hub: { nudgeAt: 0 } }).nudgeAt === 0 && hubConfig({ hub: { nudgeAt: '80' } }).nudgeAt === 80 && hubConfig({ hub: { nudgeAt: 9999 } }).nudgeAt === 500 && hubConfig({ hub: { nudgeAt: -5 } }).nudgeAt === 0 && hubConfig({ hub: { nudgeAt: 'soon' } }).nudgeAt === 60 && hubConfig({ hub: { nudgeAt: '' } }).nudgeAt === 60);
     check('the count of repeated phrases is on only when switched on, by exactly that', hubConfig({}).styleLaw === false && hubConfig({ hub: { styleLaw: true } }).styleLaw === true && hubConfig({ hub: { styleLaw: 'yes' } }).styleLaw === false && hubConfig({ hub: { styleLaw: 1 } }).styleLaw === false);
     check('no settings: the defaults', same(hubConfig(null), defaultHubConfig()) && same(hubConfig({ hub: 'x' }), defaultHubConfig()));
+    // The strip above a scene's chat (D200): off unless asked for, or unless the Doom button's menu cannot be reached.
+    check('nothing is put above a scene\'s chat unless the player asks for the bar', hubConfig({}).strip === false && hubConfig({ hub: { strip: true } }).strip === true && hubConfig({ hub: { strip: 'yes' } }).strip === false && hubConfig({ fab: { hidden: false, bypassFlyout: false } }).strip === false);
+    check('never asked, the bar shows where the Doom button\'s menu cannot be reached (the button hidden, or set to open Settings); the player\'s word stands over that', hubConfig({ fab: { hidden: true } }).strip === true && hubConfig({ fab: { bypassFlyout: true } }).strip === true && hubConfig({ hub: { strip: false }, fab: { hidden: true } }).strip === false);
+    {
+        const mark = { scene: 's3', title: 'The gate at dusk', place: { label: 'Hask, the gate' }, startDate: 'Day 42', endDate: 'Day 42, night' };
+        const open = sceneMenuModel({ mark, ended: false, count: 12 });
+        check('the scene in front for the Doom button\'s menu: one entry named for it, which scene it is, where and when and how long, and Continue fresh and End scene', open.label === 'Scene 3' && open.line === 'Scene 3: The gate at dusk' && open.where === 'Hask, the gate · Day 42 · 12 messages' && same(open.items.map(x => [x.id, x.label, x.off, x.lit]), [['continue', 'Continue fresh', false, false], ['end', 'End scene 3', false, false]]) && open.nudge === '' && open.long === false && open.busy === false, JSON.stringify(open));
+        const long = sceneMenuModel({ mark, ended: false, count: 80, long: true });
+        check('a scene that has run long says a fresh chat is due and lights Continue fresh', long.long === true && long.nudge === 'A good place to go on in a fresh chat.' && long.items[0].lit === true && long.items[1].lit === false && long.where.endsWith('80 messages'));
+        const busy = sceneMenuModel({ mark, ended: false, count: 80, long: true, busy: 'Writing the record…' });
+        check('while a handover runs the menu says what is being done and nothing can be pressed', busy.line === 'Writing the record…' && busy.where === '' && busy.busy === true && busy.long === false && busy.nudge === '' && busy.items.every(x => x.off === true));
+        const ended = sceneMenuModel({ mark, ended: true, count: 80, long: true, note: 'The record of the scene could not be written. Use End scene to write it yourself.' });
+        check('an ended scene: said so, with its end date, Continue fresh and Reopen, no nudge; why the last handover stopped is kept to show', ended.line === 'Scene 3: The gate at dusk (ended)' && ended.where === 'Day 42, night' && same(ended.items.map(x => x.id), ['continue', 'reopen']) && ended.items[1].label === 'Reopen scene 3' && ended.long === false && ended.note.startsWith('The record of the scene could not'));
+        check('a scene with no title or place yet still has its entry', sceneMenuModel({ mark: { scene: 's1' }, ended: false, count: 1 }).line === 'Scene 1' && sceneMenuModel({ mark: { scene: 's1' }, ended: false, count: 1 }).where === '1 message');
+    }
     const c = hubConfig({ hub: { gap: 'when', recapChars: 9999, closeOnStart: false } });
     check('clamps: when is not a default gap, the recap within range; a rule of the old window\'s (closing on Start) is not kept', c.gap === 'later' && c.recapChars === 1500 && !('closeOnStart' in c));
     check('six gaps, Right after first, When… last', GAPS.length === 6 && GAPS[0].id === 'now' && GAPS[5].id === 'when');

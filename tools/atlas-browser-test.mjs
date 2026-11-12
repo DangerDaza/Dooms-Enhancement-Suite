@@ -1822,6 +1822,109 @@ console.log('\n§8 nothing shows through the Atlas, and a phone (D196: the owner
     check('on a wide screen the head has no tools of its own, and the sidebar is beside the map as before', wide.head === 'none' && wide.side === 340 && wide.atlas === VIEW.width, JSON.stringify(wide));
 }
 
+console.log('\n§9 the Doom button\'s menu: the scene\'s options in it, and it stays on the screen (D200)');
+{
+    await page.setViewportSize({ width: 412, height: 800 });
+    await page.evaluate(async () => {
+        document.getElementById('dooms-atlas').style.display = 'none';
+        document.querySelectorAll('#page-behind').forEach(x => x.remove());
+        const { mountFabMenu } = await import('/src/systems/ui/fabMenu.js');
+        document.body.insertAdjacentHTML('beforeend', '<div id="dooms-settings-fab" class="dooms-settings-fab"><button id="dooms-fab-settings" class="dooms-fab-btn" title="Settings"><span class="doom-icon"></span></button></div>');
+        const fab = document.getElementById('dooms-settings-fab');
+        window.__ran = [];
+        window.__scene = { label: 'Scene 1', long: false, busy: false, note: '' };
+        const host = ['AI Response Configuration', 'API Connections', 'AI Response Formatting', 'World Info', 'User Settings', 'Change Background Image', 'Extensions', 'Persona Management', 'Character Management', 'Workshop', 'Atlas'];
+        window.__count = host.length;
+        const items = () => [
+            ...host.slice(0, window.__count).map((label, k) => ({ id: `h${k}`, label, iconClass: 'fa-solid fa-gear', action: () => window.__ran.push(label) })),
+            ...(window.__scene ? [{ id: 'scene', label: window.__scene.label, iconClass: 'fa-solid fa-clapperboard', lit: window.__scene.long, children: () => [
+                { note: window.__scene.busy ? 'Writing the record…' : 'Scene 1: Porridge Before Anything', sub: window.__scene.busy ? '' : 'The house on the lane above the temple, the kitchen · Tail of Harvestide, the second morning after the return · 1 message' },
+                ...(window.__scene.long ? [{ note: 'A good place to go on in a fresh chat.' }] : []),
+                ...(window.__scene.note ? [{ note: window.__scene.note, warn: true }] : []),
+                { id: 'scene-continue', label: 'Continue fresh', iconClass: 'fa-solid fa-forward-step', disabled: window.__scene.busy, lit: window.__scene.long, action: () => window.__ran.push('continue') },
+                { id: 'scene-end', label: 'End scene 1', iconClass: 'fa-solid fa-flag-checkered', disabled: window.__scene.busy, action: () => window.__ran.push('end') },
+            ] }] : []),
+            { id: 'des-settings', label: "Doom's Settings", iconClass: 'fa-solid fa-gear', action: () => window.__ran.push('settings') },
+        ];
+        window.__fab = mountFabMenu(fab, { items });
+        window.__place = (left, top) => { fab.style.left = left + 'px'; fab.style.top = top + 'px'; fab.style.right = 'auto'; fab.style.bottom = 'auto'; };
+    });
+    const menu = () => page.evaluate(() => {
+        const list = document.querySelector('#dooms-settings-fab .dooms-fab-menu');
+        const fab = document.getElementById('dooms-fab-settings').getBoundingClientRect();
+        const lb = list.getBoundingClientRect();
+        const rows = [...list.children].map(li => { const b = li.querySelector('.dooms-fab-menu-item'); const r = (b || li).getBoundingClientRect(); return { text: li.textContent.replace(/\s+/g, ' ').trim(), note: li.classList.contains('dooms-fab-menu-note'), warn: li.classList.contains('is-warn'), off: !!(b && b.disabled), lit: !!(b && b.classList.contains('is-lit')), more: !!(b && b.querySelector('.dooms-fab-menu-more')), left: r.left, right: r.right, top: r.top, bottom: r.bottom, seen: r.top >= lb.top - 1 && r.bottom <= lb.bottom + 1 }; });
+        return { open: list.classList.contains('open'), dir: list.getAttribute('data-direction'), scroll: list.classList.contains('is-scroll'), top: lb.top, bottom: lb.bottom, tall: list.scrollHeight, high: list.clientHeight, fabTop: fab.top, fabBottom: fab.bottom, rows, vh: innerHeight, vw: innerWidth, over: document.documentElement.scrollWidth > innerWidth + 1 };
+    });
+    const tap = (text) => page.evaluate((t) => { const b = [...document.querySelectorAll('#dooms-settings-fab .dooms-fab-menu-item')].find(x => x.textContent.replace(/\s+/g, ' ').trim() === t); if (b) b.click(); return !!b; }, text);
+
+    // Where the owner keeps it: near the top-left of a phone, thirteen entries.
+    await page.evaluate(() => { window.__place(10, 110); window.__fab.open(); });
+    await settle();
+    let m = await menu();
+    check('opened near the top of a phone, the list goes down from the button and ends on the screen: taller than the room, it scrolls inside it', m.open && m.dir === 'down' && m.rows.length === 13 && m.top >= m.fabBottom && m.bottom <= m.vh - 6 && (m.scroll ? m.tall > m.high : m.tall <= m.high + 1) && m.rows[0].seen && !m.over, JSON.stringify({ dir: m.dir, top: m.top, bottom: m.bottom, scroll: m.scroll, tall: m.tall, high: m.high }));
+    check('a scene in front is one entry in it, named for the scene, that opens to more; End scene is no longer an entry of its own', m.rows.filter(r => r.text === 'Scene 1' && r.more).length === 1 && !m.rows.some(r => /^End scene/.test(r.text)) && m.rows[m.rows.length - 1].text === "Doom's Settings");
+    await shot('9a-fab-menu-phone');
+    await tap('Scene 1');
+    await settle();
+    m = await menu();
+    check('pressed, the fly-out is the scene\'s own list: which scene it is with its place and date, Continue fresh, End scene and the way back', m.open && same(m.rows.map(r => r.text.slice(0, 34)), ['Scene 1: Porridge Before AnythingT', 'Continue fresh', 'End scene 1', 'Back']) && m.rows[0].note && /Tail of Harvestide.*1 message$/.test(m.rows[0].text) && !m.rows[1].off && !m.rows[2].off, JSON.stringify(m.rows.map(r => r.text)));
+    check('it fits a phone: nothing off either side, the scene\'s line wrapped, the list on the screen', m.rows.every(r => r.left >= 0 && r.right <= m.vw) && m.rows[0].bottom - m.rows[0].top > 40 && m.top >= 0 && m.bottom <= m.vh && !m.scroll && !m.over, JSON.stringify(m.rows.map(r => [Math.round(r.left), Math.round(r.right)])));
+    await shot('9b-fab-scene-phone');
+    await tap('Back');
+    await settle();
+    m = await menu();
+    check('Back is the fly-out again', m.open && m.rows.length === 13 && m.rows.some(r => r.text === 'Scene 1'));
+    await tap('Scene 1');
+    await tap('End scene 1');
+    await settle();
+    m = await menu();
+    check('an option pressed closes the fly-out and is done', !m.open && same(await page.evaluate(() => window.__ran), ['end']));
+
+    // A scene that has run long, a handover running, one that stopped.
+    await page.evaluate(() => { window.__ran = []; window.__scene = { label: 'Scene 1', long: true, busy: false, note: '' }; document.getElementById('dooms-settings-fab').classList.add('dooms-fab-scene-long'); window.__fab.open(); });
+    await settle();
+    m = await menu();
+    const dot = await page.evaluate(() => { const cs = getComputedStyle(document.getElementById('dooms-settings-fab'), '::after'); return { w: parseFloat(cs.width), content: cs.content, bg: cs.backgroundColor }; });
+    check('a scene that has run long: a dot on the Doom button, and its entry lit', dot.w >= 8 && dot.content !== 'none' && m.rows.find(r => r.text === 'Scene 1').lit, JSON.stringify(dot));
+    await tap('Scene 1');
+    await settle();
+    m = await menu();
+    check('opened, it says a fresh chat is due and Continue fresh is lit', m.rows.some(r => r.note && r.text === 'A good place to go on in a fresh chat.') && m.rows.find(r => r.text === 'Continue fresh').lit && !m.rows.find(r => r.text === 'End scene 1').lit);
+    await page.evaluate(() => { window.__fab.close(); window.__scene = { label: 'Scene 1', long: false, busy: true, note: '' }; window.__fab.open(); });
+    await tap('Scene 1');
+    await tap('Continue fresh');
+    await settle();
+    m = await menu();
+    check('while a handover runs the list says what is being done, and nothing in it can be pressed', m.open && m.rows[0].text === 'Writing the record…' && m.rows.find(r => r.text === 'Continue fresh').off && m.rows.find(r => r.text === 'End scene 1').off && same(await page.evaluate(() => window.__ran), []));
+    await page.evaluate(() => { window.__fab.close(); window.__scene = { label: 'Scene 1', long: false, busy: false, note: 'The record of the scene could not be written. Use End scene to write it yourself.' }; window.__fab.open(); });
+    await tap('Scene 1');
+    await settle();
+    m = await menu();
+    check('why the last handover stopped is said in the list, marked, and wraps inside the screen', m.rows.some(r => r.warn && /could not be written/.test(r.text) && r.right <= m.vw && r.left >= 0));
+
+    // No scene in front: no entry. The button at the bottom: the list goes up and stays under the top of the screen.
+    await page.evaluate(() => { window.__fab.close(); window.__scene = null; document.getElementById('dooms-settings-fab').classList.remove('dooms-fab-scene-long'); window.__place(10, 750); window.__fab.open(); });
+    await settle();
+    m = await menu();
+    check('a chat that is no scene has no such entry, and the fly-out is one shorter', m.rows.length === 12 && !m.rows.some(r => /^Scene/.test(r.text)));
+    check('from the bottom of the screen the list goes up and stops below the top of it, the entry nearest the button in view', m.dir === 'up' && m.top >= 6 && m.bottom <= m.fabTop + 1 && m.rows[m.rows.length - 1].seen && m.rows[m.rows.length - 1].text === "Doom's Settings" && (m.scroll ? m.tall > m.high : true), JSON.stringify({ top: m.top, bottom: m.bottom, scroll: m.scroll }));
+    // A short screen (a phone on its side): the same list scrolls and nothing leaves the screen.
+    await page.evaluate(() => window.__fab.close());
+    await page.setViewportSize({ width: 800, height: 360 });
+    await page.evaluate(() => { window.__place(10, 310); window.__fab.open(); });
+    await settle();
+    m = await menu();
+    check('on a screen too short for the whole list it scrolls: every entry is still there, none off the screen', m.scroll && m.tall > m.high && m.top >= 6 && m.bottom <= m.vh && m.rows.length === 12 && m.rows[m.rows.length - 1].seen && !m.rows[0].seen, JSON.stringify({ top: m.top, bottom: m.bottom, tall: m.tall, high: m.high }));
+    const reached = await page.evaluate(() => { const list = document.querySelector('#dooms-settings-fab .dooms-fab-menu'); list.scrollTop = 0; const first = list.children[0].getBoundingClientRect(); const lb = list.getBoundingClientRect(); return first.top >= lb.top - 1 && first.bottom <= lb.bottom + 1 && getComputedStyle(list).pointerEvents === 'auto'; });
+    check('scrolled, the far end of the list is reached', reached);
+    await page.mouse.click(700, 100);
+    await settle();
+    check('a press outside closes it', !(await menu()).open);
+    await page.evaluate(() => { document.getElementById('dooms-settings-fab').remove(); });
+    await page.setViewportSize(VIEW);
+}
+
 check('no errors on the page', errors.length === 0, errors.join(' | '));
 await browser.close();
 server.close();

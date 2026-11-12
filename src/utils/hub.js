@@ -67,7 +67,8 @@ const CONFIG_DEFAULTS = Object.freeze({
     gap: 'later',          // the Start sheet's first choice
     recapChars: RECAP_CHARS,
     styleLaw: false,       // the count of repeated phrases at a scene's end and the list held against the next (D179): off until switched on (the owner, D180)
-    nudgeAt: 60,           // messages after which a scene's strip suggests going on in a fresh chat (D181); 0 never
+    nudgeAt: 60,           // messages after which a scene suggests going on in a fresh chat (D181); 0 never
+    strip: false,          // the strip above a scene's chat (D121): off, the scene's options are in the Doom button's menu (the owner, D200)
 });
 
 export function defaultHubConfig() {
@@ -83,6 +84,43 @@ export function hubConfig(settings) {
         recapChars: int(h.recapChars, 200, 1500, CONFIG_DEFAULTS.recapChars),
         styleLaw: h.styleLaw === true,
         nudgeAt: h.nudgeAt === undefined || h.nudgeAt === null || h.nudgeAt === '' ? CONFIG_DEFAULTS.nudgeAt : int(h.nudgeAt, 0, 500, CONFIG_DEFAULTS.nudgeAt),
+        // The player's word where it was given. Never asked: off, unless the Doom button's menu cannot be reached
+        // (the button hidden, or set to open Settings directly), where the strip is the only place for a scene's options.
+        strip: typeof h.strip === 'boolean' ? h.strip : !!(settings && isObj(settings.fab) && (settings.fab.hidden === true || settings.fab.bypassFlyout === true)),
+    };
+}
+
+/**
+ * The scene in front as the Doom button's menu shows it (D200): one entry,
+ * "Scene N", that opens to which scene it is and what can be done with
+ * it. The strip's own words and options (D121, D176, D181), with nothing
+ * put above the chat.
+ * @param {{ mark: object, scene?: object|null, ended: boolean, count?: number, long?: boolean, busy?: string, note?: string }} o
+ */
+export function sceneMenuModel({ mark = null, scene = null, ended = false, count = 0, long = false, busy = '', note = '' } = {}) {
+    const number = String((scene && scene.id) || (mark && mark.scene) || '').replace(/^s/, '');
+    const title = (scene && scene.title) || (mark && mark.title) || '';
+    const place = mark && mark.place && mark.place.label ? mark.place.label : (scene && scene.place ? scene.place.label : '');
+    const date = ended ? (mark && mark.endDate ? mark.endDate : '') : (mark && mark.startDate ? mark.startDate : (scene && scene.startDate ? scene.startDate : ''));
+    const length = !ended && count > 0 ? `${count} ${count === 1 ? 'message' : 'messages'}` : '';
+    const lit = !!long && !busy && !ended;
+    const off = !!busy;
+    return {
+        number,
+        label: `Scene ${number}`,
+        line: busy || `Scene ${number}${title ? `: ${title}` : ''}${ended ? ' (ended)' : ''}`,
+        where: busy ? '' : [ended ? '' : place, date, length].filter(Boolean).join(' · '),
+        nudge: lit ? 'A good place to go on in a fresh chat.' : '',
+        note: clean(note, 400),
+        busy: off,
+        ended: !!ended,
+        long: lit,
+        items: [
+            { id: 'continue', label: 'Continue fresh', icon: 'fa-solid fa-forward-step', title: ended ? 'Start the next scene straight on from this one: the same place, the same people, no time passed' : 'End this scene and go straight on in a fresh chat: the same place, the same people, no time passed', off, lit },
+            ended
+                ? { id: 'reopen', label: `Reopen scene ${number}`, icon: 'fa-solid fa-rotate-left', title: 'Play on; ending it again replaces its record and the memory', off, lit: false }
+                : { id: 'end', label: `End scene ${number}`, icon: 'fa-solid fa-flag-checkered', title: 'Write the record of this scene and remember it', off, lit: false },
+        ],
     };
 }
 

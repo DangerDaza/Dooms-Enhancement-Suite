@@ -35,7 +35,7 @@ import {
     buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle, hubMark, readMark, markEnded, sceneHeader,
     sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
-    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, renameSceneChat,
+    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
     readConflicts, mergeConflicts, normalizeConflicts,
 } from '../../utils/hub.js';
@@ -1958,16 +1958,37 @@ function continueRefusal(r) {
 }
 const describeStartWord = (r) => (r.reason === 'scene-open' ? 'another scene is open' : r.reason === 'busy' ? 'another request is running' : r.reason === 'card-gone' ? 'the narrator card is gone' : r.reason || 'unknown');
 
-/** The strip's own way of going on (D181): the handover run with its steps shown on the strip; when it stops, the strip says why. */
-async function continueFromStrip() {
+/** What a handover is doing, said where there is no strip to say it (D200): one notice that changes with each step and goes when it is done. */
+let handoverToast = null;
+function sayHandover(word) {
+    try {
+        if (typeof toastr === 'undefined' || !toastr) return;
+        if (handoverToast) { toastr.clear(handoverToast); handoverToast = null; }
+        if (word) handoverToast = toastr.info(word, 'Continue fresh', { timeOut: 0, extendedTimeOut: 0, tapToDismiss: false });
+    } catch (e) { /* no notices here */ }
+}
+
+/**
+ * Going straight on in a fresh chat (D181), from the strip or from the
+ * Doom button's menu (D200): the handover run with its steps said as they
+ * are taken, and why it stopped when it does. On the strip where it is
+ * shown; otherwise in a notice, and kept for the menu to show.
+ */
+export async function continueFresh() {
     if (continuing) return;
+    const bar = cfg().strip;
     stripNote = '';
     stripBusy = 'Going on in a fresh chat…';
     mountStrip();
-    const r = await continueScene({ onStep: (word) => { stripBusy = word; mountStrip(); } });
+    if (!bar) sayHandover(stripBusy);
+    const r = await continueScene({ onStep: (word) => { stripBusy = word; mountStrip(); if (!bar) sayHandover(word); } });
     stripBusy = '';
     stripNote = r.ok ? '' : continueRefusal(r);
     mountStrip();
+    if (!bar) {
+        sayHandover('');
+        try { if (!r.ok && typeof toastr !== 'undefined' && toastr) toastr.warning(stripNote, 'Continue fresh', { timeOut: 15000 }); } catch (e) { /* no notices here */ }
+    }
     // The record could not be written, or the world has moved past the scene: the End sheet is where that is settled.
     if (!r.ok && r.stage === 'end' && (r.reason === 'no-recap' || r.reason === 'stale')) {
         try { const m = await import('../ui/atlas.js'); await m.openAtlasEnd(); } catch (e) { log('the End sheet could not be opened', String(e && e.message || e)); }
@@ -2219,12 +2240,14 @@ export async function deleteScene(worldId, id) {
  * there is no chat column.
  */
 function mountStrip() {
+    markDoomButton();
     let chatEl = null;
     try { chatEl = typeof document !== 'undefined' && document && typeof document.getElementById === 'function' ? document.getElementById('chat') : null; } catch (e) { chatEl = null; }
     if (!chatEl || typeof chatEl.insertAdjacentHTML !== 'function') return;
     const cur = extensionSettings.enabled ? currentScene() : null;
     const existing = document.getElementById(STRIP_DOM_ID);
-    if (!cur) { if (existing && typeof existing.remove === 'function') existing.remove(); return; }
+    // Off (D200), nothing is put above the chat: the scene's options are in the Doom button's menu.
+    if (!cur || !cfg().strip) { stripToken++; if (existing && typeof existing.remove === 'function') existing.remove(); return; }
     const token = ++stripToken;
     Promise.all([ensureCss('modals').catch(() => {}), import('../ui/atlasViews.js')]).then(([, v]) => {
         if (token !== stripToken) return;
@@ -2240,6 +2263,30 @@ function mountStrip() {
         }
         if (el) { el.innerHTML = html; if (el.classList && typeof el.classList.toggle === 'function') { el.classList.toggle('is-long', long); el.classList.toggle('is-busy', !!stripBusy); } }
     }).catch(e => log('the strip could not be shown', String(e && e.message || e)));
+}
+
+/**
+ * The scene in front for the Doom button's menu (D200): which scene it
+ * is, how long it has run, whether a fresh chat is due, what a handover
+ * is doing or why the last one stopped, and what can be pressed. Null
+ * when the chat in front is no scene.
+ */
+export function sceneMenu() {
+    const cur = extensionSettings.enabled ? currentScene() : null;
+    if (!cur) return null;
+    const count = sceneLength(chatArray() || []);
+    return sceneMenuModel({ mark: cur.mark, scene: cur.scene, ended: cur.ended, count, long: !cur.ended && sceneIsLong(count, cfg().nudgeAt), busy: stripBusy, note: stripNote });
+}
+
+/** The Doom button says a scene has run long (a dot) or that a handover is running, so the chat needs no strip to say it (D200). */
+function markDoomButton() {
+    try {
+        const fab = typeof document !== 'undefined' && document && typeof document.getElementById === 'function' ? document.getElementById('dooms-settings-fab') : null;
+        if (!fab || !fab.classList || typeof fab.classList.toggle !== 'function') return;
+        const m = sceneMenu();
+        fab.classList.toggle('dooms-fab-scene-long', !!(m && m.long));
+        fab.classList.toggle('dooms-fab-scene-busy', !!(m && m.busy));
+    } catch (e) { /* no button here */ }
 }
 
 const STRIP_DOM_ID = 'dooms-scene-strip';
@@ -2302,7 +2349,7 @@ export function initHub() {
             const act = this.getAttribute('data-act');
             ev.preventDefault();
             if (act === 'reopen') { const r = await reopenCurrentScene(); if (!r.ok) log('reopen refused', r.reason); return; }
-            if (act === 'continue') { await continueFromStrip(); return; }
+            if (act === 'continue') { await continueFresh(); return; }
             const m = await import('../ui/atlas.js');
             if (act === 'end') await m.openAtlasEnd();
             else await m.openAtlas();

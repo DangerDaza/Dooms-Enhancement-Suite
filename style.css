@@ -11020,6 +11020,66 @@ body.dooms-hide-st-topbar .openDrawer {
 }
 
 
+/* The fly-out stays on the screen however many entries it has (docs/long-shot-plan.md D200): taller than the room
+   beside the button, it scrolls. A list of pills has no box of its own to catch a touch, so it takes them while it scrolls. */
+.dooms-fab-menu.is-scroll {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    padding: 2px 18px 2px 2px;
+    margin-left: -2px;
+    box-sizing: border-box;
+}
+.dooms-fab-menu.open.is-scroll { pointer-events: auto; }
+
+/* An entry that opens to a list of its own, the way back from one, one that is lit, one that cannot be pressed now. */
+.dooms-fab-menu-item .dooms-fab-menu-more { width: auto; margin-left: 2px; opacity: 0.75; font-size: 0.85em; }
+.dooms-fab-menu-item.is-lit { border-color: var(--rpg-highlight, #e94560); box-shadow: inset 0 0 0 1px var(--rpg-highlight, #e94560), 1px 3px 6px var(--rpg-shadow, rgba(0, 0, 0, 0.4)); }
+.dooms-fab-menu-item:disabled { opacity: 0.5; cursor: default; }
+.dooms-fab-menu-item:disabled:hover { margin-left: 0; }
+
+/* A line that is read, not pressed: which scene this is, where and when, what a handover stopped on. */
+.dooms-fab-menu li.dooms-fab-menu-note {
+    width: max-content;
+    max-width: min(300px, calc(100vw - 44px));
+    box-sizing: border-box;
+    padding: 7px 12px;
+    border: 1px solid var(--rpg-border, rgba(74, 123, 167, 0.3));
+    border-radius: 5px;
+    background-color: #1a1a2e;
+    background-image: linear-gradient(var(--rpg-accent, rgba(22, 33, 62, 0.95)), var(--rpg-accent, rgba(22, 33, 62, 0.95)));
+    color: var(--rpg-text, #eaeaea);
+    box-shadow: 1px 3px 6px var(--rpg-shadow, rgba(0, 0, 0, 0.4));
+    font-size: 0.8em;
+    line-height: 1.35;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    cursor: default;
+}
+.dooms-fab-menu-note-line { display: block; font-weight: 600; }
+.dooms-fab-menu-note-sub { display: block; opacity: 0.8; }
+.dooms-fab-menu li.dooms-fab-menu-note.is-warn { border-color: #f2c14e; color: #f2c14e; }
+
+/* The Doom button says a scene has run long, so the chat needs no bar above it to say so. */
+.dooms-settings-fab.dooms-fab-scene-long::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--rpg-highlight, #e94560);
+    border: 2px solid #12121a;
+    box-sizing: border-box;
+    pointer-events: none;
+}
+.dooms-settings-fab.dooms-fab-scene-busy .dooms-fab-btn { animation: dooms-fab-busy 1.2s ease-in-out infinite; }
+@keyframes dooms-fab-busy { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .dooms-settings-fab.dooms-fab-scene-busy .dooms-fab-btn { animation: none; opacity: 0.7; } }
+
+
 /* ========================================
    CHAT BUBBLES — Per-Character Message Bubbles
    Transforms .mes_text content into styled bubbles.

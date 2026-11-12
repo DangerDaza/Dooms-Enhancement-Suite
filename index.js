@@ -35,6 +35,7 @@ import { loadSettings, saveSettings, saveChatData, loadChatData, updateMessageSw
 import { SlashCommandParser } from '../../../slash-commands/SlashCommandParser.js';
 import { SlashCommand } from '../../../slash-commands/SlashCommand.js';
 import { topBarHidden, canHideFlyoutItem, repairFabSettings, rescuedFabSettings, SETTINGS_ITEM } from './src/utils/fabGuard.js';
+import { mountFabMenu } from './src/systems/ui/fabMenu.js';
 import { registerAllEvents } from './src/core/events.js';
 import { registerSettingsUIInitializer, ensureSettingsUI } from './src/core/lazyUI.js';
 import { ensureCss, removeCss } from './src/core/cssLoader.js';
@@ -173,7 +174,7 @@ import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, getWorldState, getActivePack, getPackError, getMissingWorld, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
 import { initCanon, onCanonChatChanged, onCanonMessageReceived, onCanonMessageDeleted, onCanonGenerationStarted, updateCanon, clearCanon, exportCanonToLorebook, canonBookName, getCanon, isCanonOn, CANON_CHANGED_EVENT } from './src/systems/features/canon.js';
-import { initHub, onHubChatChanged, onHubChatDeleted, onHubChatRenamed, onHubMessageReceived, onHubMessageDeleted, onHubGenerationStarted, hubWorldIds, cardOf, bindCard, unbindCard, makeNarratorCard, worldEntry, worldOfCard } from './src/systems/features/hub.js';
+import { sceneMenu, continueFresh, reopenCurrentScene, initHub, onHubChatChanged, onHubChatDeleted, onHubChatRenamed, onHubMessageReceived, onHubMessageDeleted, onHubGenerationStarted, hubWorldIds, cardOf, bindCard, unbindCard, makeNarratorCard, worldEntry, worldOfCard } from './src/systems/features/hub.js';
 import { hubConfig, hubStatusLine } from './src/utils/hub.js';
 import { canonConfig, defaultCanonConfig, describeCanonResult, CANON_KINDS, KIND_LABELS } from './src/utils/canon.js';
 import { initScenePictures, onSceneGenerationStarted, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
@@ -565,6 +566,7 @@ function renderHubSettings() {
     $('#rpg-hub-start').prop('disabled', !worldId || !bound);
     $('#rpg-hub-style-law').prop('checked', hubConfig(extensionSettings).styleLaw);
     $('#rpg-hub-nudge').val(hubConfig(extensionSettings).nudgeAt);
+    $('#rpg-hub-strip').prop('checked', hubConfig(extensionSettings).strip);
     renderHubStatus();
 }
 
@@ -2267,6 +2269,8 @@ function bindSettingsUI() {
     // The count of repeated phrases at a scene's end (docs/long-shot-plan.md D179): off until switched on (D180).
     $(document).on('change', '#rpg-hub-style-law', function () { _hubRules().styleLaw = $(this).prop('checked'); saveSettings(); });
     // The length from which a scene's strip suggests a fresh chat (docs/long-shot-plan.md D181); the field shows what is in force (0 to 500).
+    // The strip above a scene's chat (docs/long-shot-plan.md D200): off, the scene's options are in the Doom button's menu.
+    $(document).on('change', '#rpg-hub-strip', function () { _hubRules().strip = $(this).prop('checked'); saveSettings(); onHubChatChanged(); });
     $(document).on('change', '#rpg-hub-nudge', function () { _hubRules().nudgeAt = Number($(this).val()); $(this).val(hubConfig(extensionSettings).nudgeAt); saveSettings(); onHubChatChanged(); });
     window.addEventListener('dooms:hub-changed', () => { try { renderHubStatus(); } catch (e) { /* not mounted */ } });
     $(document).on('click', '#rpg-world-builder', function () {
@@ -3905,8 +3909,7 @@ async function initUI() {
         window.addEventListener('resize', applySavedPosition);
         // Fly-out menu: DES Settings + each button from SillyTavern's top bar.
         // Built dynamically so the menu always reflects whatever the host UI shows.
-        const $menuList = $('<ul class="dooms-fab-menu" role="menu"></ul>');
-        $(fabEl).append($menuList);
+        // The list itself (src/systems/ui/fabMenu.js) is mounted below, once its entries are defined.
         // Returns every possible flyout entry (without filtering). Used for
         // both the live menu and the settings panel toggle list. Doom's
         // Settings is appended LAST so it ends up at the bottom of the
@@ -3961,15 +3964,32 @@ async function initUI() {
                         .catch(err => console.error('[Dooms Tracker] The Atlas failed to load:', err));
                 },
             });
-            // End scene for the scene in front (docs/hub-plan.md D127), listed whatever Live World's switch says.
+            // The scene in front (docs/long-shot-plan.md D200): one entry, there while the chat is a scene, that opens
+            // to which scene it is and what is done with one: Continue fresh, End scene (Reopen once it has ended).
+            // It took End scene's place (docs/hub-plan.md D127) and the strip's above the chat, so the fly-out is
+            // no longer for it and the chat has nothing above it.
             items.push({
-                id: 'end-scene',
-                label: 'End scene',
-                iconClass: 'fa-solid fa-flag-checkered',
-                action: () => {
-                    import('./src/systems/ui/atlas.js')
-                        .then(m => m.openAtlasEnd())
-                        .catch(err => console.error('[Dooms Tracker] The Atlas failed to load:', err));
+                id: 'scene',
+                label: 'Scene (while a scene is open)',
+                iconClass: 'fa-solid fa-clapperboard',
+                show: () => { try { return !!sceneMenu(); } catch (e) { return false; } },
+                live: () => { const m = sceneMenu(); return m ? { label: m.label, lit: m.long || !!m.note } : {}; },
+                children: () => {
+                    const m = sceneMenu();
+                    if (!m) return [{ note: 'This chat is not a scene.' }];
+                    const run = (id) => {
+                        if (id === 'continue') { continueFresh().catch(err => console.error('[Dooms Tracker] Continue fresh failed:', err)); return; }
+                        if (id === 'reopen') { reopenCurrentScene().catch(err => console.error('[Dooms Tracker] Reopen failed:', err)); return; }
+                        import('./src/systems/ui/atlas.js')
+                            .then(mod => mod.openAtlasEnd())
+                            .catch(err => console.error('[Dooms Tracker] The Atlas failed to load:', err));
+                    };
+                    return [
+                        { note: m.line, sub: m.where },
+                        ...(m.nudge ? [{ note: m.nudge }] : []),
+                        ...(m.note ? [{ note: m.note, warn: true }] : []),
+                        ...m.items.map(it => ({ id: `scene-${it.id}`, label: it.label, iconClass: it.icon, title: it.title, disabled: it.off, lit: it.lit, action: () => run(it.id) })),
+                    ];
                 },
             });
             items.push({
@@ -3981,10 +4001,15 @@ async function initUI() {
 
             return items;
         };
+        // The entries of the live fly-out: the ones not switched off, an entry that has its moment only then
+        // (the scene's), each with what it says now.
         const buildMenuItems = () => {
             const hidden = new Set(extensionSettings.fab.hiddenButtons || []);
-            return buildAllMenuItems().filter(i => !hidden.has(i.id));
+            return buildAllMenuItems()
+                .filter(i => !hidden.has(i.id) && (typeof i.show !== 'function' || i.show()))
+                .map(i => (typeof i.live === 'function' ? { ...i, ...i.live() } : i));
         };
+        const fabMenu = mountFabMenu(fabEl, { items: buildMenuItems });
         // Settings panel: list every entry as an enable/disable row
         const populateFabSettingsToggles = () => {
             const $container = $('#rpg-fab-menu-toggles');
@@ -4009,56 +4034,6 @@ async function initUI() {
         };
         // Expose for the settings UI binder below
         window.__doomsFabPopulateToggles = populateFabSettingsToggles;
-        const renderMenuItems = () => {
-            $menuList.empty();
-            for (const item of buildMenuItems()) {
-                const $li = $('<li></li>');
-                const $btn = $('<button type="button" class="dooms-fab-menu-item"></button>')
-                    .attr('data-action', item.id)
-                    .append($('<i></i>').attr('class', item.iconClass))
-                    .append($('<span></span>').text(item.label));
-                $btn.on('click', function (ev) {
-                    ev.stopPropagation();
-                    closeFlyout();
-                    if (typeof item.action === 'function') item.action();
-                });
-                $li.append($btn);
-                $menuList.append($li);
-            }
-        };
-        const closeFlyout = () => {
-            $menuList.removeClass('open');
-            fabEl.classList.remove('dooms-fab-open');
-            $(document).off('mousedown.fabflyout keydown.fabflyout');
-        };
-        const openFlyout = () => {
-            renderMenuItems();
-            // Choose direction (up vs down) based on space available
-            const rect = fabEl.getBoundingClientRect();
-            const spaceAbove = rect.top;
-            const spaceBelow = window.innerHeight - rect.bottom;
-            const $items = $menuList.children('li');
-            const total = $items.length;
-            // Estimate: ~36px per item + 8px margin
-            const estimated = total * 44 + 20;
-            const direction = (spaceAbove < estimated && spaceBelow > spaceAbove) ? 'down' : 'up';
-            $menuList.attr('data-direction', direction);
-            // Stagger: item nearest the button animates first
-            $items.each(function (idx) {
-                const stagger = direction === 'up' ? (total - 1 - idx) : idx;
-                this.style.transitionDelay = (stagger * 0.04) + 's';
-            });
-            $menuList.addClass('open');
-            fabEl.classList.add('dooms-fab-open');
-            setTimeout(() => {
-                $(document).on('mousedown.fabflyout', function (ev) {
-                    if (!$(ev.target).closest('#dooms-settings-fab').length) closeFlyout();
-                });
-                $(document).on('keydown.fabflyout', function (ev) {
-                    if (ev.key === 'Escape') closeFlyout();
-                });
-            }, 0);
-        };
         $('#dooms-fab-settings').on('click', function (e) {
             if (suppressClick) {
                 suppressClick = false;
@@ -4069,12 +4044,12 @@ async function initUI() {
             e.preventDefault();
             e.stopPropagation();
             if (extensionSettings.fab.bypassFlyout) {
-                if ($menuList.hasClass('open')) closeFlyout();
+                if (fabMenu.isOpen()) fabMenu.close();
                 openSettingsDirect();
                 return;
             }
-            if ($menuList.hasClass('open')) closeFlyout();
-            else openFlyout();
+            if (fabMenu.isOpen()) fabMenu.close();
+            else fabMenu.open();
         });
         // Right-click context menu: Move / Reset
         const closeContextMenu = () => {

@@ -1076,3 +1076,36 @@ between the player's message and its reply, the lead's size and its
 least, the oldest parts not read, the request's wording),
 `tools/hub-flow-test.mjs` §21 (the record's and the ledger's requests
 carry the lead, none after a skipped part) and §16 (End's later pass).
+
+## 39. Nothing above the chat: a scene's options in the Doom button (2026-11-12, D200)
+
+The owner, of the strip above a scene's chat (D121, D176, D181) on a
+phone: "I don't want anything on the screen that's not the input box
+and the story and the D button." There it wrapped onto four lines of
+text and two rows of buttons, a quarter of the screen, and the Doom
+button sat over its Atlas button. Asked where its options should go,
+the owner chose the Doom button, as a list of its own: the button's
+fly-out was already long and one more entry would run it off the screen.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D200 | The strip is off; a scene's options are one entry in the Doom button's fly-out | **Nothing above the chat.** The strip is not mounted unless Settings → Live World → The Hub → "Show a bar above a scene's chat" is on (`hub.strip`, off). One case apart: where the Doom button's fly-out cannot be reached (the button hidden, or set to open Settings directly) and the switch was never touched, the strip shows, because it is then the only place for a scene's options. The player's own choice stands over that. **One entry, "Scene N"**, there only while the chat in front is a scene. It took the place of End scene (D127), so the fly-out is no longer than it was, and one shorter in a chat that is no scene. **Pressed, the fly-out becomes the scene's own list** (`sceneMenuModel`, `fabMenu.js`): which scene it is with its place, date and length; Continue fresh; End scene N (Reopen scene N once it has ended); and Back. Atlas stays an entry of the fly-out. **What the strip said without being asked.** A scene that has run long (D181) puts a dot on the Doom button and lights the Scene entry and Continue fresh; the list says a fresh chat is due. A handover's steps are said in a notice that changes with each step and goes when it is done, and the list says the same and lets nothing be pressed meanwhile; why one stopped is a notice and stays in the list until the chat changes. With the strip on, all of that is on the strip as before. **The fly-out stays on the screen.** It opens to the side of the button with more room, by its real height, and when it is taller than that room it scrolls inside it, the end nearest the button in view. |
+
+What it does not do. The scene's name, place and date are no longer in
+view while playing: they are two taps away, and the tracker's own block
+carries the place and date. The Present Characters bar, the tracker's
+block in a message and SillyTavern's own buttons are not this strip and
+were not touched. The fly-out's width is not managed: a button kept at
+the right edge of the screen opens its list as it did. `end-scene` in a
+stored list of hidden fly-out entries now names nothing. The fly-out's
+code moved from `index.js` to `src/systems/ui/fabMenu.js` and is drawn
+without jQuery; `index.js` itself is not run by any test, so the wiring
+of the entries there is read, not exercised.
+
+Tests: `tools/hub-test.mjs` §1 (the switch, and the case with no menu)
+and the scene's entry (open, long, a handover running, ended, why one
+stopped); `tools/hub-flow-test.mjs` §3 and §9 (the real module: a scene,
+an ended one, a chat that is no scene); `tools/atlas-browser-test.mjs`
+§9 (a phone: the list from the top of the screen and from the bottom,
+the scene's list and Back, an option pressed, the dot, a handover, a
+short screen that scrolls, a press outside).

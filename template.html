@@ -1999,9 +1999,20 @@
                     </div>
                     <div class="rpg-setting-row rpg-world-sub">
                         <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Show a bar above a scene's chat</span>
+                            <span class="rpg-setting-hint">Off by default: nothing is put above the chat, and a scene's options (Continue fresh, End scene)
+                                are under Scene in the Doom button's menu. On: a bar above the chat with the scene's name, place and date and the same options.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-hub-strip" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row rpg-world-sub">
+                        <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Suggest a fresh chat after this many messages</span>
-                            <span class="rpg-setting-hint">The strip above a scene shows how long it has run. From this many messages on it suggests
-                                going on in a fresh chat, and Continue fresh does that in one click. 0: never suggest.</span>
+                            <span class="rpg-setting-hint">From this many messages on, the Doom button shows a dot and its Scene entry suggests
+                                going on in a fresh chat; Continue fresh does that in one tap. 0: never suggest.</span>
                         </div>
                         <input type="number" id="rpg-hub-nudge" class="rpg-accordion-input" min="0" max="500" step="5" value="60" style="width: 64px;" />
                     </div>

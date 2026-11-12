@@ -282,6 +282,10 @@ console.log('\n§3 played, then ended');
     lw.onWorldMessageReceived(chat.length - 1);
     cn.onCanonMessageReceived(chat.length - 1);
     check('a reply counted by Live World and Canon as in any chat', lw.getWorldState().sinceLast === 1 && cn.getCanon().sinceLast === 1);
+    {
+        const m = hub.sceneMenu();
+        check('the scene in front for the Doom button\'s menu (D200): its number, where it is, how long it has run, Continue fresh and End scene', !!m && m.label === 'Scene 1' && m.line.startsWith('Scene 1') && m.where === 'The Anchor, a tavern · Day 1 · 3 messages' && same(m.items.map(x => x.id), ['continue', 'end']) && m.busy === false && m.long === false && typeof hub.continueFresh === 'function', JSON.stringify(m));
+    }
     let recapAsked = null;
     hub.__setRecapTransport(async (p) => { recapAsked = p; return '{"recap":"Jordan asked Old Marit about the ring; she said it sank with the Kestrel."}'; });
     const pe = await hub.prepareEnd();
@@ -301,6 +305,7 @@ console.log('\n§3 played, then ended');
     check('the mark records the ledger\'s read, so End again does not read it twice for the same reply', meta.dooms_hub.end && meta.dooms_hub.end.canonAt === chat[2].dooms_world_id);
     check('the record ended with its recap and dates; the mark ended in the chat; the chat in front reads as ended', e.scenes[0].status === 'ended' && e.scenes[0].recap === pe.recap && e.scenes[0].endDate === 'Day 1' && meta.dooms_hub.endedAt > 0 && hub.currentScene().ended === true);
     check('End again is refused: not open', (await hub.prepareEnd()).reason === 'not-open');
+    check('ended, the menu offers Continue fresh and Reopen in End\'s place', hub.sceneMenu().ended === true && same(hub.sceneMenu().items.map(x => x.id), ['continue', 'reopen']) && /\(ended\)$/.test(hub.sceneMenu().line));
     check('the status line: one scene played, the world\'s date', (await hub.hubStatusLines())[0].line === 'Harbourside: narrated by Mara Vane; 1 scene played; the world\'s date is Day 2, morning.', (await hub.hubStatusLines())[0].line);
 }
 
@@ -584,6 +589,7 @@ console.log('\n§9 a chat already played, taken as where a campaign\'s scenes be
     const joins = hub.scenesPlan();
     check('with the campaign on, another chat of it is taken into the campaign\'s world, which keeps its narrator', joins.ok && joins.world.id === 'first-descent' && joins.world.made === false && joins.card.avatar === 'The Redward.png' && joins.replaces === true, JSON.stringify(joins));
     extensionSettings.liveWorld.enabled = false;
+    check('a chat that is no scene has no entry in the Doom button\'s menu', hub.currentScene() === null && hub.sceneMenu() === null);
     check('with Live World off there is nothing to play as scenes', hub.scenesPlan().reason === 'off' && (await hub.prepareAdopt()).reason === 'off');
     extensionSettings.liveWorld.enabled = true;
     hub.__setRecapTransport(null);
