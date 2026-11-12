@@ -1189,3 +1189,49 @@ Tests: `tools/hub-flow-test.mjs` §22 (a scene opened from another
 card's chat, the card recorded; the file gone: nothing asked of
 SillyTavern, the record marked, the words; the file back; a chat with
 nothing in it) and §9 (a new scene records its card).
+
+## 42. Run in a real SillyTavern; the way back to a scene (2026-11-12, D203)
+
+With the owner's leave, SillyTavern 1.19.0 was installed from the
+package registry and run in this session, the extension copied into its
+user extensions, and a browser driven through the owner's steps. It is
+the first time any of the Long Shot work has run in a real SillyTavern.
+The owner's empty chat (§41) was not reproduced. What was run, each
+with the chat's file read from the disk and the page reloaded between:
+
+- a card made and clicked, eight messages sent, Play as scenes
+  (`commitAdopt`), scene 1 started with a stand-in for the openers'
+  request: the file holds its opening, and a reload with SillyTavern's
+  "Auto-load Last Chat" on comes back to the scene;
+- the long chat and the scene opened from each other, the scene opened
+  and resumed from another card's chat, End, a scene started after it,
+  Play as scenes taken again: every chat came up with its messages;
+- D202's record of the card in front: opened from another card's chat,
+  a reload comes back to the scene, where before it went to the other
+  card;
+- the Doom button's fly-out as `index.js` builds it (which no test
+  runs): the Scene entry and its list, no strip above the chat, the
+  knock's no-button choice and three taps opening the list at the left
+  edge.
+
+What the run did show: from SillyTavern's home screen (no chat open,
+which is where a reload lands when Auto-load is off or its card is not
+the scene's) there was no short way back to a scene being played. The
+fly-out had no Scene entry, there being no scene in front, and the
+Atlas opened on "This chat" with no world and no Scenes tab until a
+world was picked.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D203 | A scene being played is one press away from wherever the screen is | **The fly-out.** With no scene in front and one being played (a world's open scene whose chat and card are there; of several worlds, the one started last, `sceneAway`), the Scene entry is there and lit, and opens to: which scene it is, that its chat is not the one in front, and **Go to scene N**, which opens its chat (D202's checks apply). **The Atlas.** Opened with no chat in front at all, it opens on the world whose scene is being played, or on the only world there is; the picker still chooses another. A chat in front keeps its own world, scenes or not. |
+
+What it does not do. SillyTavern is not made to open a scene by itself
+at startup: where a reload lands is its "Auto-load Last Chat" and its
+record of the card in front, which D202 now keeps right. The run was on
+a desktop browser at a phone's width, not on a phone, and with stand-ins
+for the model's requests. The scripts that drove it are not in the
+repository.
+
+Tests: `tools/hub-test.mjs` (the entry for a scene not in front),
+`tools/hub-flow-test.mjs` §22 (nothing being played, a scene left for
+another chat, pressed, Live World off); the real SillyTavern, by hand.

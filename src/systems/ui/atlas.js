@@ -28,7 +28,7 @@ import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHt
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
 import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml } from './atlasViews.js';
 import { isCanonOn } from '../features/canon.js';
-import { scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, hubWorldIds, cardOf, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
+import { sceneAway, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, hubWorldIds, cardOf, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
 import { describeStartResult, describeEndResult, describeDeleteResult, gapOf, hubConfig } from '../../utils/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
@@ -1694,6 +1694,13 @@ export async function openAtlas({ place = '', name = '', worldId = '', tab: open
         let inFront = '';
         try { const cur = currentScene(); inFront = cur ? cur.worldId : ''; } catch (e) { inFront = ''; }
         if (worldId !== inFront) await pickWorld(worldId);
+    }
+    // No chat in front at all (SillyTavern's home screen, D203): the Atlas has no world of its own to show, so it opens
+    // on the world whose scene is being played, or on the only world there is. The picker still chooses another.
+    else if (!theState()) {
+        let target = '';
+        try { const away = sceneAway(); const ids = isHubOn() ? hubWorldIds() : []; target = away ? away.worldId : ids.length === 1 ? ids[0] : ''; } catch (e) { target = ''; }
+        if (target) await pickWorld(target);
     }
     // The records against the card's chats (D128): a chat deleted outside is marked gone, one the list lost is brought back.
     { const w = hubWorld(); if (w && !picked) refreshScenes(w).catch(() => {}); }

@@ -2306,9 +2306,36 @@ function mountStrip() {
  */
 export function sceneMenu() {
     const cur = extensionSettings.enabled ? currentScene() : null;
-    if (!cur) return null;
+    if (!cur) {
+        // No scene in front, and one is being played somewhere (D203): the entry is the way back to it.
+        const away = sceneAway();
+        return away ? { ...sceneMenuModel({ scene: away.scene, away: true }), worldId: away.worldId, sceneId: away.scene.id } : null;
+    }
     const count = sceneLength(chatArray() || []);
     return sceneMenuModel({ mark: cur.mark, scene: cur.scene, ended: cur.ended, count, long: !cur.ended && sceneIsLong(count, cfg().nudgeAt), busy: stripBusy, note: stripNote });
+}
+
+/**
+ * The scene being played whose chat is not the one in front (D203): the
+ * world's open scene, where its chat and its narrator card are there. Of
+ * several worlds, the one started last. Null when the chat in front is a
+ * scene, or nothing is being played.
+ * @returns {{ worldId: string, scene: object }|null}
+ */
+export function sceneAway() {
+    try {
+        if (!isHubOn() || currentScene()) return null;
+        const worlds = store().worlds || {};
+        let best = null;
+        for (const id of Object.keys(worlds)) {
+            const s = (worlds[id].scenes || []).find(x => x.status === 'open' && !x.gone && x.chat);
+            if (!s || !cardOf(id)) continue;
+            if (!best || (Number(s.startedAt) || 0) > (Number(best.scene.startedAt) || 0)) best = { worldId: id, scene: JSON.parse(JSON.stringify(s)) };
+        }
+        return best;
+    } catch (e) {
+        return null;
+    }
 }
 
 /** The Doom button says a scene has run long (a dot) or that a handover is running, so the chat needs no strip to say it (D200). */

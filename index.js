@@ -174,7 +174,7 @@ import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, getWorldState, getActivePack, getPackError, getMissingWorld, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
 import { initCanon, onCanonChatChanged, onCanonMessageReceived, onCanonMessageDeleted, onCanonGenerationStarted, updateCanon, clearCanon, exportCanonToLorebook, canonBookName, getCanon, isCanonOn, CANON_CHANGED_EVENT } from './src/systems/features/canon.js';
-import { sceneMenu, continueFresh, reopenCurrentScene, initHub, onHubChatChanged, onHubChatDeleted, onHubChatRenamed, onHubMessageReceived, onHubMessageDeleted, onHubGenerationStarted, hubWorldIds, cardOf, bindCard, unbindCard, makeNarratorCard, worldEntry, worldOfCard } from './src/systems/features/hub.js';
+import { sceneMenu, continueFresh, reopenCurrentScene, openSceneChat, initHub, onHubChatChanged, onHubChatDeleted, onHubChatRenamed, onHubMessageReceived, onHubMessageDeleted, onHubGenerationStarted, hubWorldIds, cardOf, bindCard, unbindCard, makeNarratorCard, worldEntry, worldOfCard } from './src/systems/features/hub.js';
 import { hubConfig, hubStatusLine } from './src/utils/hub.js';
 import { canonConfig, defaultCanonConfig, describeCanonResult, CANON_KINDS, KIND_LABELS } from './src/utils/canon.js';
 import { initScenePictures, onSceneGenerationStarted, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
@@ -3981,6 +3981,7 @@ async function initUI() {
             });
             // The scene in front (docs/long-shot-plan.md D200): one entry, there while the chat is a scene, that opens
             // to which scene it is and what is done with one: Continue fresh, End scene (Reopen once it has ended).
+            // With no scene in front and one being played elsewhere (D203), the entry is the way back to it.
             // It took End scene's place (docs/hub-plan.md D127) and the strip's above the chat, so the fly-out is
             // no longer for it and the chat has nothing above it.
             items.push({
@@ -3988,11 +3989,18 @@ async function initUI() {
                 label: 'Scene (while a scene is open)',
                 iconClass: 'fa-solid fa-clapperboard',
                 show: () => { try { return !!sceneMenu(); } catch (e) { return false; } },
-                live: () => { const m = sceneMenu(); return m ? { label: m.label, lit: m.long || !!m.note } : {}; },
+                live: () => { const m = sceneMenu(); return m ? { label: m.label, lit: m.long || !!m.note || !!m.away } : {}; },
                 children: () => {
                     const m = sceneMenu();
                     if (!m) return [{ note: 'This chat is not a scene.' }];
                     const run = (id) => {
+                        // The scene being played is not the chat in front (docs/long-shot-plan.md D203): its chat is opened.
+                        if (id === 'goto') {
+                            openSceneChat(m.worldId, m.sceneId)
+                                .then(r => { if (!r.ok) toastr.warning(r.reason === 'chat-gone' ? "That scene's chat file is not there any more, so it was not opened." : `The scene's chat could not be opened (${r.error || r.reason || 'unknown'}).`, 'Scene', { timeOut: 10000 }); else if (r.empty) toastr.warning("This scene's chat opened with no messages in it.", 'Scene', { timeOut: 10000 }); })
+                                .catch(err => console.error('[Dooms Tracker] The scene could not be opened:', err));
+                            return;
+                        }
                         if (id === 'continue') { continueFresh().catch(err => console.error('[Dooms Tracker] Continue fresh failed:', err)); return; }
                         if (id === 'reopen') { reopenCurrentScene().catch(err => console.error('[Dooms Tracker] Reopen failed:', err)); return; }
                         import('./src/systems/ui/atlas.js')

@@ -1581,6 +1581,36 @@ console.log('\n§22 a scene opened from the list: its file looked for first, its
     await hub.refreshScenes(W);
     check('the file back, the record is a scene again', hub.worldEntry(W).scenes.find(x => x.id === 's1').gone === false);
     // A chat that is there with nothing in it: opened, and said.
+    // No scene in front, one being played elsewhere (D203): the Doom button's entry is the way back to it.
+    {
+        ctxTarget.characterId = ctxTarget.characters.findIndex(c => c.avatar === 'Saga.png');
+        ctxTarget.name2 = 'Saga';
+        await openPlain('Saga - elsewhere');
+        check('with nothing being played anywhere there is no such entry', hub.sceneAway() === null && hub.sceneMenu() === null);
+        // A scene started in the world and left: another chat opened over it.
+        hub.__setOpenersTransport(async () => '{"when":{"date":"Day 50","time":"dawn"},"openers":[{"title":"The road","text":"The road is empty.","who":[]},{"title":"B","text":"Two.","who":[]},{"title":"C","text":"Three.","who":[]}]}');
+        const pn = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'now' } });
+        const cn2 = pn.ok ? await hub.commitScene(pn.token, { choice: 0 }) : pn;
+        hub.__setOpenersTransport(null);
+        check('(a scene is started and left for another chat)', cn2.ok && hub.currentScene() !== null, JSON.stringify([pn.ok, pn.reason, cn2.ok, cn2.reason]));
+        ctxTarget.characterId = ctxTarget.characters.findIndex(c => c.avatar === 'Saga.png');
+        ctxTarget.name2 = 'Saga';
+        await openPlain('Saga - elsewhere');
+        const openOnes = Object.keys(extensionSettings.hub.worlds).flatMap(id => (hub.worldEntry(id).scenes || []).filter(x => x.status === 'open' && !x.gone).map(x => ({ id, x })));
+        const latest = openOnes.slice().sort((a, b2) => (b2.x.startedAt || 0) - (a.x.startedAt || 0))[0];
+        const away = hub.sceneAway();
+        const m = hub.sceneMenu();
+
+        check('from a chat that is no scene, the scene being played is found: of several worlds, the one started last', !!latest && !!away && away.worldId === latest.id && away.scene.id === latest.x.id, JSON.stringify([latest && [latest.id, latest.x.id], away && [away.worldId, away.scene.id]]));
+        check('the Doom button\'s entry is then the way to it: its number, that it is not in front, Go to scene N', !!m && m.away === true && m.worldId === away.worldId && m.sceneId === away.scene.id && same(m.items.map(x => x.id), ['goto']) && m.items[0].label === `Go to scene ${away.scene.id.replace(/^s/, '')}`, JSON.stringify(m));
+        const went = await hub.openSceneChat(m.worldId, m.sceneId);
+        check('pressed, its chat is in front, and the entry is the scene\'s own again', went.ok && hub.currentScene() && hub.currentScene().scene.id === away.scene.id && hub.sceneAway() === null && hub.sceneMenu().away === false, JSON.stringify(went));
+        extensionSettings.liveWorld.enabled = false;
+        await openPlain('Saga - elsewhere');
+        check('with Live World off there is no such entry', hub.sceneAway() === null && hub.sceneMenu() === null);
+        extensionSettings.liveWorld.enabled = true;
+        await openPlain('Saga - elsewhere');
+    }
     files.set(sc.chat, { ...kept, messages: [] });
     const empty = await hub.openSceneChat(W, 's1');
     check('a chat that comes up with nothing in it is opened and the answer says so, for the player to be told', empty.ok && empty.empty === true && empty.messages === 0, JSON.stringify(empty));

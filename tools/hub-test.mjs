@@ -58,6 +58,8 @@ console.log('\n§1 the rules');
         check('while a handover runs the menu says what is being done and nothing can be pressed', busy.line === 'Writing the record…' && busy.where === '' && busy.busy === true && busy.long === false && busy.nudge === '' && busy.items.every(x => x.off === true));
         const ended = sceneMenuModel({ mark, ended: true, count: 80, long: true, note: 'The record of the scene could not be written. Use End scene to write it yourself.' });
         check('an ended scene: said so, with its end date, Continue fresh and Reopen, no nudge; why the last handover stopped is kept to show', ended.line === 'Scene 3: The gate at dusk (ended)' && ended.where === 'Day 42, night' && same(ended.items.map(x => x.id), ['continue', 'reopen']) && ended.items[1].label === 'Reopen scene 3' && ended.long === false && ended.note.startsWith('The record of the scene could not'));
+        const away = sceneMenuModel({ scene: { id: 's3', title: 'The gate at dusk' }, away: true });
+        check('a scene being played whose chat is not in front (D203): the entry names it, says so, and offers the way to it and nothing else', away.label === 'Scene 3' && away.line === 'Scene 3: The gate at dusk' && /not the one in front/.test(away.where) && away.away === true && same(away.items.map(x => [x.id, x.label, x.off]), [['goto', 'Go to scene 3', false]]) && open.away === false);
         check('a scene with no title or place yet still has its entry', sceneMenuModel({ mark: { scene: 's1' }, ended: false, count: 1 }).line === 'Scene 1' && sceneMenuModel({ mark: { scene: 's1' }, ended: false, count: 1 }).where === '1 message');
     }
     const c = hubConfig({ hub: { gap: 'when', recapChars: 9999, closeOnStart: false } });

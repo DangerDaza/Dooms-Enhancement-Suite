@@ -98,9 +98,18 @@ export function hubConfig(settings) {
  * put above the chat.
  * @param {{ mark: object, scene?: object|null, ended: boolean, count?: number, long?: boolean, busy?: string, note?: string }} o
  */
-export function sceneMenuModel({ mark = null, scene = null, ended = false, count = 0, long = false, busy = '', note = '' } = {}) {
+export function sceneMenuModel({ mark = null, scene = null, ended = false, count = 0, long = false, busy = '', note = '', away = false } = {}) {
     const number = String((scene && scene.id) || (mark && mark.scene) || '').replace(/^s/, '');
     const title = (scene && scene.title) || (mark && mark.title) || '';
+    // A scene being played whose chat is not the one in front (D203: SillyTavern's home screen after a reload, another
+    // chat opened meanwhile): the one thing to do with it from here is go to it.
+    if (away) {
+        return {
+            number, label: `Scene ${number}`, line: `Scene ${number}${title ? `: ${title}` : ''}`, where: 'Being played. Its chat is not the one in front.',
+            nudge: '', note: '', busy: false, ended: false, long: false, away: true,
+            items: [{ id: 'goto', label: `Go to scene ${number}`, icon: 'fa-solid fa-arrow-right-to-bracket', title: 'Opens its chat', off: false, lit: true }],
+        };
+    }
     const place = mark && mark.place && mark.place.label ? mark.place.label : (scene && scene.place ? scene.place.label : '');
     const date = ended ? (mark && mark.endDate ? mark.endDate : '') : (mark && mark.startDate ? mark.startDate : (scene && scene.startDate ? scene.startDate : ''));
     const length = !ended && count > 0 ? `${count} ${count === 1 ? 'message' : 'messages'}` : '';
@@ -116,6 +125,7 @@ export function sceneMenuModel({ mark = null, scene = null, ended = false, count
         busy: off,
         ended: !!ended,
         long: lit,
+        away: false,
         items: [
             { id: 'continue', label: 'Continue fresh', icon: 'fa-solid fa-forward-step', title: ended ? 'Start the next scene straight on from this one: the same place, the same people, no time passed' : 'End this scene and go straight on in a fresh chat: the same place, the same people, no time passed', off, lit },
             ended
