@@ -29,7 +29,7 @@ import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFac
 import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml } from './atlasViews.js';
 import { isCanonOn } from '../features/canon.js';
 import { isVoicesEnabled, getEngine, getEngineIfLoaded, unlockVoicesAudio } from '../voices/voiceBoot.js';
-import { sceneAway, deletePlan, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, hubWorldIds, cardOf, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
+import { lastScenePresent, sceneAway, deletePlan, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, hubWorldIds, cardOf, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
 import { describeStartResult, describeEndResult, describeDeleteResult, gapOf, hubConfig } from '../../utils/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
@@ -759,11 +759,20 @@ function placesForStart() {
 }
 
 /** The people the sheet offers: everyone the world knows, those last seen at the place first. */
-function peopleFor(placeId) {
+function peopleFor(placeId, { worldId = '', seed = null } = {}) {
     const state = theState();
     const m = placeId && model ? model.all.find(x => x.id === placeId) : null;
     const here = new Set(m ? m.people || [] : []);
-    return Object.keys((state && state.known) || {}).map(name => ({ name, here: here.has(name) })).sort((p, q) => Number(q.here) - Number(p.here) || p.name.localeCompare(q.name));
+    const list = Object.keys((state && state.known) || {}).map(name => ({ name, here: here.has(name), last: false }));
+    // Who the tracker had present when the scene before stopped (D211): marked, and listed though the world does not know them yet.
+    let last = [];
+    try { last = worldId ? lastScenePresent(worldId, seed) : []; } catch (e) { last = []; }
+    for (const n of last) {
+        const row = list.find(p => p.name.toLowerCase() === String(n).toLowerCase());
+        if (row) row.last = true; else list.push({ name: String(n), here: false, last: true });
+    }
+    const rank = (p) => (p.last ? 0 : p.here ? 1 : 2);
+    return list.sort((p, q) => rank(p) - rank(q) || p.name.localeCompare(q.name));
 }
 
 /** What the map says of the way to a place on the map in front, and the time that way takes: nothing for a place on another map. */
@@ -795,13 +804,14 @@ function openSceneStart({ id = '', seed = null, place = null, cast = null } = {}
         : place && place.id && known(place.id) ? { id: place.id, label: known(place.id).label }
         : place && place.label ? { id: '', label: String(place.label) }
         : { id: '', label: '' };
-    const people = peopleFor(at.id);
+    const sd = seed && typeof seed === 'object' ? seed : null;
+    const people = peopleFor(at.id, { worldId: startPlan.worldId, seed: sd });
     const way = wayTo(at.id);
     const asked = Array.isArray(cast) ? cast.map(n => String(n || '').trim()).filter(Boolean) : [];
-    const sd = seed && typeof seed === 'object' ? seed : null;
     setup = {
         start: true, step: 'form', worldId: startPlan.worldId, sceneNo: startPlan.number, card: startPlan.card, newCard: !!startPlan.newCard,
-        place: at, people, cast: asked.length ? asked.filter(n => people.some(p => p.name === n)) : people.filter(p => p.here).map(p => p.name),
+        // Ticked to begin with: who the tracker had present when the scene before stopped (D211), and who was last seen at the place.
+        place: at, people, cast: asked.length ? asked.filter(n => people.some(p => p.name === n)) : people.filter(p => p.here || p.last).map(p => p.name),
         extra: asked.filter(n => !people.some(p => p.name === n)).join(', '),
         places: m ? null : placesForStart(), whereNew: !at.id && at.label ? at.label : '',
         seed: sd, from: sd && sd.kind && !['place', 'anywhere'].includes(sd.kind) ? { kind: sd.kind, label: sd.label || '' } : null,
@@ -862,10 +872,13 @@ function readSceneForm() {
 function sceneWhereChanged() {
     if (!setup || !setup.start || setup.step !== 'form' || !setup.places) return;
     const f = readSceneForm();
-    const people = peopleFor(f.place.id);
+    const people = peopleFor(f.place.id, { worldId: setup.worldId, seed: setup.seed });
     const way = wayTo(f.place.id);
     const moved = f.place.id !== setup.place.id;
-    const cast = moved ? [...new Set([...f.cast.filter(n => people.some(p => p.name === n) && !(setup.people.find(p => p.name === n) || {}).here), ...people.filter(p => p.here).map(p => p.name)])] : f.cast.filter(n => people.some(p => p.name === n));
+    // Another place: who was ticked only for being at the old one is let go, who is at the new one is ticked; the people
+    // of the scene before stay as they were ticked (D211), wherever the scene opens.
+    const wasOnlyHere = (n) => { const old = setup.people.find(p => p.name === n) || {}; return !!old.here && !old.last; };
+    const cast = moved ? [...new Set([...f.cast.filter(n => people.some(p => p.name === n) && !wasOnlyHere(n)), ...people.filter(p => p.here).map(p => p.name)])] : f.cast.filter(n => people.some(p => p.name === n));
     setup = { ...setup, ...f, people, cast, journey: way.journey, gap: moved && way.from ? way.gap : f.gap };
     renderSetup();
     const $new = $(`${root()} .dooms-atlas-scene-where-new`);

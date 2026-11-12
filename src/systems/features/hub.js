@@ -33,7 +33,7 @@ import { buildHooksPrompt, parseHooksReply, validateHooks, proposeRound, failRou
 import {
     HUB_META_KEY, hubConfig, normalizeHub, normalizeWorldEntry, gapOf, gapMoves, takeSnapshot, seedStores, personLine, buildBrief,
     buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle, hubMark, readMark, markEnded, sceneHeader,
-    sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, ledgerOfReply, sceneCardFields, sceneCardTag, markCardsGone, SCENE_NARRATOR_NAME, lastTrackerFacts, timeReached, openSceneOf, openScene, setSceneAside as setAsidePure,
+    sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, ledgerOfReply, sceneCardFields, sceneCardTag, markCardsGone, SCENE_NARRATOR_NAME, lastTrackerFacts, timeReached, presentFromTracker, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
@@ -899,20 +899,66 @@ async function moveWorldByGap(worldId, pack, memory, gap, recaps, { mode = 'betw
  * passed. Nothing where the chat cannot be read: the record stands alone.
  * @returns {Promise<{ text: string, messages: number, scene: string }>}
  */
+/** The scene a Start goes on from (D205): the one it names, else the one whose End made the world's memory, else the last that ended; null when its chat is gone. */
+function sceneBefore(entry, seed) {
+    const named = seed && typeof seed === 'object' && seed.kind === 'scene' && seed.id ? String(seed.id) : '';
+    const made = entry && entry.memory && entry.memory.scene ? String(entry.memory.scene) : '';
+    const scenes = entry && Array.isArray(entry.scenes) ? entry.scenes : [];
+    const ok = (x) => !!x && !x.gone && !!x.chat;
+    return [scenes.find(x => x.id === named), scenes.find(x => x.id === made), scenes.slice().reverse().find(x => x.status === 'ended')].find(ok) || null;
+}
+
+/** Whether a card's chat of that name is the one in front. */
+function chatInFront(card, file) {
+    const b = bridge();
+    const same = (a, c) => String(a || '').replace(/\.jsonl$/i, '').toLowerCase() === String(c || '').replace(/\.jsonl$/i, '').toLowerCase();
+    return !!card && String(b.characterId()) === String(card.index) && !b.groupId() && same(chatId(), file);
+}
+
+/** Who the tracker of a world's memory had present, and how: the tracker as the memory's End read it. */
+function memoryPresent(memory) {
+    const t = memory && memory.stores && memory.stores.dooms_tracker;
+    const d = t && typeof t === 'object' ? (t.lastGeneratedData && t.lastGeneratedData.characterThoughts ? t.lastGeneratedData : t.committedTrackerData) : null;
+    return d && d.characterThoughts ? presentFromTracker(d.characterThoughts) : [];
+}
+
+/**
+ * The people the tracker had present when the scene before stopped
+ * (D211), by name and never the player: who the Start sheet ticks to
+ * begin with. Read without a request: from the last reply of the chat in
+ * front when that chat is the scene before, else from the world's memory
+ * when the scene before is the one whose End made it. Empty where neither
+ * can say (the openings are still told, once the scene's file is read).
+ * @returns {string[]}
+ */
+export function lastScenePresent(worldId, seed = null) {
+    try {
+        const id = String(worldId || '').trim();
+        const e = id ? store().worlds[id] : null;
+        if (!e) return [];
+        const players = playerNames();
+        const names = (list) => list.map(p => p.name).filter(n => !players.some(p => sameName(p, n)));
+        const s = sceneBefore(e, seed);
+        if (s && chatInFront(cardOfScene(id, s), s.chat)) {
+            const f = lastTrackerFacts(chatArray() || []);
+            if (f && !f.back && f.present) return names(f.present);
+        }
+        const ofMemory = !!(s && e.memory && e.memory.scene === s.id);
+        return ofMemory ? names(memoryPresent(e.memory)) : [];
+    } catch (err) {
+        return [];
+    }
+}
+
 async function lastLinesFor(worldId, entry, seed, gap, players) {
     const none = { text: '', messages: 0, scene: '', facts: null };
     try {
-        const named = seed && typeof seed === 'object' && seed.kind === 'scene' && seed.id ? String(seed.id) : '';
-        const made = entry && entry.memory && entry.memory.scene ? String(entry.memory.scene) : '';
-        const scenes = entry && Array.isArray(entry.scenes) ? entry.scenes : [];
-        const ok = (x) => !!x && !x.gone && !!x.chat;
-        const s = [scenes.find(x => x.id === named), scenes.find(x => x.id === made), scenes.slice().reverse().find(x => x.status === 'ended')].find(ok);
+        const s = sceneBefore(entry, seed);
         if (!s) return none;
         const card = cardOfScene(worldId, s);
         if (!card) return { ...none, scene: s.id };
         const b = bridge();
-        const same = (a, c) => String(a || '').replace(/\.jsonl$/i, '').toLowerCase() === String(c || '').replace(/\.jsonl$/i, '').toLowerCase();
-        const inFront = String(b.characterId()) === String(card.index) && !b.groupId() && same(chatId(), s.chat);
+        const inFront = chatInFront(card, s.chat);
         const messages = inFront ? (chatArray() || []) : await b.readChat({ chName: card.name, avatar: card.avatar, fileName: s.chat });
         const t = sceneTail(messages, { count: gap && gap.id === 'now' ? TAIL.now : TAIL.later, persona: players[0] || 'Player' });
         // The tracker as it stood at the last of those messages (D210): the lines have their tracker blocks taken out, so
@@ -986,7 +1032,12 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     // scene opens (no time has passed); later, that weather only where the place is the same, as before.
     if (rightAfter && then.weather) weather = then.weather;
     else if (!rightAfter && lf && lf.weather && label && then.location && sameName(label, then.location)) weather = lf.weather;
-    const prompt = buildOpenersPrompt({ then, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads });
+    // How the tracker had the people of this scene when the scene before stopped (D211): from the same copy of the tracker
+    // as the date and the weather, for the ones who are in this scene. Told where the scene opens right after or the same
+    // day: what a person wore and the state they were in is no word on them weeks later.
+    const wasThere = (lf && lf.present ? lf.present : ofMemory ? memoryPresent(g.entry.memory) : []).filter(x => !players.some(p => sameName(p, x.name)));
+    const thenPeople = rightAfter || theGap.id === 'later' ? wasThere.filter(x => x.line && names.some(n => sameName(n, x.name))) : [];
+    const prompt = buildOpenersPrompt({ then, thenPeople, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads });
     let openers = [];
     let when = null;
     let errors = [];
@@ -1014,7 +1065,7 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
         heldWhen: rightAfter && !then.back && (then.date || then.time) ? { date: then.date, time: then.time } : null,
         lore: { found: notesOf.found, missing: notesOf.missing, standing: !!notesOf.standing, books: notesOf.books },
         stand, threads, continuity: { stand: stand.map(x => x.name), threads: threads.length },
-        tail: { messages: lastLines.messages, scene: lastLines.scene, right: theGap.id === 'now', ...(then.date || then.time || then.weather ? { then: { date: then.date, time: then.time, weather: [then.weather, then.temperature].filter(Boolean).join(', '), fromTracker: !!lf } } : {}) },
+        tail: { messages: lastLines.messages, scene: lastLines.scene, right: theGap.id === 'now', ...(then.date || then.time || then.weather || thenPeople.length ? { then: { date: then.date, time: then.time, weather: [then.weather, then.temperature].filter(Boolean).join(', '), fromTracker: !!lf, ...(thenPeople.length ? { people: thenPeople.map(x => x.name) } : {}) } } : {}) },
     };
     return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes, lore: pending.lore, continuity: pending.continuity, tail: pending.tail };
 }

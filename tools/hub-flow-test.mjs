@@ -2259,5 +2259,75 @@ console.log('\n§28 the openings are told the tracker of the last message: the t
     hub.__setRecapTransport(null);
 }
 
+console.log('\n§29 who the tracker had present when the scene before stopped: ticked on the sheet, told to the openings (D211)');
+{
+    const W = 'castland';
+    extensionSettings.liveWorld.customPacks[W] = JSON.stringify({ ...example, id: W, name: 'Castland' });
+    ctxTarget.characters.push({ name: 'Warden', avatar: 'Warden.png', chat: 'Warden - plain' });
+    ctxTarget.characterId = ctxTarget.characters.findIndex(c => c.avatar === 'Warden.png');
+    ctxTarget.name2 = 'Warden';
+    files.set('Warden - plain', { header: { chat_metadata: {} }, messages: [], avatar: 'Warden.png', chName: 'Warden' });
+    await openPlain('Warden - plain');
+    extensionSettings.hub.styleLaw = false;
+    hub.__setBookApi(shelfApi);
+    check('(a world with its own narrator)', hub.bindCard(W, 'Warden.png').ok);
+    let asked = null;
+    hub.__setOpenersTransport(async (prompt) => { asked = prompt; return JSON.stringify({ when: { date: 'Day 5', time: 'night' }, openers: [{ title: 'a', text: 'The lamps gutter.', who: [] }, { title: 'b', text: 'Second.', who: [] }, { title: 'c', text: 'Third.', who: [] }] }); });
+    hub.__setGapTransport(async () => 'no');
+    hub.__setRecapTransport(async () => '{"recap":"They talked.","people":[],"threads":{"closed":[],"opened":[]}}');
+    const box = JSON.stringify({ date: { value: 'Day 5' }, time: { start: '20:00', end: '21:40' }, location: { value: 'The quay' }, weather: { emoji: '🌫', forecast: 'sea fog' } });
+    const people = (list) => JSON.stringify({ characters: list });
+    const kiyoha = { name: 'Kiyoha', emoji: '⚔', details: { appearance: 'Mail under a wet cloak' }, relationship: { status: 'Ally' }, thoughts: { content: 'He is late again.' } };
+    const lysandra = { name: 'Lysandra', details: { appearance: 'Grey travelling dress' }, thoughts: { content: 'Her hands are cold.' } };
+    const dagger = { name: 'Dagger', thoughts: { content: 'Off-scene: asleep upstairs' } };
+    const jordan = { name: 'Jordan', details: { appearance: 'Tired' }, thoughts: { content: '' } };
+    /** A scene played to its end: its last reply carries the tracker, and the chat's latest is the same, as it is when the tracker runs. */
+    const playScene = async (who, cast = []) => {
+        const p = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast, gap: { id: 'now' } });
+        const c = await hub.commitScene(p.token, { choice: 0 });
+        chat.push(user('We wait.'));
+        chat.push({ is_user: false, name: 'Warden', mes: 'The fog comes in.', swipe_id: 0, swipes: [], extra: { dooms_tracker_swipes: { 0: { infoBox: box, characterThoughts: people(who) } } } });
+        state.setLastGeneratedData({ ...state.lastGeneratedData, infoBox: box, characterThoughts: people(who) });
+        state.setCommittedTrackerData({ ...state.committedTrackerData, infoBox: box, characterThoughts: people(who) });
+        const e = await hub.endScene({ skipCanon: true, skipWorld: true });
+        return { id: c.scene.id, file: c.file, ok: c.ok && e.ok };
+    };
+
+    check('a world with no scene yet has no one from a scene before', same(hub.lastScenePresent(W), []) && same(hub.lastScenePresent('nowhere'), []));
+    const s1 = await playScene([kiyoha, lysandra, dagger, jordan]);
+    check('with the scene before in front, the people its last reply\'s tracker had present are the ones to tick: not one it marked off the scene, never the player', s1.ok && same(hub.lastScenePresent(W), ['Kiyoha', 'Lysandra']), JSON.stringify(hub.lastScenePresent(W)));
+    await openPlain('Warden - plain');
+    check('from another chat they are read from the world\'s memory, which its End took from the same tracker: no request', same(hub.lastScenePresent(W), ['Kiyoha', 'Lysandra']));
+
+    // The openings: told how the tracker had the people who are in this scene.
+    const reads = calls.filter(c => c.url === '/api/chats/get').length;
+    const p = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: ['Kiyoha'], gap: { id: 'now' } });
+    check('started right after with one of them, the request is told how the tracker had that one, from the scene\'s own file: what she wore, how she stands with the player, what was on her mind', p.ok && calls.filter(c => c.url === '/api/chats/get').length === reads + 1 && asked.user.includes('How the tracker had them when the scene before stopped:\n- Kiyoha: appearance: Mail under a wet cloak; to the player: Ally; thinking: He is late again.\n'), asked.user.split('\n').slice(4, 9).join(' | '));
+    check('someone who was there and is not in this scene is not told of, nor the one off the scene, nor the player', !asked.user.includes('- Lysandra: appearance') && !asked.user.includes('Dagger') && !asked.user.includes('- Jordan:'));
+    check('the Start says whom the openings were told of; the sheet is drawn from the same', same(p.tail.then.people, ['Kiyoha']) && same(hub.pendingStart().tail.then.people, ['Kiyoha']), JSON.stringify(p.tail.then));
+    hub.cancelStart();
+    const p2 = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: ['Kiyoha', 'Lysandra'], gap: { id: 'later' } });
+    check('later the same day both are told of, still so unless the time would have changed it', p2.ok && asked.user.includes('- Kiyoha: appearance') && asked.user.includes('- Lysandra: appearance: Grey travelling dress; thinking: Her hands are cold.') && /unless the time that has passed would have changed it/.test(asked.system) && same(p2.tail.then.people, ['Kiyoha', 'Lysandra']));
+    hub.cancelStart();
+    const p3 = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: ['Kiyoha'], gap: { id: 'tomorrow' } });
+    check('the next day they are not: what a person wore and was thinking is no word on them a day later', p3.ok && !asked.user.includes('How the tracker had them') && p3.tail.then.people === undefined);
+    hub.cancelStart();
+
+    // A second scene with someone else: the memory is that scene's; going on from the first names the first.
+    const s2 = await playScene([{ name: 'Old Marit', details: { appearance: 'Net-mender\'s apron' }, thoughts: { content: 'The debt is due.' } }], ['Old Marit']);
+    await openPlain('Warden - plain');
+    check('after the next scene the ones to tick are that scene\'s', s2.ok && same(hub.lastScenePresent(W), ['Old Marit']));
+    const from1 = { kind: 'scene', id: s1.id, label: 'a', text: 'On from the first.' };
+    check('going on from an older scene whose chat is not in front, there is no one to tick without reading its file: none are', same(hub.lastScenePresent(W, from1), []));
+    const p4 = await hub.prepareScene({ worldId: W, seed: from1, place: null, cast: ['Kiyoha', 'Old Marit'], gap: { id: 'now' } });
+    check('but its openings are told how the tracker of that scene had its people, read from that scene\'s file, and not how the newer scene\'s had theirs', p4.ok && asked.user.includes('- Kiyoha: appearance: Mail under a wet cloak') && !asked.user.includes('Net-mender') && same(p4.tail.then.people, ['Kiyoha']), JSON.stringify(p4.tail));
+    hub.cancelStart();
+    await hub.openSceneChat(W, s1.id);
+    check('with that older scene in front its people are the ones to tick', same(hub.lastScenePresent(W, from1), ['Kiyoha', 'Lysandra']), JSON.stringify(hub.lastScenePresent(W, from1)));
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+    hub.__setRecapTransport(null);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

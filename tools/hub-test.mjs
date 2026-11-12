@@ -16,7 +16,7 @@ import {
     sealStores, takeSnapshot, sealSnapshot, factsFrom, weatherText, seedStores,
     personLine, buildBrief, buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle,
     hubMark, readMark, markEnded, sceneHeader, sceneFileName,
-    sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, buildOpenersPrompt as openersPromptOf, buildRecapPrompt, parseRecapReply, ledgerOfReply, LEDGER_ADDS, LEDGER_DROPS, sceneCardFields, sceneCardTag, markCardsGone, SCENE_NARRATOR_NAME, lastTrackerFacts, timeReached, isStaleScene, markIsOfFile,
+    sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, buildOpenersPrompt as openersPromptOf, buildRecapPrompt, parseRecapReply, ledgerOfReply, LEDGER_ADDS, LEDGER_DROPS, sceneCardFields, sceneCardTag, markCardsGone, SCENE_NARRATOR_NAME, lastTrackerFacts, timeReached, presentFromTracker, PRESENT_LINE, isStaleScene, markIsOfFile,
     openSceneOf, asideScenes, openScene, setSceneAside, resumeScene, endSceneRecord, reopenScene, sceneByChat, markChatGone, renameSceneChat, removeGoneScene, reconcileScenesWithChats, lastRecaps,
     canDeleteScene, deleteKind, deleteSceneRecord, describeDeleteResult,
     hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE, backupFileName,
@@ -585,6 +585,36 @@ console.log('\nthe tracker of the last message, for the openings (D210)');
     const none = buildOpenersPrompt({ ...base, gapWords: '', weather: 'rain', date: 'Day 1', time: 'noon' });
     check('with no tracker to go by the request is as it was: the date at the last scene, the weather beside the place', none.user.includes('Where the scene opens: The Rusty Anchor. Weather: rain\nThe story\'s date at the last scene: Day 1, noon; this scene opens right after.') && !/by its tracker/.test(none.system) && same(buildOpenersPrompt({ ...base, gapWords: '', weather: 'rain', date: 'Day 1', time: 'noon', then: { date: '', time: '', weather: '' } }), none));
     check('no weather known: it is not promised', buildOpenersPrompt({ ...base, gapWords: '', then: { date: 'Day 1', time: 'noon' } }).user.includes('This scene opens right after: the same date, the same time of day.'));
+}
+
+console.log('\nwho the tracker had present, and how (D211)');
+{
+    const chars = [
+        { name: 'Kiyoha', emoji: '⚔', details: { appearance: { value: 'Mail under a wet cloak' }, currentMood: 'Short-tempered' }, relationship: { status: 'Ally' }, thoughts: { content: 'He is late again.' } },
+        { name: 'Dagger', details: { appearance: 'Asleep' }, thoughts: { content: 'Off-scene: asleep upstairs' } },
+        { name: 'Lysandra', details: {}, thoughts: '' },
+        { name: 'Unavailable' },
+        { name: 'kiyoha', details: { appearance: 'twice' } },
+    ];
+    const got = presentFromTracker(JSON.stringify({ characters: chars }));
+    check('the tracker\'s present characters are read by name, once each, in its order: one it marks off the scene is not present, nor its "unavailable"', same(got.map(x => x.name), ['Kiyoha', 'Lysandra']), JSON.stringify(got.map(x => x.name)));
+    check('how it had each is its own fields under their own names, how they stand with the player, and what was on their mind', got[0].line === 'appearance: Mail under a wet cloak; current mood: Short-tempered; to the player: Ally; thinking: He is late again.' && got[1].line === '', JSON.stringify(got));
+    check('the list as a bare array, and the older text form, are read too', same(presentFromTracker(chars.slice(0, 1)).map(x => x.name), ['Kiyoha']) && same(presentFromTracker('- Kiyoha\n- Lysandra\n---\nWeather: fog').map(x => x.name), ['Kiyoha', 'Lysandra']));
+    check('nothing to read is no one', same(presentFromTracker(null), []) && same(presentFromTracker(''), []) && same(presentFromTracker('{"characters":[]}'), []) && same(presentFromTracker('{bad'), []));
+    check('a long entry is cut to what an opening is told of one person', presentFromTracker([{ name: 'Wordy', details: { appearance: 'x'.repeat(900) } }])[0].line.length <= PRESENT_LINE);
+    // With the last reply's tracker.
+    const box = JSON.stringify({ date: { value: 'Day 5' }, time: { start: '20:00', end: '21:40' }, location: { value: 'The quay' }, weather: 'fog' });
+    const f = lastTrackerFacts([{ is_user: false, mes: 'x', swipe_id: 0, extra: { dooms_tracker_swipes: { 0: { infoBox: box, characterThoughts: JSON.stringify({ characters: chars }) } } } }]);
+    check('the last reply\'s tracker says who was there as well as when: from the same copy', !!f && f.time === '21:40' && same(f.present.map(x => x.name), ['Kiyoha', 'Lysandra']));
+    check('a tracker with no one in it has no word on who was there', !('present' in lastTrackerFacts([{ is_user: false, mes: 'x', extra: { dooms_tracker_swipes: { 0: { infoBox: box } } } }])));
+    // The request.
+    const base = { world: { name: 'The Eld' }, place: 'The quay', cast: ['Kiyoha: someone the player knows'], seed: 'On.', player: 'Jordan', tail: 'Narrator: The lamps gutter.', then: { date: 'Day 5', time: '21:40', weather: 'fog', back: 0 } };
+    const told = buildOpenersPrompt({ ...base, gapWords: '', thenPeople: [got[0], got[1], { name: '', line: 'x' }] });
+    check('the request is told how the tracker had the people of the scene when the scene before stopped: those it has a word on', told.user.includes('How the tracker had them when the scene before stopped:\n- Kiyoha: appearance: Mail under a wet cloak; current mood: Short-tempered; to the player: Ally; thinking: He is late again.\n') && !told.user.includes('- Lysandra:') && told.user.indexOf('People here:') < told.user.indexOf('How the tracker had them'));
+    check('and that they are still so as the scene opens, and that what was on a person\'s mind is not said aloud', /they are still so as this scene opens: dressed as they were, in the state they were in\. What was on a person's mind is theirs: it shapes what they do and is not said aloud\./.test(told.system));
+    check('the same day later: still so unless the time would have changed it', /in the state they were in, unless the time that has passed would have changed it\./.test(buildOpenersPrompt({ ...base, gapWords: 'later that day', thenPeople: [got[0]] }).system));
+    const none = buildOpenersPrompt({ ...base, gapWords: '' });
+    check('with no one to tell of, the request has no word of it', !none.user.includes('How the tracker had them') && !/how the tracker had a person/.test(none.system) && same(buildOpenersPrompt({ ...base, gapWords: '', thenPeople: [got[1]] }), none));
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

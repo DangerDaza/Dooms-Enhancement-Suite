@@ -1258,6 +1258,18 @@ console.log('\n§5h starting a scene from a place (D174)');
     v = await panel();
     pk = await picks();
     check('one opening alone: nothing to mark is said, it is shown first, and Start is still there', !/swipes of the scene's first message/.test(v.text) && pk.radios === '0*' && pk.tags === 'shown first' && pk.starts.length === 1, JSON.stringify(pk));
+    // Who the tracker had present when the scene before stopped (D211): ticked to begin with, and marked.
+    {
+        const withLast = { ...form, people: [{ name: 'Kiyoha', here: true, last: true }, { name: 'Old Marit', here: false, last: true }, { name: 'Lysandra', here: true, last: false }, { name: 'Dagger', here: false, last: false }], cast: ['Kiyoha', 'Old Marit', 'Lysandra'] };
+        await page.evaluate((o) => window.__sceneStart(o), withLast);
+        v = await panel();
+        const rows = await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-setup-card'); const cb = c.getBoundingClientRect(); return [...c.querySelectorAll('.dooms-atlas-cast-one')].map(l => ({ name: l.querySelector('input').value, on: l.querySelector('input').checked, tags: [...l.querySelectorAll('.dooms-atlas-cast-here')].map(x => x.textContent.trim()).join('+'), tip: (l.querySelector('.dooms-atlas-cast-last') || { title: '' }).title, fits: l.getBoundingClientRect().right <= cb.right + 1 })); });
+        check('the people the tracker had present when the last scene stopped are ticked and marked "last scene", beside the ones last seen here; the rest are not ticked', same(rows.map(r => `${r.name}:${r.on ? 'on' : 'off'}:${r.tags}`), ['Kiyoha:on:last scene+here', 'Old Marit:on:last scene', 'Lysandra:on:here', 'Dagger:off:']) && rows[1].tip === 'The tracker had them present when the scene before stopped' && rows.every(r => r.fits), JSON.stringify(rows));
+        check('the sheet says why they are ticked', /Ticked to begin with: whoever the tracker had present when the last scene stopped, and whoever was last seen here\./.test(v.text) && v.inside && !v.overflow);
+        await shot('7zd2-scene-sheet-last');
+        await page.evaluate((o) => window.__sceneStart(o), form);
+        check('with no one from a scene before there is no such mark and no such line', !(await page.evaluate(() => document.querySelector('.dooms-atlas-setup-card .dooms-atlas-cast-last, .dooms-atlas-setup-card .dooms-atlas-cast-note'))));
+    }
     // A narrator card of its own for the scene (D209): the sheet and the pick say so.
     await page.evaluate((o) => window.__sceneStart(o), { ...form, newCard: true });
     v = await panel();
@@ -1295,6 +1307,11 @@ console.log('\n§5h starting a scene from a place (D174)');
         tl = await thenLine({ messages: 0, scene: 's3', right: true, then: { date: '', time: 'Dusk', weather: '', fromTracker: true } });
         check('what is not known is left out; the line stands though the messages could not be read', tl.text === 'Opens at the moment it stopped, by the tracker of its last message: Dusk.' && /could not be read/.test((await panel()).text));
         check('with nothing known of when it stopped there is no such line', (await thenLine({ messages: 15, scene: 's3', right: true })) === null);
+        // Whom the openings were told of as the tracker had them (D211).
+        tl = await thenLine({ messages: 15, scene: 's3', right: true, then: { date: '14th of Frostfall', time: '21:40', weather: 'fog', fromTracker: true, people: ['Kiyoha', 'Lysandra', 'Old Marit'] } });
+        check('the pick says whom the openings were told of as the tracker had them', tl.text === 'Opens at the moment it stopped, by the tracker of its last message: 14th of Frostfall · 21:40 · fog. The openings were told how the tracker had Kiyoha, Lysandra and Old Marit then.' && tl.fits, JSON.stringify(tl));
+        tl = await thenLine({ messages: 15, scene: 's3', right: true, then: { date: '', time: '', weather: '', fromTracker: true, people: ['Kiyoha'] } });
+        check('one person, and nothing known of the hour: the line is about them alone', tl.text === 'The openings were told how the tracker had Kiyoha then.', JSON.stringify(tl));
     }
     await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { ...pending, lore: { found: [], missing: [], standing: false, books: [] } } });
     check('with no lorebook read it says nothing of them', !/lorebook/.test((await panel()).text));

@@ -1535,3 +1535,35 @@ the date and time held to, asked again, the new scene's tracker, the
 memory's word over an older message's, the next day with the world
 moved, later that day without); `tools/atlas-browser-test.mjs` §5h
 (the pick's line).
+
+## 50. Who the tracker had present: ticked on the sheet, told to the openings (2026-11-12, D211)
+
+D210 fed the openings the tracker's date, time and weather and left its
+Present Characters out. Asked whether they should go in too, the owner:
+"If we could feed the present characters in and auto fill them in for
+the check boxes that would be pretty cool."
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D211 | The people the tracker had present when the scene before stopped are ticked on the Start sheet, and the openings are told how it had the ones in the scene | **Who** (`presentFromTracker`). The tracker's Present Characters as it kept them with the last reply (D210's same copy): each by name, once, in its order; one it marks as off the scene is not present, as on the panel, nor is the player. With each, how it had them: its own fields under their own names (appearance, demeanour, whatever the player's tracker keeps), how they stand with the player, what was on their mind, 320 characters at most. **The sheet** (`lastScenePresent`, `peopleFor`). The Who list marks them "last scene" and ticks them to begin with, beside the ones last seen at the place ("here"), and lists them first; one the world does not know yet is listed all the same. A line under the list says why they are ticked. They are read without a request: from the last reply of the chat in front when that chat is the scene before, else from the world's memory, whose End took the same tracker. Changing the place keeps them ticked (the ones ticked only for being at the old place are let go, as before). A Start that names its own people (a person's card) ticks those alone, as before. Going on from an older scene whose chat is not in front, no one is ticked from it: that needs its file. **The openings** (`thenPeople`). Under "People here", for those of them who are in the scene (ticked): "How the tracker had them when the scene before stopped", a line each, read from the chat the last lines are read from (so a scene gone on from by name gives its own people, not the latest scene's). The narrator is told they are still so as the scene opens, dressed as they were and in the state they were in, and that what was on a person's mind shapes what they do and is not said aloud. Told right after and later the same day (there, "unless the time that has passed would have changed it"); from the next day on it is left out. Someone who was there and is unticked is not told of. **Shown.** The pick's line (D210) adds whom the openings were told of. The new scene's own tracker starts with the people of the scene as present, with what the tracker kept of them, as it did before (seedStores). |
+
+What it does not do. The ticks are a beginning: nothing stops the player
+unticking them, and a scene started at another place has them ticked
+all the same (the party goes together more often than not). The
+tracker's vitals and the player's own entry are not fed. What the
+tracker kept is given in its own words: where it is wrong, the opening
+is told the wrong thing. Run in the real SillyTavern at a phone's width:
+a scene played with three people in its last reply's tracker, one of
+them off the scene, and ended; the sheet with that scene in front and
+from another chat (the two present ones ticked and marked, the third
+not listed, in a world that knew none of them); one unticked, and the
+request and the pick's line naming only the other; the scene started
+with her as its tracker's one present character, her appearance kept.
+
+Tests: `tools/hub-test.mjs` (who is present and how, each shape, the
+last reply's copy, the request with and without); `tools/hub-flow-test.mjs`
+§29 (no scene yet, the chat in front, the memory, the one in the
+scene told of and the others not, the same day, the next day, the next
+scene's people, an older scene by name from elsewhere and in front);
+`tools/atlas-browser-test.mjs` §5h (the sheet's ticks, marks and line,
+the pick's line).

@@ -17,6 +17,7 @@ import { normalizeWorldState, jsonObjectsIn, sameName } from './liveWorld.js';
 import { normalizeCanon, buildCanonBlock, canonAsk } from './canon.js';
 import { normalizeHooks, takeHook as takeHookPure, recordTaken, questFromHook } from './questHooks.js';
 import { sceneFactsFrom, cleanWhen } from './questCut.js';
+import { isOffScene } from './offScene.js';
 import { normalizeBook } from './atlas.js';
 import { normalizeStyle, styleLawText } from './styleLaw.js';
 import { normalizeContinuity, emptyContinuity, draftBlocks, CONT } from './continuity.js';
@@ -398,6 +399,44 @@ export function timeReached(time) {
     return parts.length ? parts[parts.length - 1] : '';
 }
 
+export const PRESENT_LINE = 320;    // characters of how the tracker had one person, as an opening is told it
+
+/**
+ * Who the tracker had in the scene, and how (D211): its Present
+ * Characters as [{ name, line }], the line what it kept of each (what
+ * they wore, their state, how they stood with the player, what was on
+ * their mind), in the tracker's own words and under its own field names.
+ * A character the tracker marks as off the scene is not present, as on
+ * the panel. Reads the tracker's JSON in either shape and the older text
+ * form ("- Name").
+ * @param {*} raw  the tracker's characterThoughts
+ * @returns {{ name: string, line: string }[]}
+ */
+export function presentFromTracker(raw) {
+    const text = (v) => (isObj(v) ? clean(v.value ?? v.content ?? v.text ?? v.status ?? '', 400) : Array.isArray(v) ? v.map(x => text(x)).filter(Boolean).join(', ') : clean(v, 400));
+    const words = (k) => String(k).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').toLowerCase().trim();
+    let list = readCharacters(raw).list;
+    if (!list.length && typeof raw === 'string' && !raw.trim().startsWith('{') && !raw.trim().startsWith('[')) {
+        list = raw.split('\n').map(l => l.trim().match(/^-\s+(.+)$/)).filter(m => m && !m[1].includes(':') && !m[1].includes('---')).map(m => ({ name: m[1].trim() }));
+    }
+    const out = [];
+    for (const c of list) {
+        if (!isObj(c)) continue;
+        const name = clean(c.name, 60);
+        if (!name || name.toLowerCase() === 'unavailable' || isOffScene(c.thoughts)) continue;
+        if (out.some(x => sameName(x.name, name))) continue;
+        const bits = [];
+        if (isObj(c.details)) for (const [k, v] of Object.entries(c.details)) { const t = text(v); if (t) bits.push(`${words(k)}: ${t}`); }
+        const rel = text(c.relationship);
+        if (rel) bits.push(`to the player: ${rel}`);
+        const mind = text(c.thoughts);
+        if (mind) bits.push(`thinking: ${mind}`);
+        const line = bits.join('; ');
+        out.push({ name, line: line.length > PRESENT_LINE ? cutText(line, PRESENT_LINE) : line });
+    }
+    return out.slice(0, MAX_CAST);
+}
+
 /**
  * What the tracker said at the last reply of a chat (D210): the date, the
  * time it had reached, the place, the weather and the temperature. Read
@@ -405,8 +444,9 @@ export function timeReached(time) {
  * reply for the swipe in front, so it is that message's and not the
  * chat's latest. The last few replies are looked through for one that has
  * it; `back` is how many of the chat's messages come after that one (0:
- * it is the last message's own).
- * @returns {{ date: string, time: string, location: string, weather: string, temperature: string, back: number }|null}
+ * it is the last message's own). `present` is who that same copy had in
+ * the scene and how (D211), where it says.
+ * @returns {{ date: string, time: string, location: string, weather: string, temperature: string, back: number, present?: { name: string, line: string }[] }|null}
  */
 export function lastTrackerFacts(chat, { reach = 6 } = {}) {
     const list = (Array.isArray(chat) ? chat : []).filter(m => m && typeof m === 'object' && !m.is_system && typeof m.mes === 'string');
@@ -431,6 +471,8 @@ export function lastTrackerFacts(chat, { reach = 6 } = {}) {
             temperature: isObj(t) ? clean([t.value, t.unit].filter(v => v !== undefined && v !== null && v !== '').join(''), 24) : clean(t, 24),
             back: list.length - 1 - i,
         };
+        const present = presentFromTracker(data.characterThoughts);
+        if (present.length) out.present = present;
         if (out.date || out.time || out.location || out.weather) return out;
     }
     return null;
@@ -700,8 +742,10 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
  * the narrator's template; and the exact JSON asked for.
  * @returns {{ system: string, user: string }}
  */
-export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [], tail = '', then = null, now = null } = {}) {
+export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [], tail = '', then = null, now = null, thenPeople = [] } = {}) {
     const name = clean(world.name, 80) || 'the world';
+    // How the tracker had the people of this scene when the scene before stopped (D211): what they wore, their state, what was on their mind.
+    const asTracked = (Array.isArray(thenPeople) ? thenPeople : []).filter(x => isObj(x) && clean(x.name, 60) && clean(x.line, PRESENT_LINE + 20)).slice(0, MAX_CAST).map(x => `- ${clean(x.name, 60)}: ${clean(x.line, PRESENT_LINE + 20)}`);
     // When the scene before stopped, by its tracker at its last message (D210): the date, the time it had reached, the
     // place, the weather. The opening is written for that moment or counted on from it; before this the request was told
     // the weather only where the place's name matched, and the time as a span.
@@ -734,7 +778,7 @@ Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording
             : `The last lines of the scene before are given as they were played, so that you know how things were left. This scene opens ${clean(gapWords, 80)} after them: do not carry that conversation on. Each opener is a new moment that follows from how things were left: the place as ${who} finds it now, who is there, the first thing that happens, and it stops with the first move still ${who}'s. `)
         : `Each opener: the place as ${who} finds it, who is there, the first thing that happens, and it stops with the first move still ${who}'s; `}${lastLines
         ? `Write as the narrator wrote in those lines: the same person and tense, speech set out the same way (its marks and any colour tags), about as long as one of the narrator's own messages there; no headings, no dice, no tracker or status block, nothing resolved or decided. Make nothing up that those lines, the record or the notes do not give you: where you do not know, stay with what is there. `
-        : 'a paragraph or two, plain prose, no markup, no headings, no dice, nothing resolved or decided. '}Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standNow.length ? 'Where it is said how a person stands now, that is how the story left them: they pick up from there, and it holds over older notes where the two differ. ' : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${law ? `${law} ` : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
+        : 'a paragraph or two, plain prose, no markup, no headings, no dice, nothing resolved or decided. '}Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standNow.length ? 'Where it is said how a person stands now, that is how the story left them: they pick up from there, and it holds over older notes where the two differ. ' : ''}${asTracked.length ? `Where it is said how the tracker had a person when the scene before stopped, they are still so as this scene opens: dressed as they were, in the state they were in${gapWords ? ', unless the time that has passed would have changed it' : ''}. What was on a person's mind is theirs: it shapes what they do and is not said aloud. ` : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${law ? `${law} ` : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
     const people = cast.length ? cast.map(c => (typeof c === 'string' ? clean(c, 260) : personLine(c.name, c))).join('\n- ') : 'no one in particular';
     const q = [quests && quests.main && quests.main !== 'None' ? `Main: ${clean(quests.main, 200)}` : '', ...((quests && Array.isArray(quests.optional)) ? quests.optional.map(x => clean(x, 200)).filter(Boolean).slice(0, 6) : [])].filter(Boolean);
     const user = `World: ${name}${world.blurb ? `. ${clean(world.blurb, 600)}` : ''}
@@ -745,7 +789,7 @@ ${!gapWords ? (t.back ? 'This scene opens right after the last lines: the time o
         : `The story's date at the last scene: ${[date, time].map(s => clean(s, 80)).filter(Boolean).join(', ') || 'unknown'}${gapWords ? `; this scene opens ${clean(gapWords, 80)}` : '; this scene opens right after'}.`}
 People here:
 - ${people}
-${notes.length ? `Their own notes:\n${notes.map(l => `[${l.name}] ${l.text}`).join('\n')}\n` : ''}${standNow.length ? `Where they stand now:\n${standNow.join('\n')}\n` : ''}${standingText ? `The story's standing notes:\n${standingText}\n` : ''}What brought us here: ${clean(seed, MAX_SEED) || 'nothing in particular; the world as it is'}
+${asTracked.length ? `How the tracker had them when the scene before stopped:\n${asTracked.join('\n')}\n` : ''}${notes.length ? `Their own notes:\n${notes.map(l => `[${l.name}] ${l.text}`).join('\n')}\n` : ''}${standNow.length ? `Where they stand now:\n${standNow.join('\n')}\n` : ''}${standingText ? `The story's standing notes:\n${standingText}\n` : ''}What brought us here: ${clean(seed, MAX_SEED) || 'nothing in particular; the world as it is'}
 ${canonBlock ? `What the story has established:\n${clean(canonBlock, 1200)}\n` : ''}${recaps.length ? `Last time:\n${recaps.map(r => clean(r, 700)).filter(Boolean).slice(0, 2).map((r, i) => `${i ? 'Before that' : 'Last scene'}: ${r}`).join('\n')}\n` : ''}${q.length ? `Open quests: ${q.join('; ')}\n` : ''}${open.length ? `Left open by the story so far (a scene may pick one up; none has to be):\n${open.map(t => `- ${t}`).join('\n')}\n` : ''}${note ? `${who} wants from this scene: ${clean(note, MAX_NOTE)}\n` : ''}${lastLines ? `The last lines of the scene before, as they were played (${rightAfter ? 'this scene carries straight on from the last of them' : `this scene opens ${clean(gapWords, 80)} after them`}):\n${lastLines}\n` : ''}The player: ${who} (never written for).
 
 Answer with the JSON object only.`;

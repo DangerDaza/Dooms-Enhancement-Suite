@@ -245,6 +245,8 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-cast-one:has(input:checked), .dooms-atlas-gaps label:has(input:checked) { border-color: var(--atlas-accent); background: color-mix(in srgb, var(--atlas-accent) 12%, transparent); }
 .dooms-atlas-cast-one input, .dooms-atlas-gaps input { margin: 0; }
 .dooms-atlas-cast-here { font-size: 0.82em; color: var(--atlas-accent2); }
+.dooms-atlas-cast-last { color: var(--atlas-accent); }
+.dooms-atlas-cast-note { margin-top: 6px; }
 .dooms-atlas-gaps { display: flex; flex-wrap: wrap; gap: 6px; }
 .dooms-atlas-openers { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
 .dooms-atlas-opener { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); min-width: 0; }

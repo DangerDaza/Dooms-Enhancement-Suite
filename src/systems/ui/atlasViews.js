@@ -258,7 +258,7 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
     }
     const ticked = new Set(cast);
     const who = people.length
-        ? `<div class="dooms-atlas-cast">${people.map(p => `<label class="dooms-atlas-cast-one${p.here ? ' is-here' : ''}"><input type="checkbox" name="dooms-atlas-cast" value="${attr(p.name)}"${ticked.has(p.name) ? ' checked' : ''} /> <span>${e(p.name)}</span>${p.here ? '<span class="dooms-atlas-cast-here" title="Last seen here">here</span>' : ''}</label>`).join('')}</div>`
+        ? `<div class="dooms-atlas-cast">${people.map(p => `<label class="dooms-atlas-cast-one${p.here ? ' is-here' : ''}${p.last ? ' is-last' : ''}"><input type="checkbox" name="dooms-atlas-cast" value="${attr(p.name)}"${ticked.has(p.name) ? ' checked' : ''} /> <span>${e(p.name)}</span>${p.last ? '<span class="dooms-atlas-cast-here dooms-atlas-cast-last" title="The tracker had them present when the scene before stopped">last scene</span>' : ''}${p.here ? '<span class="dooms-atlas-cast-here" title="Last seen here">here</span>' : ''}</label>`).join('')}</div>${people.some(p => p.last) ? '<p class="dooms-atlas-start-note dooms-atlas-cast-note">Ticked to begin with: whoever the tracker had present when the last scene stopped, and whoever was last seen here.</p>' : ''}`
         : '<p class="dooms-atlas-none">The world knows no one yet. Name who is there below.</p>';
     const gaps = [...GAPS.filter(g => g.id !== 'when'), { id: 'when', label: 'In my words' }].map(g => `<label><input type="radio" name="dooms-atlas-gap" value="${g.id}"${g.id === gap.id ? ' checked' : ''} /> <span>${e(g.label)}</span></label>`).join('');
     const choose = Array.isArray(places);
@@ -469,7 +469,11 @@ function tailLine(t) {
     // When the scene before stopped, as the openings were told it (D210): the tracker of its last message, else the world's memory.
     const th = k.then && typeof k.then === 'object' ? k.then : null;
     const at = th ? [th.date, th.time, th.weather].map(x => String(x || '').trim()).filter(Boolean) : [];
-    const stopped = at.length ? `<p class="dooms-atlas-start-note dooms-atlas-then-line"><i class="fa-solid fa-clock" aria-hidden="true"></i> ${k.right ? 'Opens at the moment it stopped' : 'Counted on from where it stopped'}, by ${th.fromTracker ? 'the tracker of its last message' : 'the world\'s memory'}: ${e(at.join(' · '))}.</p>` : '';
+    // Whom the openings were told of as the tracker had them then (D211).
+    const who = th && Array.isArray(th.people) ? th.people.map(x => String(x || '').trim()).filter(Boolean) : [];
+    const told = who.length ? `The openings were told how the tracker had ${e(who.length === 1 ? who[0] : `${who.slice(0, -1).join(', ')} and ${who[who.length - 1]}`)} then.` : '';
+    const stopped = at.length ? `<p class="dooms-atlas-start-note dooms-atlas-then-line"><i class="fa-solid fa-clock" aria-hidden="true"></i> ${k.right ? 'Opens at the moment it stopped' : 'Counted on from where it stopped'}, by ${th.fromTracker ? 'the tracker of its last message' : 'the world\'s memory'}: ${e(at.join(' · '))}.${told ? ` ${told}` : ''}</p>`
+        : told ? `<p class="dooms-atlas-start-note dooms-atlas-then-line"><i class="fa-solid fa-clock" aria-hidden="true"></i> ${told}</p>` : '';
     const of = k.scene ? (k.scene === 's0' ? 'the chat before the scenes' : `scene ${sceneNoOf(k.scene)}`) : 'the scene before';
     if (k.messages > 0) return `<p class="dooms-atlas-start-note dooms-atlas-tail-line"><i class="fa-solid fa-quote-left" aria-hidden="true"></i> Shown the last ${k.messages} ${k.messages === 1 ? 'message' : 'messages'} of ${of} as ${k.messages === 1 ? 'it was' : 'they were'} played${k.right ? ', to carry straight on from' : ', to know how things were left'}.</p>${stopped}`;
     return k.scene ? `<p class="dooms-atlas-start-note dooms-atlas-tail-line"><i class="fa-solid fa-quote-left" aria-hidden="true"></i> The messages of ${of} could not be read, so these are written from its record alone and may not pick up where it stopped.</p>${stopped}` : stopped;
