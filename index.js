@@ -34,8 +34,8 @@ import {
 import { loadSettings, saveSettings, saveChatData, loadChatData, updateMessageSwipeData, setDoomKnivesEnabled } from './src/core/persistence.js';
 import { SlashCommandParser } from '../../../slash-commands/SlashCommandParser.js';
 import { SlashCommand } from '../../../slash-commands/SlashCommand.js';
-import { topBarHidden, canHideFlyoutItem, repairFabSettings, rescuedFabSettings, SETTINGS_ITEM } from './src/utils/fabGuard.js';
-import { mountFabMenu } from './src/systems/ui/fabMenu.js';
+import { topBarHidden, canHideFlyoutItem, repairFabSettings, rescuedFabSettings, knockMode, fabBoxHidden, SETTINGS_ITEM } from './src/utils/fabGuard.js';
+import { mountFabMenu, mountKnock } from './src/systems/ui/fabMenu.js';
 import { registerAllEvents } from './src/core/events.js';
 import { registerSettingsUIInitializer, ensureSettingsUI } from './src/core/lazyUI.js';
 import { ensureCss, removeCss } from './src/core/cssLoader.js';
@@ -1129,7 +1129,8 @@ function applyHideStTopBar() {
  * Every Doom button element on the page is covered, not only the first.
  */
 function applyFabVisibility() {
-    const hidden = !!(extensionSettings.fab && extensionSettings.fab.hidden === true);
+    // Its box stays on the page where the knock opens its fly-out with no button (D201): the list hangs in the box.
+    const hidden = fabBoxHidden(extensionSettings);
     document.querySelectorAll('#dooms-settings-fab, .dooms-settings-fab').forEach((fab) => {
         fab.classList.toggle('is-hidden', hidden);
         if (hidden) {
@@ -1157,7 +1158,7 @@ function registerDesCommands() {
                 extensionSettings.fab = rescuedFabSettings(extensionSettings);
                 delete extensionSettings.fabPosition;
                 saveSettings();
-                try { applyHideStTopBar(); applyFabVisibility(); } catch (e) { /* not mounted yet */ }
+                try { applyHideStTopBar(); applyFabVisibility(); if (window.__doomsFabKnock) window.__doomsFabKnock.sync(); $('#rpg-fab-knock').val('off'); } catch (e) { /* not mounted yet */ }
                 const fab = document.getElementById('dooms-settings-fab');
                 if (fab) { fab.style.left = ''; fab.style.top = ''; fab.style.right = ''; fab.style.bottom = ''; }
                 $('#rpg-extension-enabled').prop('checked', true);
@@ -3495,6 +3496,19 @@ function bindSettingsUI() {
     $('#rpg-toggle-fab-bypass').off('change.fab').on('change.fab', function () {
         extensionSettings.fab.bypassFlyout = $(this).prop('checked');
         saveSettings();
+        onHubChatChanged();    // with no fly-out to hold a scene's options, the bar above its chat shows (D200)
+    });
+    // The knock (docs/long-shot-plan.md D201): what three quick taps on the screen do. Changed, it is drawn at once:
+    // the button put away comes back, or leaves the screen for good where the taps open its fly-out.
+    $('#rpg-fab-knock').val(knockMode({ ...extensionSettings, enabled: true }));
+    $('#rpg-fab-knock').off('change.fab').on('change.fab', function () {
+        const want = String($(this).val() || 'off');
+        extensionSettings.fab.knock = want === 'menu' || want === 'button' ? want : 'off';
+        saveSettings();
+        applyFabVisibility();
+        if (window.__doomsFabKnock) window.__doomsFabKnock.sync();
+        onHubChatChanged();
+        if (extensionSettings.fab.knock === 'menu') toastr.info('The Doom button is off the screen. Triple-tap anywhere to open its menu at the left edge. Typing /des in the message box always opens these settings.', "Doom's Enhancement Suite", { timeOut: 9000 });
     });
     $('#rpg-toggle-fab-shown').off('change.fab').on('change.fab', function () {
         extensionSettings.fab.hidden = !$(this).prop('checked');
@@ -3506,6 +3520,7 @@ function bindSettingsUI() {
         applyHideStTopBar();
         saveSettings();
         syncDoomButtonRows();
+        onHubChatChanged();    // with no Doom button to hold a scene's options, the bar above its chat shows (D200)
     });
     $('#rpg-toggle-hide-st-topbar').off('change.fab').on('change.fab', function () {
         const want = $(this).prop('checked');
@@ -4010,6 +4025,21 @@ async function initUI() {
                 .map(i => (typeof i.live === 'function' ? { ...i, ...i.live() } : i));
         };
         const fabMenu = mountFabMenu(fabEl, { items: buildMenuItems });
+        // The knock (docs/long-shot-plan.md D201): three quick taps on the screen put the button away and bring it
+        // back, or, with no button on the screen at all, open its fly-out at the screen's left edge. Put away, its
+        // fly-out closes; the first time ever, a line says how it comes back.
+        window.__doomsFabKnock = mountKnock(fabEl, {
+            mode: () => knockMode(extensionSettings),
+            menu: fabMenu,
+            onChange: (hidden) => {
+                if (!hidden) return;
+                fabMenu.close();
+                if (extensionSettings.fab.knockSeen === true) return;
+                extensionSettings.fab.knockSeen = true;
+                saveSettings();
+                try { toastr.info('The Doom button is put away. Triple-tap anywhere on the screen to bring it back.', '', { timeOut: 5000 }); } catch (e) { /* no notices */ }
+            },
+        });
         // Settings panel: list every entry as an enable/disable row
         const populateFabSettingsToggles = () => {
             const $container = $('#rpg-fab-menu-toggles');

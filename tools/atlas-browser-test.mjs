@@ -1880,6 +1880,8 @@ console.log('\n§9 the Doom button\'s menu: the scene\'s options in it, and it s
     await settle();
     m = await menu();
     check('an option pressed closes the fly-out and is done', !m.open && same(await page.evaluate(() => window.__ran), ['end']));
+    await page.evaluate(() => { const b = document.querySelector('#dooms-settings-fab .dooms-fab-menu-item'); if (b) b.click(); });
+    check('a list that is closed does nothing, whatever reaches its rows', same(await page.evaluate(() => window.__ran), ['end']));
 
     // A scene that has run long, a handover running, one that stopped.
     await page.evaluate(() => { window.__ran = []; window.__scene = { label: 'Scene 1', long: true, busy: false, note: '' }; document.getElementById('dooms-settings-fab').classList.add('dooms-fab-scene-long'); window.__fab.open(); });
@@ -1921,6 +1923,156 @@ console.log('\n§9 the Doom button\'s menu: the scene\'s options in it, and it s
     await page.mouse.click(700, 100);
     await settle();
     check('a press outside closes it', !(await menu()).open);
+
+    // The knock (D201): three quick taps on the screen put the button away, three more bring it back.
+    await page.setViewportSize({ width: 412, height: 800 });
+    await page.evaluate(async () => {
+        const { mountKnock } = await import('/src/systems/ui/fabMenu.js');
+        const fab = document.getElementById('dooms-settings-fab');
+        window.__place(10, 110);
+        document.body.insertAdjacentHTML('beforeend', '<div id="knock-page" style="position:fixed;inset:0;z-index:5;font:16px/1.5 sans-serif;color:#ddd;padding:220px 16px 0;"><p id="knock-text" style="margin:0 0 20px;">The house on the lane above the temple, the kitchen. Porridge before anything.</p><button id="knock-btn" type="button" style="display:block;width:200px;height:60px;">A button</button><textarea id="knock-box" style="display:block;width:300px;height:60px;margin-top:20px;"></textarea><div id="knock-dialog" role="dialog" style="position:absolute;left:16px;top:700px;width:380px;height:80px;background:#333;">A window of its own</div></div>');
+        window.__knockMode = 'button';
+        window.__knocks = [];
+        window.__knock = mountKnock(fab, { mode: () => window.__knockMode, menu: window.__fab, onChange: (h) => { window.__knocks.push(h); if (h) window.__fab.close(); } });
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+        // A press as the browser reports it: down, perhaps a move, up, at one spot of the page.
+        // `compat`: the mouse events a touch screen sends for the same tap once the finger is up (mousedown, mouseup, click),
+        // to whatever is under the point by then.
+        window.__press = async (x, y, { type = 'touch', hold = 40, drift = 0, cancel = false, id = 7, compat = false } = {}) => {
+            const el = document.elementFromPoint(x, y) || document.body;
+            const ev = (name, yy) => new PointerEvent(name, { bubbles: true, cancelable: true, composed: true, pointerId: id, pointerType: type, isPrimary: true, button: 0, clientX: x, clientY: yy });
+            el.dispatchEvent(ev('pointerdown', y));
+            await wait(hold);
+            if (cancel) { el.dispatchEvent(ev('pointercancel', y)); return; }
+            (document.elementFromPoint(x, y + drift) || el).dispatchEvent(ev('pointerup', y + drift));
+            if (!compat) return;
+            await wait(8);
+            const under = document.elementFromPoint(x, y) || document.body;
+            for (const name of ['mousedown', 'mouseup', 'click']) under.dispatchEvent(new MouseEvent(name, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }));
+        };
+        window.__taps = async (points, { gap = 70, ...o } = {}) => { for (const [x, y] of points) { await window.__press(x, y, o); await wait(gap); } };
+    });
+    const fabState = () => page.evaluate(() => { const f = document.getElementById('dooms-settings-fab'); const cs = getComputedStyle(f); return { knocked: f.classList.contains('dooms-fab-knocked'), seen: cs.visibility !== 'hidden' && Number(cs.opacity) > 0.9, press: cs.pointerEvents, aria: f.getAttribute('aria-hidden'), log: window.__knocks.slice(), menu: document.querySelector('#dooms-settings-fab .dooms-fab-menu').classList.contains('open') }; });
+    const spot = [[300, 600], [304, 603], [298, 598]];
+    await page.evaluate((p) => window.__taps(p), spot);
+    await settle();
+    let f = await fabState();
+    check('three quick taps on the screen put the Doom button away: not seen, not pressable', f.knocked && !f.seen && f.press === 'none' && f.aria === 'true' && same(f.log, [true]), JSON.stringify(f));
+    await shot('9c-knocked-away');
+    await page.evaluate((p) => window.__taps(p), spot);
+    await settle();
+    f = await fabState();
+    check('three more bring it back, as it was', !f.knocked && f.seen && f.press !== 'none' && same(f.log, [true, false]), JSON.stringify(f));
+    await page.evaluate((p) => window.__taps(p), spot.slice(0, 2));
+    await page.waitForTimeout(600);
+    await page.evaluate((p) => window.__taps(p), spot.slice(0, 1));
+    await page.evaluate((p) => window.__taps(p, { gap: 600 }), spot);
+    f = await fabState();
+    check('two taps and a pause are not a knock, nor three slow ones', !f.knocked && f.log.length === 2);
+    await page.waitForTimeout(600);
+    await page.evaluate(() => window.__taps([[60, 600], [200, 600], [340, 600]]));
+    f = await fabState();
+    check('three taps in three different places are not a knock', !f.knocked && f.log.length === 2);
+    await page.waitForTimeout(600);
+    const onButton = await page.evaluate(async () => { const r = document.getElementById('knock-btn').getBoundingClientRect(); const b = document.getElementById('knock-box').getBoundingClientRect(); await window.__taps([[r.left + 40, r.top + 30], [r.left + 42, r.top + 31], [r.left + 41, r.top + 29]]); await new Promise(x => setTimeout(x, 600)); await window.__taps([[b.left + 40, b.top + 30], [b.left + 42, b.top + 31], [b.left + 41, b.top + 29]]); return true; });
+    f = await fabState();
+    check('taps on a button or in a text box are presses of those, not a knock', onButton && !f.knocked && f.log.length === 2);
+    await page.waitForTimeout(600);
+    await page.evaluate(() => window.__taps([[200, 740], [202, 742], [199, 739]]));
+    f = await fabState();
+    check('taps inside a window of its own (a dialog, the Atlas) are that window\'s, not a knock', !f.knocked && f.log.length === 2);
+    await page.waitForTimeout(600);
+    await page.evaluate((p) => window.__taps(p, { drift: 60 }), spot);
+    await page.waitForTimeout(600);
+    await page.evaluate((p) => window.__taps(p, { hold: 500 }), spot);
+    await page.waitForTimeout(600);
+    await page.evaluate((p) => window.__taps(p, { cancel: true }), spot);
+    f = await fabState();
+    check('a scroll, a held press and a press the browser took over are not taps', !f.knocked && f.log.length === 2);
+    await page.waitForTimeout(600);
+    // A mouse: three clicks on text select the paragraph and are left alone; three on an empty spot are a knock.
+    const picked = await page.evaluate(async () => { const t = document.getElementById('knock-text'); const r = t.getBoundingClientRect(); const sel = window.getSelection(); const range = document.createRange(); range.selectNodeContents(t); sel.removeAllRanges(); sel.addRange(range); await window.__taps([[r.left + 30, r.top + 8], [r.left + 31, r.top + 8], [r.left + 30, r.top + 9]], { type: 'mouse' }); const had = String(sel).length > 10; sel.removeAllRanges(); return had; });
+    f = await fabState();
+    check('three clicks of a mouse that selected a paragraph are a selection, not a knock', picked && !f.knocked && f.log.length === 2);
+    await page.waitForTimeout(600);
+    await page.evaluate((p) => window.__taps(p, { type: 'mouse' }), spot);
+    await settle();
+    f = await fabState();
+    check('three clicks on an empty spot are a knock with a mouse too', f.knocked && same(f.log, [true, false, true]));
+    await page.evaluate((p) => window.__taps(p), spot);
+    await settle();
+    // Put away with its fly-out open: the fly-out closes with it.
+    await page.evaluate(() => window.__fab.open());
+    await settle();
+    await page.evaluate((p) => window.__taps(p), spot);
+    await settle();
+    f = await fabState();
+    check('put away with its fly-out open, the fly-out closes with it', f.knocked && !f.menu && !f.seen);
+    // The switch off: a button that was put away comes back, and the knock does nothing.
+    await page.evaluate(() => { window.__knockMode = 'off'; window.__knock.sync(); });
+    await page.waitForTimeout(600);
+    await page.evaluate((p) => window.__taps(p), spot);
+    await settle();
+    f = await fabState();
+    check('switched off, the button is back and three taps do nothing', !f.knocked && f.seen && same(f.log, [true, false, true, false, true, false]), JSON.stringify(f.log));
+
+    // No button at all: the taps open its fly-out at the left edge of the screen.
+    const side = () => page.evaluate(() => {
+        const fab = document.getElementById('dooms-settings-fab');
+        const btn = document.getElementById('dooms-fab-settings');
+        const list = fab.querySelector('.dooms-fab-menu');
+        const lb = list.getBoundingClientRect();
+        const first = list.children[0] ? list.children[0].getBoundingClientRect() : null;
+        return { nobutton: fab.classList.contains('dooms-fab-nobutton'), button: getComputedStyle(btn).visibility, boxPress: getComputedStyle(fab).pointerEvents, open: list.classList.contains('open'), dir: list.getAttribute('data-direction'), left: first ? first.left : null, top: lb.top, bottom: lb.bottom, mid: (lb.top + lb.bottom) / 2, rows: list.children.length, scroll: list.classList.contains('is-scroll'), vh: innerHeight, vw: innerWidth, right: Math.max(...[...list.querySelectorAll('.dooms-fab-menu-item, .dooms-fab-menu-note')].map(x => x.getBoundingClientRect().right), 0), ran: window.__ran.slice(), under: (() => { const e = document.elementFromPoint(20, 130); return e ? (e.id || e.className || e.tagName) : ''; })() };
+    });
+    await page.evaluate(() => { window.__ran = []; window.__scene = { label: 'Scene 1', long: false, busy: false, note: '' }; window.__knockMode = 'menu'; window.__knock.sync(); });
+    await settle();
+    let sd = await side();
+    check('with no button chosen, the Doom button is not on the screen and its box takes no press: what is under it is the page', sd.nobutton && sd.button === 'hidden' && sd.boxPress === 'none' && !sd.open && sd.under !== 'dooms-fab-settings' && !/dooms-fab-btn/.test(String(sd.under)), JSON.stringify(sd));
+    await page.waitForTimeout(600);
+    // Tapped where the list will come up, as a phone reports it: the tap's own mouse events arrive after the list is open.
+    const early = await page.evaluate(async () => { await window.__taps([[40, 600], [42, 602], [39, 599]], { compat: true, gap: 60 }); const list = document.querySelector('#dooms-settings-fab .dooms-fab-menu'); const b = list.querySelector('.dooms-fab-menu-item'); if (b) b.click(); return { open: list.classList.contains('open'), ran: window.__ran.slice() }; });
+    check('the taps that opened the list are not taken for a press of an entry that came up under them, nor for a press outside that closes it', early.open && early.ran.length === 0, JSON.stringify(early));
+    await settle();
+    sd = await side();
+    check('three quick taps open its fly-out at the left edge of the screen, in the middle of its height, all of it on the screen', sd.open && sd.dir === 'side' && sd.rows === 13 && sd.left >= 8 && sd.left <= 14 && sd.top >= 6 && sd.bottom <= sd.vh - 6 && Math.abs(sd.mid - sd.vh / 2) <= 24 && sd.right <= sd.vw, JSON.stringify(sd));
+    await shot('9d-knock-menu');
+    await page.waitForTimeout(450);
+    await tap('Scene 1');
+    await settle();
+    sd = await side();
+    check('the scene\'s own list opens in the same place', sd.open && sd.dir === 'side' && sd.rows === 4 && sd.left >= 8 && sd.left <= 14 && Math.abs(sd.mid - sd.vh / 2) <= 24, JSON.stringify(sd));
+    await tap('End scene 1');
+    await settle();
+    sd = await side();
+    check('an entry pressed is done and the list goes', !sd.open && same(sd.ran, ['end']));
+    // Three taps while it is open close it, and do not open it again.
+    await page.waitForTimeout(600);
+    await page.evaluate((p) => window.__taps(p), spot);
+    await settle();
+    await page.waitForTimeout(600);
+    const openNow = (await side()).open;
+    await page.evaluate((p) => window.__taps(p, { compat: true }), spot);    // the first tap, outside the list, closes it; the third must not open it again
+    await settle();
+    sd = await side();
+    check('three taps with the list open close it and leave it closed', openNow && !sd.open, JSON.stringify([openNow, sd.open]));
+    // A screen too short for the list: it scrolls, and still starts on the screen.
+    await page.setViewportSize({ width: 800, height: 360 });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => window.__taps([[500, 200], [503, 202], [498, 199]]));
+    await settle();
+    sd = await side();
+    check('on a short screen the list at the edge scrolls inside the screen', sd.open && sd.scroll && sd.top >= 6 && sd.bottom <= sd.vh - 6 && sd.left >= 8 && sd.left <= 14, JSON.stringify(sd));
+    await page.mouse.click(700, 100);
+    await settle();
+    check('a press outside closes it', !(await side()).open);
+    await page.setViewportSize({ width: 412, height: 800 });
+    // The choice changed back: the button is on the screen again, and its fly-out hangs from it as before.
+    await page.evaluate(() => { window.__knockMode = 'off'; window.__knock.sync(); window.__fab.open(); });
+    await settle();
+    sd = await side();
+    check('the choice taken back, the button is on the screen again and its fly-out hangs from it as before', !sd.nobutton && sd.button === 'visible' && sd.boxPress !== 'none' && sd.open && sd.dir !== 'side');
+    await page.evaluate(() => { window.__fab.close(); window.__knock.destroy(); document.getElementById('knock-page').remove(); });
     await page.evaluate(() => { document.getElementById('dooms-settings-fab').remove(); });
     await page.setViewportSize(VIEW);
 }

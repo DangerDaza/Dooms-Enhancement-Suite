@@ -11061,6 +11061,27 @@ body.dooms-hide-st-topbar .openDrawer {
 .dooms-fab-menu-note-sub { display: block; opacity: 0.8; }
 .dooms-fab-menu li.dooms-fab-menu-note.is-warn { border-color: #f2c14e; color: #f2c14e; }
 
+/* The knock (docs/long-shot-plan.md D201): three quick taps on the screen put the button away, three more bring it
+   back. Not the stored "Show the Doom button" switch: nothing else changes with it, and a reload shows it again. */
+.dooms-settings-fab { transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0s; }
+.dooms-settings-fab.dooms-fab-knocked {
+    opacity: 0;
+    transform: scale(0.6);
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0.18s;
+}
+.dooms-settings-fab.dooms-fab-moving { transition: none; }
+/* The knock's menu mode: no button on the screen at all. Its box stays (the fly-out hangs in it) and takes no press;
+   the list stands at the left edge of the screen, placed by fabMenu.js, and comes in from that edge. */
+.dooms-settings-fab.dooms-fab-nobutton { pointer-events: none; }
+.dooms-settings-fab.dooms-fab-nobutton .dooms-fab-btn { visibility: hidden; pointer-events: none; }
+.dooms-settings-fab.dooms-fab-nobutton::after { display: none; }
+.dooms-fab-menu[data-direction="side"] { bottom: auto; }
+.dooms-fab-menu[data-direction="side"] li { transform: translateX(-10px) scale(0.92); }
+.dooms-fab-menu[data-direction="side"].open li { transform: translateX(0) scale(1); }
+@media (prefers-reduced-motion: reduce) { .dooms-settings-fab, .dooms-settings-fab.dooms-fab-knocked { transition: none; } }
+
 /* The Doom button says a scene has run long, so the chat needs no bar above it to say so. */
 .dooms-settings-fab.dooms-fab-scene-long::after {
     content: '';

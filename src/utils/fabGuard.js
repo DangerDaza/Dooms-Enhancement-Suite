@@ -27,6 +27,25 @@ export function fabState(settings) {
     };
 }
 
+/**
+ * What three quick taps on the screen do (docs/long-shot-plan.md D201):
+ * 'button' puts the Doom button away and brings it back; 'menu' is a
+ * screen with no button at all, where the taps open its fly-out; 'off'
+ * is nothing. The extension off, nothing. `/des` from the chat box opens
+ * the settings whatever this is, and `/des reset` puts it back to 'off'.
+ */
+export function knockMode(settings) {
+    const s = settings && typeof settings === 'object' ? settings : {};
+    if (s.enabled === false) return 'off';
+    const k = s.fab && typeof s.fab === 'object' ? s.fab.knock : undefined;
+    return k === 'menu' ? 'menu' : k === 'button' ? 'button' : 'off';
+}
+
+/** Whether the Doom button's box is taken off the page: "Show the Doom button" off, unless the knock opens its fly-out (the box holds the list). */
+export function fabBoxHidden(settings) {
+    return fabState(settings).hidden && knockMode(settings) !== 'menu';
+}
+
 /** Whether SillyTavern's top bar is hidden now: the extension on, the setting on, and the Doom button showing. */
 export function topBarHidden(settings) {
     const f = fabState(settings);
@@ -61,8 +80,8 @@ export function repairFabSettings(settings) {
     return { fab, changed: why.length > 0, why };
 }
 
-/** The rescue (`/des reset`): the Doom button shown, the top bar shown, every fly-out entry back, the click opening the fly-out. */
+/** The rescue (`/des reset`): the Doom button shown, the top bar shown, every fly-out entry back, the click opening the fly-out, the knock off. */
 export function rescuedFabSettings(settings) {
     const source = settings && settings.fab && typeof settings.fab === 'object' ? settings.fab : {};
-    return { ...source, hidden: false, hideStTopBar: false, hiddenButtons: [], bypassFlyout: false };
+    return { ...source, hidden: false, hideStTopBar: false, hiddenButtons: [], bypassFlyout: false, knock: 'off' };
 }

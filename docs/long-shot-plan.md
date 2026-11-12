@@ -1109,3 +1109,45 @@ an ended one, a chat that is no scene); `tools/atlas-browser-test.mjs`
 §9 (a phone: the list from the top of the screen and from the bottom,
 the scene's list and Back, an option pressed, the dot, a handover, a
 short screen that scrolls, a press outside).
+
+## 40. The knock: three taps on the screen (2026-11-12, D201)
+
+The owner, with the strip gone (D200): could three taps on the screen
+make the Doom button go away, and three more bring it back? And then:
+"Maybe we should bypass the button entirely and just add a knock mode
+that you do three taps on the screen anywhere and it opens the D button
+menu on the left side of the phone screen. Let's make that an option."
+The owner plays on a phone with SillyTavern's top bar hidden and wants
+the screen to hold the story and the message box and nothing else.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D201 | Three quick taps on the screen are a knock, and what it does is chosen | **The setting.** Settings → Doom Button → "Triple-tap the screen" (`fab.knock`): **Does nothing** (as shipped), **Hides or shows the button**, or **Opens the menu, no button**. **A knock** is three taps (`src/utils/knock.js`): each a press shorter than 350 ms that moved less than 12 px, no more than 450 ms after the one before, within 48 px of the first. A tap on a button, a link, a text box or anything else that is pressed is not counted and starts the count again, nor is one inside the Atlas, a dialog or a drawer; nor is a scroll; nor three clicks of a mouse that selected a paragraph. After a knock the count starts from nothing. **Hides or shows the button.** The Doom button fades off the screen and takes no press; three more bring it back. This is not the stored "Show the Doom button" switch (D58): nothing else changes with it, SillyTavern's top bar stays as it was, and a reload shows the button again. Put away with its fly-out open, the fly-out closes. The first time ever, a notice says how it comes back. **Opens the menu, no button.** The button is never drawn. Three taps anywhere open its fly-out (D200) at the left edge of the screen, in the middle of the screen's height, wherever the button had been left; it scrolls when the screen is shorter than it. An entry pressed, a press outside it, or three more taps close it. The fly-out's box stays on the page for this even where "Show the Doom button" is off (`fabBoxHidden`), and the top bar may stay hidden: the knock reaches the fly-out that stands in for it. **A way in whatever the screen shows.** `/des` in the message box opens Doom's Settings as it always has, and `/des reset` turns the knock off with the rest. The button is taken off the screen by the code that listens for the knock and by nothing else, so where that code did not start the button is there. |
+
+Two things a phone does that the fly-out now allows for. The mouse
+events a touch screen sends for a tap arrive after the finger is up,
+that is, after the third tap has already opened the list: for a third
+of a second after a knock opens it the list takes no press of an entry
+and no press outside, so the tap that opened it neither presses what
+came up under it nor closes it. And three taps while the list is open
+close it: the first, outside the list, closes it as any press outside
+does, and the third does not open it again.
+
+What it does not do. There is no way to choose where on the screen the
+list stands, nor how many taps or how fast. On a desktop it is three
+clicks, which most people will not want switched on. A scene that has
+run long shows no dot where there is no button: the Scene entry is lit
+in the list. Taps inside the Atlas, a dialog or one of SillyTavern's
+drawers are not counted: a map is tapped quickly for its own reasons.
+None of it has
+been tried on a real phone: the taps in the tests are events made by
+the test, in the order Chrome on Android is documented to send them.
+
+Tests: `tools/knock-test.mjs` (what a tap is, what a knock is),
+`tools/fab-guard-test.mjs` (the three choices, the box, the top bar,
+the rescue), `tools/hub-test.mjs` (the bar above a scene stays off where
+the knock reaches the menu), `tools/atlas-browser-test.mjs` §9 (put away
+and brought back, what is not a knock, a mouse, the fly-out closing with
+the button; no button: the list at the left edge, the tap that opened
+it, the scene's list there, three taps to close, a short screen, the
+choice taken back).

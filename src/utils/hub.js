@@ -86,7 +86,8 @@ export function hubConfig(settings) {
         nudgeAt: h.nudgeAt === undefined || h.nudgeAt === null || h.nudgeAt === '' ? CONFIG_DEFAULTS.nudgeAt : int(h.nudgeAt, 0, 500, CONFIG_DEFAULTS.nudgeAt),
         // The player's word where it was given. Never asked: off, unless the Doom button's menu cannot be reached
         // (the button hidden, or set to open Settings directly), where the strip is the only place for a scene's options.
-        strip: typeof h.strip === 'boolean' ? h.strip : !!(settings && isObj(settings.fab) && (settings.fab.hidden === true || settings.fab.bypassFlyout === true)),
+        // (A knock that opens the fly-out reaches it with no button at all, D201.)
+        strip: typeof h.strip === 'boolean' ? h.strip : !!(settings && isObj(settings.fab) && settings.fab.knock !== 'menu' && (settings.fab.hidden === true || settings.fab.bypassFlyout === true)),
     };
 }
 

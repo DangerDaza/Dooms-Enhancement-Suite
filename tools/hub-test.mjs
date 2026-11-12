@@ -47,6 +47,7 @@ console.log('\n§1 the rules');
     // The strip above a scene's chat (D200): off unless asked for, or unless the Doom button's menu cannot be reached.
     check('nothing is put above a scene\'s chat unless the player asks for the bar', hubConfig({}).strip === false && hubConfig({ hub: { strip: true } }).strip === true && hubConfig({ hub: { strip: 'yes' } }).strip === false && hubConfig({ fab: { hidden: false, bypassFlyout: false } }).strip === false);
     check('never asked, the bar shows where the Doom button\'s menu cannot be reached (the button hidden, or set to open Settings); the player\'s word stands over that', hubConfig({ fab: { hidden: true } }).strip === true && hubConfig({ fab: { bypassFlyout: true } }).strip === true && hubConfig({ hub: { strip: false }, fab: { hidden: true } }).strip === false);
+    check('where three taps on the screen open the menu it is reached with no button at all, so the bar stays off (D201)', hubConfig({ fab: { hidden: true, knock: 'menu' } }).strip === false && hubConfig({ fab: { bypassFlyout: true, knock: 'menu' } }).strip === false && hubConfig({ fab: { hidden: true, knock: 'button' } }).strip === true);
     {
         const mark = { scene: 's3', title: 'The gate at dusk', place: { label: 'Hask, the gate' }, startDate: 'Day 42', endDate: 'Day 42, night' };
         const open = sceneMenuModel({ mark, ended: false, count: 12 });
