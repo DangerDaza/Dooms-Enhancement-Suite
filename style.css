@@ -11077,6 +11077,8 @@ body.dooms-hide-st-topbar .openDrawer {
 .dooms-settings-fab.dooms-fab-nobutton { pointer-events: none; }
 .dooms-settings-fab.dooms-fab-nobutton .dooms-fab-btn { visibility: hidden; pointer-events: none; }
 .dooms-settings-fab.dooms-fab-nobutton::after { display: none; }
+/* Just opened by a knock: the tap that opened it is not over yet, and the list is not there for it to land on. */
+.dooms-fab-menu.is-deaf, .dooms-fab-menu.is-deaf li { pointer-events: none !important; }
 .dooms-fab-menu[data-direction="side"] { bottom: auto; }
 .dooms-fab-menu[data-direction="side"] li { transform: translateX(-10px) scale(0.92); }
 .dooms-fab-menu[data-direction="side"].open li { transform: translateX(0) scale(1); }

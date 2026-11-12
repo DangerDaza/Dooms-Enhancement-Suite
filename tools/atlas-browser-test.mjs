@@ -1946,9 +1946,14 @@ console.log('\n§9 the Doom button\'s menu: the scene\'s options in it, and it s
             if (cancel) { el.dispatchEvent(ev('pointercancel', y)); return; }
             (document.elementFromPoint(x, y + drift) || el).dispatchEvent(ev('pointerup', y + drift));
             if (!compat) return;
-            await wait(8);
-            const under = document.elementFromPoint(x, y) || document.body;
-            for (const name of ['mousedown', 'mouseup', 'click']) under.dispatchEvent(new MouseEvent(name, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }));
+            // Not awaited past the tap when the browser holds them back: the next tap does not wait for this one's click.
+            const late = async () => {
+                await wait(compat === true ? 8 : compat);
+                const under = document.elementFromPoint(x, y) || document.body;
+                window.__clickedOn = under.closest ? (under.closest('.dooms-fab-menu-item') ? 'entry' : under.id || under.tagName) : '';
+                for (const name of ['mousedown', 'mouseup', 'click']) under.dispatchEvent(new MouseEvent(name, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }));
+            };
+            if (compat === true) await late(); else late();
         };
         window.__taps = async (points, { gap = 70, ...o } = {}) => { for (const [x, y] of points) { await window.__press(x, y, o); await wait(gap); } };
     });
@@ -2033,6 +2038,27 @@ console.log('\n§9 the Doom button\'s menu: the scene\'s options in it, and it s
     // Tapped where the list will come up, as a phone reports it: the tap's own mouse events arrive after the list is open.
     const early = await page.evaluate(async () => { await window.__taps([[40, 600], [42, 602], [39, 599]], { compat: true, gap: 60 }); const list = document.querySelector('#dooms-settings-fab .dooms-fab-menu'); const b = list.querySelector('.dooms-fab-menu-item'); if (b) b.click(); return { open: list.classList.contains('open'), ran: window.__ran.slice() }; });
     check('the taps that opened the list are not taken for a press of an entry that came up under them, nor for a press outside that closes it', early.open && early.ran.length === 0, JSON.stringify(early));
+    await settle();
+    // The owner's report: a phone that holds the tap's click back a third of a second and more (it waits for a double
+    // tap). By then an entry stands under the finger: the list was opened, and Persona Management with it.
+    for (const held of [330, 420, 700]) {
+        await page.evaluate(() => { window.__fab.close(); window.__ran = []; window.__clickedOn = ''; });
+        await page.waitForTimeout(600);
+        const r = await page.evaluate(async (ms) => { await window.__taps([[60, 450], [62, 452], [59, 449]], { compat: ms, gap: 60 }); await new Promise(x => setTimeout(x, ms + 150)); return { open: document.querySelector('#dooms-settings-fab .dooms-fab-menu').classList.contains('open'), ran: window.__ran.slice(), on: window.__clickedOn }; }, held);
+        check(`a click the phone holds back ${held} ms after the knock presses nothing in the list and leaves it open${held > 400 ? ', though it lands on an entry' : ''}`, r.open && r.ran.length === 0 && (held <= 400 || r.on === 'entry'), JSON.stringify(r));
+    }
+    await page.waitForTimeout(500);
+    const after = await page.evaluate(() => { const b = [...document.querySelectorAll('#dooms-settings-fab .dooms-fab-menu-item')].find(x => x.textContent.trim() === 'Atlas'); const r = b.getBoundingClientRect(); b.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + 20, clientY: r.top + 10 })); return window.__ran.slice(); });
+    check('an entry away from where the knock landed is pressed as soon as the list is up', same(after, ['Atlas']), JSON.stringify(after));
+    await page.evaluate(() => { window.__ran = []; });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => window.__taps([[60, 450], [62, 452], [59, 449]], { gap: 60 }));
+    await page.waitForTimeout(1100);
+    const late = await page.evaluate(() => { const el = document.elementFromPoint(60, 450); const b = el && el.closest ? el.closest('.dooms-fab-menu-item') : null; if (b) b.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 60, clientY: 450 })); return { hit: !!b, ran: window.__ran.length }; });
+    check('and the entry at that very spot is pressed too, a second after the knock', late.hit && late.ran === 1, JSON.stringify(late));
+    await page.evaluate(() => { window.__fab.close(); window.__ran = []; });
+    await page.waitForTimeout(600);
+    await page.evaluate((p) => window.__taps(p), spot);
     await settle();
     sd = await side();
     check('three quick taps open its fly-out at the left edge of the screen, in the middle of its height, all of it on the screen', sd.open && sd.dir === 'side' && sd.rows === 13 && sd.left >= 8 && sd.left <= 14 && sd.top >= 6 && sd.bottom <= sd.vh - 6 && Math.abs(sd.mid - sd.vh / 2) <= 24 && sd.right <= sd.vw, JSON.stringify(sd));

@@ -22,6 +22,8 @@ const GAP = 50;     // the list's edge nearest the button, measured from the but
 const EDGE = 8;     // what is left clear at the edge of the screen
 const LEAST = 132;  // a list is never squeezed below about three entries
 const SIDE = 10;    // where the list stands from the left edge of the screen when there is no button to hang from
+const DEAF_MS = 400;       // how long a list opened by a knock takes no press at all
+const GHOST_RADIUS = 48;   // how near the knock a later click still counts as the knock's own
 
 /** The rows as list items. `back` puts the way back to the fly-out last, nearest the button of a list that opens upward. */
 export function fabMenuHtml(rows, { back = false } = {}) {
@@ -39,7 +41,7 @@ export function fabMenuHtml(rows, { back = false } = {}) {
  * The fly-out mounted in the Doom button.
  * @param {HTMLElement} fabEl          the button's box (#dooms-settings-fab)
  * @param {{ items: () => object[] }} o   the entries, asked for each time the fly-out opens
- * @returns {{ open: (o?: { guardMs?: number }) => void, close: () => void, isOpen: () => boolean, element: HTMLElement }}
+ * @returns {{ open: (o?: { guardMs?: number, at?: { x: number, y: number } }) => void, close: () => void, isOpen: () => boolean, element: HTMLElement }}
  */
 export function mountFabMenu(fabEl, { items }) {
     const list = document.createElement('ul');
@@ -49,7 +51,20 @@ export function mountFabMenu(fabEl, { items }) {
     let rows = [];
     let isOpen = false;
     let armed = 0;
-    let deafUntil = 0;    // a list opened by a knock does not take the press that opened it for a press of its own
+    // A list opened by a knock does not take the tap that opened it for a press of its own. A phone sends that tap's
+    // mouse events and its click after the finger is up, and may hold the click back for a third of a second or more
+    // (it waits to see whether a double tap is coming), by when an entry stands under the finger. So for a moment the
+    // list takes no press at all (`deafUntil`), and for longer one at the very spot of the knock is not a press (`ghost`).
+    let deafUntil = 0;
+    let deafTimer = 0;
+    let ghost = null;     // { x, y, until }
+    const isGhost = (ev) => !!ghost && Date.now() < ghost.until && Number.isFinite(ev.clientX) && Math.hypot(ev.clientX - ghost.x, ev.clientY - ghost.y) <= GHOST_RADIUS;
+    function hear() {
+        deafUntil = 0;
+        if (deafTimer) clearTimeout(deafTimer);
+        deafTimer = 0;
+        list.classList.remove('is-deaf');
+    }
 
     /** Up or down, by which side of the button has the room; taller than that room, the list scrolls inside it. */
     function place() {
@@ -99,20 +114,30 @@ export function mountFabMenu(fabEl, { items }) {
 
     // A press outside closes the list. Not the press that opened it: on a touch screen the browser sends that tap's
     // mouse events after the knock has already opened the list.
-    const onDown = (ev) => { if (Date.now() < deafUntil) return; if (!fabEl.contains(ev.target)) close(); };
+    const onDown = (ev) => { if (Date.now() < deafUntil || isGhost(ev)) return; if (!fabEl.contains(ev.target)) close(); };
     const onKey = (ev) => { if (ev.key === 'Escape') close(); };
 
     function close() {
         isOpen = false;
         armed++;
+        hear();
+        ghost = null;
         list.classList.remove('open', 'is-sub');
         fabEl.classList.remove('dooms-fab-open');
         document.removeEventListener('mousedown', onDown);
         document.removeEventListener('keydown', onKey);
     }
 
-    function open({ guardMs = 0 } = {}) {
-        deafUntil = guardMs > 0 ? Date.now() + guardMs : 0;
+    function open({ guardMs = 0, at = null } = {}) {
+        hear();
+        ghost = null;
+        if (guardMs > 0) {
+            const deaf = Math.min(guardMs, DEAF_MS);
+            deafUntil = Date.now() + deaf;
+            list.classList.add('is-deaf');    // not even hit: a click held back by the browser falls on the page under the list, as it would have
+            deafTimer = setTimeout(hear, deaf);
+            if (at && Number.isFinite(at.x) && Number.isFinite(at.y)) ghost = { x: at.x, y: at.y, until: Date.now() + guardMs };
+        }
         show(items());
         list.classList.add('open');
         fabEl.classList.add('dooms-fab-open');
@@ -130,7 +155,7 @@ export function mountFabMenu(fabEl, { items }) {
         const btn = ev.target && ev.target.closest ? ev.target.closest('.dooms-fab-menu-item') : null;
         if (!btn || !list.contains(btn)) return;
         ev.stopPropagation();
-        if (!isOpen || btn.disabled || Date.now() < deafUntil) return;    // a list that is closed keeps its rows, and they do nothing
+        if (!isOpen || btn.disabled || Date.now() < deafUntil || isGhost(ev)) return;    // a list that is closed keeps its rows, and they do nothing
         if (btn.hasAttribute('data-back')) { show(items()); return; }
         const row = rows[Number(btn.getAttribute('data-row'))];
         if (!row) return;
@@ -207,7 +232,7 @@ export function mountKnock(fabEl, { mode, menu = null, onChange = null }) {
         if (ev.pointerType === 'mouse') { let picked = ''; try { picked = String(window.getSelection ? window.getSelection() : ''); } catch (e) { picked = ''; } if (picked.trim()) return; }
         if (m === 'menu') {
             if (!menu) return;
-            if (menuWasOpen) menu.close(); else menu.open({ guardMs: 350 });    // the tap that opened it is still in the browser's hands: the list is deaf to it
+            if (menuWasOpen) menu.close(); else menu.open({ guardMs: 1000, at: { x: up.x, y: up.y } });    // the tap that opened it is still in the browser's hands: its click is not a press of the list
             return;
         }
         set(!isHidden());
