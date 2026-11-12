@@ -698,7 +698,7 @@ export function scenesRefusalText(plan) {
  * @param {boolean} o.replace  the player ticked that the memory may be replaced
  * @param {object|null} o.result  commitAdopt()'s answer, for the last step
  */
-export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error = '', replace = false, result = null, messages = 0, continuity = null, reach = null, mode = 'parts', progress = null, stopping = false, read = null, canon = false, ledger = null, wantLedger = false } = {}) {
+export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error = '', replace = false, result = null, messages = 0, continuity = null, reach = null, mode = 'parts', progress = null, stopping = false, read = null, canon = false, ledger = null, wantLedger = false, withLedger = false } = {}) {
     const p = plan && typeof plan === 'object' ? plan : { ok: false, reason: '' };
     const close = '<button type="button" class="dooms-atlas-btn" data-act="setup-close">Not now</button>';
     if (!p.ok && step !== 'done') return `<div class="dooms-atlas-setup-card is-scenes"><h3>Play this story as scenes</h3><p class="dooms-atlas-setup-error" role="alert">${e(scenesRefusalText(p))}</p><div class="dooms-atlas-setup-actions"><button type="button" class="dooms-atlas-btn" data-act="setup-close">Close</button></div></div>`;
@@ -710,7 +710,14 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
     const choice = r.pages > 1 || r.messages > 40;
     const g = progress && typeof progress === 'object' ? progress : null;
     const ofLedger = !!(g && g.part === 'ledger');
-    const ledgerLine = ledger && typeof ledger === 'object'
+    const facts = (n) => `${n} ${n === 1 ? 'fact' : 'facts'}`;
+    const parts = (n) => `${n} ${n === 1 ? 'part' : 'parts'}`;
+    // Filled from the record's own requests (D208): what was added, and how many parts it holds nothing from (their answer had the
+    // record and no ledger that could be used, or they were skipped).
+    const missed = ledger && typeof ledger === 'object' && ledger.merged && Array.isArray(ledger.missed) ? ledger.missed.length : 0;
+    const ledgerLine = ledger && typeof ledger === 'object' && ledger.merged
+        ? `The ledger was filled from the same requests: ${facts(ledger.added)} added.${missed ? ` ${missed === ledger.pages ? (missed === 1 ? 'The answer held' : 'None of the answers held') : `${missed} of the ${ledger.pages} answers held`} ${missed === ledger.pages && missed > 1 ? 'anything' : 'nothing'} the ledger could use.` : ledger.read < ledger.pages ? ` It holds nothing from ${ledger.pages - ledger.read} of the ${parts(ledger.pages)} of the chat.` : ''}`
+        : ledger && typeof ledger === 'object'
         ? (ledger.partial
             ? `The ledger read ${ledger.read} of ${ledger.pages} parts of the chat${ledger.added ? ` (${ledger.added} ${ledger.added === 1 ? 'fact' : 'facts'} added)` : ''}.`
             : `The ledger has read the whole chat: ${ledger.added} ${ledger.added === 1 ? 'fact' : 'facts'} added${ledger.skipped ? `, ${ledger.skipped} ${ledger.skipped === 1 ? 'part' : 'parts'} skipped` : ''}.`)
@@ -722,6 +729,8 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
             : stopping ? 'Stopping after this request…'
             : again ? `Request ${g.page} of ${g.pages} did not come back right. Waiting a moment, then trying it once more.`
             : ofLedger ? (many ? `Reading the chat into the ledger: request ${g.page} of ${g.pages}.` : 'Reading the chat into the ledger…')
+            : many && g.ledger ? `Reading the chat for the record and the ledger: request ${g.page} of ${g.pages}.`
+            : g && g.ledger ? 'Reading the chat for the record and the ledger…'
             : many ? `Reading the chat: request ${g.page} of ${g.pages}.`
             : 'Writing the record of the chat so far…';
         return `<div class="dooms-atlas-setup-card is-busy is-scenes">
@@ -738,7 +747,7 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
             <h3>Play ${e(world)} as scenes</h3>
             <p class="${failed ? 'dooms-atlas-setup-error' : 'dooms-atlas-passes-line'}" role="${failed ? 'alert' : 'status'}">${failed ? `Request ${g.page} of ${g.pages} failed${g.error ? `: ${e(g.error)}` : '.'}` : `Stopped before request ${g.page} of ${g.pages}.`}</p>
             ${atlasPassesHtml(g.states)}
-            <p class="dooms-atlas-start-note">What was read before it is kept${ofLedger ? ' in the ledger' : ''}. ${failed ? 'Trying again asks for that request only. Skipping it' : 'Carrying on takes the read up from there. Skipping that request'} goes on without that part of the chat: ${ofLedger ? 'the ledger will not hold what it established.' : 'the record will not cover it.'}</p>
+            <p class="dooms-atlas-start-note">What was read before it is kept${ofLedger ? ' in the ledger' : g.ledger ? ', and the ledger has the facts of those parts' : ''}. ${failed ? 'Trying again asks for that request only. Skipping it' : 'Carrying on takes the read up from there. Skipping that request'} goes on without that part of the chat: ${ofLedger ? 'the ledger will not hold what it established.' : g.ledger ? 'neither the record nor the ledger will cover it.' : 'the record will not cover it.'}</p>
             ${err}
             <div class="dooms-atlas-setup-actions">
                 <button type="button" class="dooms-atlas-btn is-primary" data-act="scenes-retry"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i> <span>${failed ? 'Try it again' : 'Carry on'}</span></button>
@@ -772,7 +781,9 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
             : w.whole ? `Written from the whole chat: ${r.messages} messages in ${w.pages === 1 ? 'one request' : requests(w.pages)}.${w.skipped ? ` ${w.skipped} ${w.skipped === 1 ? 'part was skipped, so the record does not cover it.' : 'parts were skipped, so the record does not cover them.'}` : ''}${w.capped ? ' The chat is longer than is read: the read began part-way in.' : ''}`
             : 'Written from the last stretch of the chat only.';
         // The ledger (D198): Canon's own, read from the chat's start before the chat is taken, when asked for.
-        const ledgerPart = ledgerLine ? `<p class="dooms-atlas-start-note dooms-atlas-scenes-ledger-line"><i class="fa-solid fa-scroll" aria-hidden="true"></i> ${ledgerLine}</p>`
+        const ledgerPart = ledgerLine ? `<p class="dooms-atlas-start-note dooms-atlas-scenes-ledger-line"><i class="fa-solid fa-scroll" aria-hidden="true"></i> ${ledgerLine}</p>${missed && canon ? `
+                <label class="dooms-atlas-check"><input type="checkbox" class="dooms-atlas-scenes-ledger"${wantLedger ? ' checked' : ''} /> <span>Read ${missed === 1 ? 'that part' : `those ${missed} parts`} again for the ledger alone first (${requests(missed)} more)</span></label>
+                <p class="dooms-atlas-start-note">An answer that was cut short, or that came back without its ledger, still gave its part of the record. Read again for the ledger alone, the answer is shorter.</p>` : ''}`
             : canon && r.pages >= 1 ? `<label class="dooms-atlas-check"><input type="checkbox" class="dooms-atlas-scenes-ledger"${wantLedger ? ' checked' : ''} /> <span>Read the whole chat into the ledger first (${requests(mode === 'once' ? 1 : r.pages)} more)</span></label>
                 <p class="dooms-atlas-start-note">The ledger is Canon's list of what the story has established. As you played, it read only the latest messages every few replies; this reads the chat from its start, ${mode === 'once' ? 'in one request as the record was' : 'one request at a time with a bar for each'}, so the scenes are told what it holds.</p>`
             : !canon && choice ? '<p class="dooms-atlas-start-note dooms-atlas-scenes-nocanon">Canon is off, so this chat has no ledger of facts to read the chat into. The record above and where its people stand are what the scenes are told.</p>'
@@ -803,7 +814,9 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
             ${r.pages > 1 ? `<label class="dooms-atlas-check"><input type="radio" name="dooms-atlas-scenes-reach" class="dooms-atlas-scenes-reach" value="once"${mode === 'once' ? ' checked' : ''} /> <span><strong>The whole chat in one request</strong>: about ${Number(r.tokens || 0).toLocaleString('en-US')} tokens at once, for a model that reads that much. If it cannot, the request fails and nothing is lost.</span></label>` : ''}
             <label class="dooms-atlas-check"><input type="radio" name="dooms-atlas-scenes-reach" class="dooms-atlas-scenes-reach" value="recent"${mode === 'recent' ? ' checked' : ''} /> <span><strong>Only its last stretch</strong>: one request, the last forty messages at most</span></label>
             ${r.capped ? `<p class="dooms-atlas-start-note">This chat is longer than ${requests(r.pages)} read: the whole-chat read begins part-way in, that many parts from its end.</p>` : ''}
-        </fieldset>` : '';
+        </fieldset>
+        ${canon ? `<label class="dooms-atlas-check dooms-atlas-scenes-with-ledger-row${mode === 'recent' ? ' is-off' : ''}"><input type="checkbox" class="dooms-atlas-scenes-with-ledger"${withLedger ? ' checked' : ''}${mode === 'recent' ? ' disabled' : ''} /> <span><strong>Fill the ledger from the same requests</strong>: no second read of the chat</span></label>
+        <p class="dooms-atlas-start-note">The ledger is Canon's list of what the story has established. Ticked, each request of a whole-chat read is asked for the facts of its part as well as the record, and they are written to the ledger as it goes. Unticked, the record is read alone, and the ledger can be read afterwards in as many requests again.</p>` : ''}` : '';
     return `<div class="dooms-atlas-setup-card is-scenes">
         <h3>Play ${e(world)} as scenes</h3>
         <p>A story played as scenes is many short chats instead of one long one. Every scene starts fresh, on your map, knowing what happened before it.</p>
@@ -822,7 +835,7 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
             ${close}
         </div>
         <p class="dooms-atlas-start-note">${choice
-        ? 'Each request on the tracker\'s connection reads one part of the chat, oldest first, and carries on from the one before: a few lines on where the story stands, where the people in it stand and what it has left open. Only one request is ever out at a time. There is a bar for each request, the read can be stopped and taken up again, and you read and correct what it wrote before anything is changed.'
+        ? `Each request on the tracker's connection reads one part of the chat, oldest first, and carries on from the one before: a few lines on where the story stands, where the people in it stand and what it has left open${canon ? ', and with the box above ticked the facts that part established' : ''}. Only one request is ever out at a time. There is a bar for each request, the read can be stopped and taken up again, and you read and correct what it wrote before anything is changed.`
         : `One request on the tracker's connection reads the last forty messages${messages ? ` of ${messages}` : ''} and writes a few lines on where the story stands, where the people in it stand and what it has left open. You read and correct them before anything is changed.`}</p>
     </div>`;
 }

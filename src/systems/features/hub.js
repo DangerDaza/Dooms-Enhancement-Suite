@@ -33,7 +33,7 @@ import { buildHooksPrompt, parseHooksReply, validateHooks, proposeRound, failRou
 import {
     HUB_META_KEY, hubConfig, normalizeHub, normalizeWorldEntry, gapOf, gapMoves, takeSnapshot, seedStores, personLine, buildBrief,
     buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle, hubMark, readMark, markEnded, sceneHeader,
-    sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, openSceneOf, openScene, setSceneAside as setAsidePure,
+    sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, ledgerOfReply, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
@@ -48,7 +48,7 @@ import { diffEntry, undoChanges, areasInWords } from '../../utils/sceneLog.js';
 export const BRIEF_SLOT = 'dooms-scene-brief';
 import { ensureCss } from '../../core/cssLoader.js';
 import { isLiveWorldOn, loadPack, getWorldState, getActivePack, saveWorld, adoptWorld, presentNamesFromTracker } from './liveWorld.js';
-import { isCanonOn, updateCanon, onCanonChatChanged } from './canon.js';
+import { isCanonOn, updateCanon, onCanonChatChanged, canonContextNow, applyCanonReply } from './canon.js';
 import { resolvePersonaName } from './diceRolls.js';
 
 export const HUB_CHANGED_EVENT = 'dooms:hub-changed';
@@ -1575,7 +1575,7 @@ const beginRun = (part, players, once = false) => {
     return { part, once: !!once, meta: meta(), id: chatId(), pages, leads, total, at: 0, states: pages.map(() => 'wait'), recap: '', draft: null, people: null, maxChars: 0, added: 0, error: '' };
 };
 /** A read as the panel shows it: which pass it is on, and every pass's state (wait | run | retry | done | failed | skipped), in order. */
-const runView = (run) => ({ part: run.part, page: Math.min(run.at + 1, run.pages.length), pages: run.pages.length, states: run.states.slice(), error: run.error });
+const runView = (run) => ({ part: run.part, page: Math.min(run.at + 1, run.pages.length), pages: run.pages.length, states: run.states.slice(), error: run.error, ...(run.withLedger ? { ledger: true } : {}) });
 const tell = (onStep, run) => { try { if (typeof onStep === 'function') onStep(runView(run)); } catch (e) { /* the panel is gone */ } };
 /**
  * The wait before a failed request's second try: a few seconds, or longer
@@ -1723,8 +1723,18 @@ export function scenesPlan() {
  * `reason: 'pass'` or `'stopped'` with the passes' states, and the same
  * call with `resume` takes it up at that pass, or with `skip` as well
  * goes on without that page.
+ *
+ * With `ledger` as well (D208), and Canon on, each request of a whole
+ * read is also asked for the ledger's facts of its part, and they are
+ * written to the chat's ledger as each comes back: the chat is read once,
+ * not once for the record and once more for the ledger. That is the one
+ * thing a read changes before the chat is taken, as Canon's own runs do
+ * while a chat is played. The answer's `ledger` says how it went: the
+ * parts it was read from, what was added, and `missed`, the parts whose
+ * answer held the record and no ledger that could be used (they can be
+ * read for the ledger alone: readAdoptLedger's `only`).
  */
-export async function prepareAdopt({ whole = false, once = false, onStep = null, resume = false, skip = false } = {}) {
+export async function prepareAdopt({ whole = false, once = false, onStep = null, resume = false, skip = false, ledger = false } = {}) {
     const plan = scenesPlan();
     if (!plan.ok) return plan;
     const idle = await whenIdle();
@@ -1734,7 +1744,7 @@ export async function prepareAdopt({ whole = false, once = false, onStep = null,
     if (whole) {
         if (adoptReading) return { ok: false, reason: 'busy' };
         adoptReading = true;
-        try { return await readRecordWhole(plan, players, { once, onStep, resume, skip }); } finally { adoptReading = false; }
+        try { return await readRecordWhole(plan, players, { once, onStep, resume, skip, ledger }); } finally { adoptReading = false; }
     }
     const pages = sceneTranscriptPages((chatArray() || []).slice(-ADOPT_MESSAGES), { budget: RECAP_BUDGET, persona: players[0] || 'Player' });
     let recap = '';
@@ -1759,13 +1769,16 @@ export async function prepareAdopt({ whole = false, once = false, onStep = null,
 }
 
 /** The record of the whole chat, in passes (D198): prepareAdopt's other way. */
-async function readRecordWhole(plan, players, { once = false, onStep = null, resume = false, skip = false } = {}) {
+async function readRecordWhole(plan, players, { once = false, onStep = null, resume = false, skip = false, ledger = false } = {}) {
     let run = resume && adoptRun && adoptRun.part === 'record' && sameChat(adoptRun) ? adoptRun : null;
     if (!run) {
         run = beginRun('record', players, once);
         run.people = scenePeople(null, players);
         run.draft = continuityDraft(plan.world && !plan.world.made ? entryOf(plan.world.id).continuity : null, run.people.cast);
         run.maxChars = Math.max(cfg().recapChars, ADOPT_RECAP_CHARS);
+        // The ledger rides with the record (D208) where it was asked for and Canon is on; a read taken up again keeps what it began with.
+        run.withLedger = !!ledger && isCanonOn() && !!canonContextNow();
+        run.ledgerOf = run.pages.map(() => '');    // per part: '' not read yet | 'done' | 'missed'
     } else if (skip && run.at < run.pages.length) {
         run.states[run.at] = 'skipped';
         run.at++;
@@ -1781,17 +1794,25 @@ async function readRecordWhole(plan, players, { once = false, onStep = null, res
         tell(onStep, run);
         // The lines that lead into this page ride with it when the page before was read (D199); one that was skipped is not in the record to read on from.
         const lead = i > 0 && run.states[i - 1] === 'done' ? run.leads[i] : '';
-        const prompt = buildRecapPrompt({ transcript: run.pages[i], brief: '', player: players[0] || '', maxChars: run.maxChars, soFar: run.recap, last: i === run.pages.length - 1, continuity: run.draft, lead });
+        const ask = { transcript: run.pages[i], brief: '', player: players[0] || '', maxChars: run.maxChars, soFar: run.recap, last: i === run.pages.length - 1, continuity: run.draft, lead };
+        // With the ledger (D208): the request is shown the ledger as the parts before left it and asked for this part's facts too.
+        const canon = run.withLedger ? canonContextNow() : null;
+        const both = canon ? { ...ask, ledger: { entries: canon.entries, names: canon.names, players: canon.players, ...(run.once ? { adds: ADOPT_ONCE_ADDS } : {}) } } : null;
         let p = null;
         let failure = '';
+        let alone = false;    // the second try asks for the record alone
         // Asked for twice before it counts as failed: the line may be held for a moment, and a reply that broke the form is often right the second time.
+        // An answer that came back and could not be read, with the ledger asked for in it, is asked for again without the ledger: the longer
+        // answer is the likelier one to be cut short, and the record is what the read cannot go on without. A request that did not come
+        // back at all (the connection, a limit) is asked for again as it was.
         for (let attempt = 0; attempt < 2 && !(p && p.ok); attempt++) {
             if (attempt) { run.states[i] = 'retry'; tell(onStep, run); await waitToRetry(failure); if (adoptStop || !sameChat(run)) break; }
             try {
-                const r = await request(prompt, { transport: recapTransport, label: 'recap' });
+                const r = await request(both && !alone ? buildRecapPrompt(both) : buildRecapPrompt(ask), { transport: recapTransport, label: 'recap' });
                 if (r.busy) { failure = 'Another request held the connection.'; continue; }
                 p = parseRecapReply(r.text, { maxChars: run.maxChars });
                 failure = p.ok ? '' : p.errors.join(' ');
+                if (!p.ok && both) alone = true;
             } catch (e) { p = null; failure = String(e && e.message || e); }
         }
         if (!sameChat(run)) { adoptRun = null; return { ok: false, reason: 'changed' }; }
@@ -1803,12 +1824,25 @@ async function readRecordWhole(plan, players, { once = false, onStep = null, res
         }
         run.recap = p.recap;
         run.draft = stepDraft(run.draft, readContinuity(p.reply, run.draft, { players, known: run.people.known, text: run.pages.slice(0, i + 1).join('\n') }));
+        if (both) {
+            // The ledger's part of the answer, written as a run of Canon's own is. An answer with the record and no ledger that can be
+            // used (none in it, one that breaks the form, the record asked for alone the second time) is a part the ledger missed.
+            const said = alone ? null : ledgerOfReply(p.reply);
+            let wrote = null;
+            try { wrote = said ? applyCanonReply(said, run.once ? { adds: ADOPT_ONCE_ADDS } : {}) : null; } catch (e) { wrote = null; }
+            if (wrote && wrote.ok) { run.added += Number(wrote.added) || 0; run.ledgerOf[i] = 'done'; } else run.ledgerOf[i] = 'missed';
+        }
         run.states[i] = 'done';
         run.at = i + 1;
     }
     tell(onStep, run);
     adoptRun = null;
-    return { ok: true, reason: '', plan: scenesPlan(), recap: run.recap, error: '', messages: (chatArray() || []).length, continuity: draftChanges(run.draft), whole: true, once: run.once, pages: run.pages.length, skipped: run.states.filter(x => x === 'skipped').length, capped: run.total > run.pages.length, states: run.states.slice() };
+    const missed = run.withLedger ? run.ledgerOf.map((x, k) => (x === 'missed' ? k : -1)).filter(k => k >= 0) : [];
+    return {
+        ok: true, reason: '', plan: scenesPlan(), recap: run.recap, error: '', messages: (chatArray() || []).length, continuity: draftChanges(run.draft), whole: true, once: run.once, pages: run.pages.length, skipped: run.states.filter(x => x === 'skipped').length, capped: run.total > run.pages.length, states: run.states.slice(),
+        // How the ledger went, where it rode with the record (D208); null where it was not asked for.
+        ledger: run.withLedger ? { pages: run.pages.length, read: run.ledgerOf.filter(x => x === 'done').length, missed, skipped: run.states.filter(x => x === 'skipped').length, added: run.added } : null,
+    };
 }
 
 /**
@@ -1825,30 +1859,40 @@ async function readRecordWhole(plan, players, { once = false, onStep = null, res
  * without that page. The pages are read in order, one request at a time,
  * because a later page may settle what an earlier one left open. With
  * `once` the whole chat is handed over in one request, and may add more
- * than a page does.
+ * than a page does. With `only` (the numbers of some parts, from 0) those
+ * parts alone are read and the others count as read already: the parts
+ * whose answer held no ledger when it was asked for with the record (D208).
  * @returns {Promise<{ ok: boolean, reason: string, part?: string, page?: number, pages?: number, states?: string[], added?: number, skipped?: number, errors?: string[] }>}
  */
-export async function readAdoptLedger({ once = false, onStep = null, resume = false, skip = false } = {}) {
+export async function readAdoptLedger({ once = false, onStep = null, resume = false, skip = false, only = null } = {}) {
     const plan = scenesPlan();
     if (!plan.ok) return plan;
     if (!isCanonOn()) return { ok: false, reason: 'canon-off' };
     if (adopting || adoptReading) return { ok: false, reason: 'busy' };
     adoptReading = true;
-    try { return await readLedgerWhole({ once, onStep, resume, skip }); } finally { adoptReading = false; }
+    try { return await readLedgerWhole({ once, onStep, resume, skip, only }); } finally { adoptReading = false; }
 }
 
-async function readLedgerWhole({ once, onStep, resume, skip }) {
+async function readLedgerWhole({ once, onStep, resume, skip, only }) {
     const idle = await whenIdle();
     if (!idle) return { ok: false, reason: 'busy' };
     let run = resume && adoptRun && adoptRun.part === 'ledger' && sameChat(adoptRun) ? adoptRun : null;
-    if (!run) run = beginRun('ledger', playerNames(), once);
-    else if (skip && run.at < run.pages.length) { run.states[run.at] = 'skipped'; run.at++; }
+    if (!run) {
+        run = beginRun('ledger', playerNames(), once);
+        // Some parts alone (D208): the others were read for the ledger with the record, and stand as done.
+        if (Array.isArray(only)) {
+            const want = new Set(only.map(Number).filter(k => Number.isInteger(k) && k >= 0 && k < run.pages.length));
+            run.states = run.pages.map((x, k) => (want.has(k) ? 'wait' : 'done'));
+            run.some = want.size;
+        }
+    } else if (skip && run.at < run.pages.length) { run.states[run.at] = 'skipped'; run.at++; }
     adoptRun = run;
     adoptStop = false;
     run.error = '';
     const why = (r) => (r && (r.error || (Array.isArray(r.errors) && r.errors.join(' ')) || ({ busy: 'Another request held the connection.', running: 'Canon was already reading.', stale: 'The chat changed.', off: 'Canon is off.' })[r.reason])) || 'The request did not complete.';
     while (run.at < run.pages.length) {
         const i = run.at;
+        if (run.states[i] === 'done') { run.at = i + 1; continue; }    // read already, with the record
         if (!sameChat(run)) { adoptRun = null; return { ok: false, reason: 'changed' }; }
         if (adoptStop) { run.states[i] = 'wait'; return { ok: false, reason: 'stopped', ...runView(run), added: run.added }; }
         run.states[i] = 'run';
@@ -1873,7 +1917,7 @@ async function readLedgerWhole({ once, onStep, resume, skip }) {
     }
     tell(onStep, run);
     adoptRun = null;
-    return { ok: true, reason: '', part: 'ledger', once: run.once, pages: run.pages.length, skipped: run.states.filter(x => x === 'skipped').length, added: run.added, states: run.states.slice() };
+    return { ok: true, reason: '', part: 'ledger', once: run.once, pages: run.pages.length, skipped: run.states.filter(x => x === 'skipped').length, added: run.added, states: run.states.slice(), ...(run.some !== undefined ? { some: run.some } : {}) };
 }
 
 /**

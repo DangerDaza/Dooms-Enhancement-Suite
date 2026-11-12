@@ -284,6 +284,43 @@ export async function updateCanon({ reason = 'manual', scope = 'recent', text: g
     }
 }
 
+/**
+ * What a request that asks for the ledger together with something else
+ * needs to know (docs/long-shot-plan.md D208): the ledger as it stands,
+ * the names the story knows, the player's. Null when Canon is off or has
+ * no chat loaded.
+ * @returns {{ entries: object[], names: string[], players: string[] }|null}
+ */
+export function canonContextNow() {
+    if (!ready()) return null;
+    return { entries: state.entries.map(e => ({ ...e })), names: knownNames(), players: playerNames() };
+}
+
+/**
+ * A ledger's answer that came back inside another request (D208: each
+ * request of a long chat's read is asked for the record of its part and
+ * for the ledger's facts of it, so the chat is read once and not twice):
+ * checked and written as a run's own answer is, with a scene's caps. An
+ * answer that breaks a rule writes nothing and is not held against Canon
+ * (its next run is not brought forward: the request was not Canon's).
+ * @param {object} reply  { add, drop }
+ * @returns {{ ok: boolean, reason?: string, added?: number, dropped?: number, errors?: string[] }}
+ */
+export function applyCanonReply(reply, { adds: more = 0 } = {}) {
+    if (!ready()) return { ok: false, reason: 'off' };
+    if (updating) return { ok: false, reason: 'running' };
+    const caps = { adds: Math.max(SCENE_ADDS, Math.min(64, Math.floor(Number(more) || 0))), drops: SCENE_DROPS };
+    const v = validateCanon(reply, state, caps);
+    if (!v.ok) return { ok: false, reason: 'invalid', errors: v.errors };
+    const now = sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox);
+    const list = chatArray();
+    const last = list && list.length ? list[list.length - 1] : null;
+    const next = applyCanon(state, v.clean, { msgId: isReply(last) ? stamp(last) : null, gameDate: now.date || '', ranAt: Date.now() });
+    commit(next, { source: 'run' }, { immediate: true });
+    log('a ledger answer that rode with another request applied', { added: next.last.added, dropped: next.last.dropped, dropsRefused: v.errors });
+    return { ok: true, added: next.last.added, dropped: next.last.dropped, errors: v.errors };
+}
+
 export function isUpdating() {
     return updating;
 }

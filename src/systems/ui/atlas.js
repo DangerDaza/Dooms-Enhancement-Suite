@@ -1043,10 +1043,10 @@ function openScenes() {
     const reach = adoptReach();
     let canon = false;
     try { canon = isCanonOn(); } catch (e) { /* Canon is not loaded */ }
-    setup = { scenes: true, step: 'ask', plan: scenesPlan(), recap: '', error: '', replace: false, result: null, messages: reach.messages, world: worldKey(), reach, mode: 'parts', progress: null, stopping: false, read: null, canon, ledger: null, wantLedger: false, change: null };
+    setup = { scenes: true, step: 'ask', plan: scenesPlan(), recap: '', error: '', replace: false, result: null, messages: reach.messages, world: worldKey(), reach, mode: 'parts', progress: null, stopping: false, read: null, canon, ledger: null, wantLedger: false, withLedger: canon, change: null };
     // A read of this chat's record that stopped part-way (a request failed, or Stop) is shown where it stood, to carry on from (D198).
     const paused = setup.plan.ok ? adoptPaused() : null;
-    if (paused && paused.part === 'record') setup = { ...setup, step: 'paused', mode: paused.pages === 1 && reach.pages > 1 ? 'once' : 'parts', progress: { ...paused, reason: paused.states.includes('failed') ? 'pass' : 'stopped' } };
+    if (paused && paused.part === 'record') setup = { ...setup, step: 'paused', mode: paused.pages === 1 && reach.pages > 1 ? 'once' : 'parts', withLedger: !!paused.ledger, progress: { ...paused, reason: paused.states.includes('failed') ? 'pass' : 'stopped' } };
     else dropAdoptRead();
     $(`${root()} .dooms-atlas-start`).prop('hidden', true);
     renderSetup();
@@ -1071,13 +1071,22 @@ async function prepareScenes({ resume = false, skip = false } = {}) {
     const mode = !scenesChoice() ? 'recent' : resume ? (setup.mode === 'once' ? 'once' : 'parts') : (picked === 'once' || picked === 'recent' || picked === 'parts' ? picked : setup.mode);
     const whole = mode !== 'recent';
     const before = resume && setup.progress && setup.progress.part === 'record' ? setup.progress : null;
-    setup = { ...setup, step: 'busy', error: '', mode: scenesChoice() ? mode : setup.mode, stopping: false, ledger: null, progress: whole ? { part: 'record', page: before ? before.page : 1, pages: before ? before.pages : mode === 'once' ? 1 : setup.reach.pages, states: before ? before.states.map(x => (x === 'failed' ? 'wait' : x)) : [] } : null };
+    // The ledger filled from the same requests (D208): ticked on the panel, where Canon is on; a read taken up again goes on as it began.
+    const $with = $(`${root()} .dooms-atlas-scenes-with-ledger`);
+    const withLedger = resume ? !!setup.withLedger : ($with.length ? $with.is(':checked') : !!setup.withLedger);
+    const both = whole && setup.canon && withLedger;
+    setup = { ...setup, step: 'busy', error: '', mode: scenesChoice() ? mode : setup.mode, withLedger, stopping: false, ledger: null, progress: whole ? { part: 'record', ledger: both, page: before ? before.page : 1, pages: before ? before.pages : mode === 'once' ? 1 : setup.reach.pages, states: before ? before.states.map(x => (x === 'failed' ? 'wait' : x)) : [] } : null };
     renderSetup();
-    const r = whole ? await prepareAdopt({ whole: true, once: mode === 'once', onStep: scenesStep, resume, skip }) : await prepareAdopt();
+    const r = whole ? await prepareAdopt({ whole: true, once: mode === 'once', onStep: scenesStep, resume, skip, ledger: both }) : await prepareAdopt();
     if (!setup || !setup.scenes) return;    // the panel was closed meanwhile
-    if (!r.ok && (r.reason === 'pass' || r.reason === 'stopped')) { setup = { ...setup, step: 'paused', stopping: false, progress: { part: 'record', page: r.page, pages: r.pages, states: r.states, error: r.error, reason: r.reason } }; renderSetup(); return; }
+    if (!r.ok && (r.reason === 'pass' || r.reason === 'stopped')) { setup = { ...setup, step: 'paused', stopping: false, progress: { part: 'record', ledger: !!r.ledger, page: r.page, pages: r.pages, states: r.states, error: r.error, reason: r.reason } }; renderSetup(); return; }
     if (!r.ok) { setup = { ...setup, step: 'ask', stopping: false, progress: null, plan: r.reason === 'busy' || r.reason === 'changed' ? setup.plan : r, error: r.reason === 'busy' || r.reason === 'changed' ? scenesRefusalText(r) : '' }; renderSetup(); return; }
-    setup = { ...setup, step: 'review', stopping: false, progress: null, plan: r.plan, recap: r.recap, messages: r.messages, continuity: r.continuity || null, read: { whole: !!r.whole, pages: r.pages || 0, skipped: r.skipped || 0, capped: !!r.capped }, wantLedger: !!r.whole && setup.canon, error: r.error ? `The record could not be written (${r.error}). Write a few lines yourself, or leave it empty.` : '' };
+    setup = { ...setup, step: 'review', stopping: false, progress: null, plan: r.plan, recap: r.recap, messages: r.messages, continuity: r.continuity || null, read: { whole: !!r.whole, pages: r.pages || 0, skipped: r.skipped || 0, capped: !!r.capped },
+        // The ledger as the read left it (D208): filled from the same requests, with the parts it got nothing from to be read again for it
+        // (ticked); or not asked for, and then the read of its own is offered and left unticked, since it was turned down a moment ago.
+        ledger: r.ledger ? { merged: true, pages: r.ledger.pages, read: r.ledger.read, missed: r.ledger.missed.slice(), skipped: r.ledger.skipped, added: r.ledger.added } : null,
+        wantLedger: !!(r.ledger && r.ledger.missed.length),
+        error: r.error ? `The record could not be written (${r.error}). Write a few lines yourself, or leave it empty.` : '' };
     renderSetup();
 }
 
@@ -1098,11 +1107,19 @@ function keepReview() {
 async function readScenesLedger({ skip = false } = {}) {
     if (!setup || !setup.scenes) return false;
     const before = setup.progress && setup.progress.part === 'ledger' ? setup.progress : null;
+    // Filled with the record already (D208): only the parts it got nothing from are read, the others stand as done.
+    const had = setup.ledger && setup.ledger.merged ? setup.ledger : null;
     setup = { ...setup, step: 'busy', error: '', stopping: false, progress: { part: 'ledger', page: before ? before.page : 1, pages: before ? before.pages : setup.mode === 'once' ? 1 : setup.reach.pages, states: before ? before.states.map(x => (x === 'failed' ? 'wait' : x)) : [] } };
     renderSetup();
-    const r = await readAdoptLedger({ once: setup.mode === 'once', onStep: scenesStep, resume: true, skip });
+    const r = await readAdoptLedger({ once: setup.mode === 'once', onStep: scenesStep, resume: true, skip, only: had ? had.missed : null });
     if (!setup || !setup.scenes) return false;
-    if (r.ok) { setup = { ...setup, stopping: false, ledger: { partial: false, pages: r.pages, read: r.pages - r.skipped, skipped: r.skipped, added: r.added }, progress: { part: 'ledger', page: r.pages, pages: r.pages, states: r.states } }; return true; }
+    if (r.ok) {
+        const ledger = had
+            ? { ...had, read: had.read + had.missed.filter(k => r.states[k] === 'done').length, missed: [], added: had.added + r.added }
+            : { partial: false, pages: r.pages, read: r.pages - r.skipped, skipped: r.skipped, added: r.added };
+        setup = { ...setup, stopping: false, ledger, progress: { part: 'ledger', page: r.pages, pages: r.pages, states: r.states } };
+        return true;
+    }
     if (r.reason === 'pass' || r.reason === 'stopped') { setup = { ...setup, step: 'paused', stopping: false, progress: { part: 'ledger', page: r.page, pages: r.pages, states: r.states, error: r.error, reason: r.reason, added: r.added || 0 } }; renderSetup(); return false; }
     setup = { ...setup, step: 'review', stopping: false, progress: null, error: r.reason === 'canon-off' ? 'Canon is off, so there is no ledger to read the chat into.' : scenesRefusalText(r) };
     renderSetup();
@@ -1127,7 +1144,9 @@ async function takeScenes() {
 async function commitScenes() {
     if (!setup || !setup.scenes || setup.step !== 'review') return;
     keepReview();
-    if (setup.wantLedger && setup.canon && !setup.ledger && !(await readScenesLedger())) return;
+    // The ledger's own read: the whole chat where it was not filled with the record, else the parts that gave it nothing (D208).
+    const owed = !setup.ledger || (setup.ledger.merged && setup.ledger.missed.length > 0);
+    if (setup.wantLedger && setup.canon && owed && !(await readScenesLedger())) return;
     await takeScenes();
 }
 
@@ -1142,8 +1161,11 @@ async function resumeScenes({ skip = false } = {}) {
 async function takeScenesNow() {
     if (!setup || !setup.scenes || setup.step !== 'paused' || !setup.progress || setup.progress.part !== 'ledger') return;
     const g = setup.progress;
+    const had = setup.ledger && setup.ledger.merged ? setup.ledger : null;
     dropAdoptRead();
-    setup = { ...setup, step: 'busy', ledger: { partial: true, pages: g.pages, read: g.states.filter(x => x === 'done').length, skipped: g.states.filter(x => x === 'skipped').length, added: g.added || 0 } };
+    setup = { ...setup, step: 'busy', ledger: had
+        ? { ...had, read: had.read + had.missed.filter(k => g.states[k] === 'done').length, missed: [], added: had.added + (g.added || 0) }
+        : { partial: true, pages: g.pages, read: g.states.filter(x => x === 'done').length, skipped: g.states.filter(x => x === 'skipped').length, added: g.added || 0 } };
     await takeScenes();
 }
 
@@ -1694,6 +1716,11 @@ function build() {
         if (value) setup = { ...setup, names: setup.names.map(n => (n.id === nid ? { ...n, name: value } : n)) };
     });
     // The tick that a world's memory may be replaced lights Play as scenes; what was typed in the record is kept.
+    // Only the chat's last stretch asked for: there are no requests of a whole read for the ledger to be filled from (D208).
+    $(document).on('change', `${root()} .dooms-atlas-scenes-reach`, function () {
+        const recent = String($(`${root()} .dooms-atlas-scenes-reach:checked`).val() || '') === 'recent';
+        $(`${root()} .dooms-atlas-scenes-with-ledger`).prop('disabled', recent).closest('.dooms-atlas-check').toggleClass('is-off', recent);
+    });
     $(document).on('change', `${root()} .dooms-atlas-scenes-replace`, function () {
         if (!setup || !setup.scenes) return;
         keepReview();

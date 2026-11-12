@@ -1869,5 +1869,141 @@ console.log('\n§25 an ended scene deleted: what it changed in the world is take
     hub.__setRecapTransport(null);
 }
 
+console.log('\n§26 the ledger filled from the record\'s own requests: a long chat read once (D208)');
+{
+    ctxTarget.characters.push({ name: 'Edda', avatar: 'Edda.png', chat: 'Edda - long' });
+    ctxTarget.characterId = ctxTarget.characters.findIndex(c => c.avatar === 'Edda.png');
+    ctxTarget.name2 = 'Edda';
+    extensionSettings.lorebook = { enabled: false, campaigns: {}, campaignOrder: [], activeCampaignId: '' };
+    extensionSettings.canon.enabled = true;
+    const edda = 'Edda - long';
+    files.set(edda, { header: { chat_metadata: {} }, messages: [], avatar: 'Edda.png', chName: 'Edda' });
+    resetMeta();
+    chat.length = 0;
+    chat.push({ is_user: false, name: 'Edda', mes: 'The river begins at the weir.', swipe_id: 0, swipes: [], extra: {} });
+    ctxTarget.chatId = edda;
+    await loaders();
+    const leg = (i) => `leg-${String(i).padStart(3, '0')}`;
+    const filler = ' The barge drifts on under a white sky and Halla names the reeds aloud while the heron watches.'.repeat(9);
+    const LEGS = 90;
+    for (let i = 1; i <= LEGS; i++) { chat.push(user(`We pole past ${leg(i)}.`)); chat.push({ is_user: false, name: 'Edda', mes: `On ${leg(i)} Halla reads the water.${filler}`, swipe_id: 0, swipes: [], extra: {} }); }
+    const box = JSON.stringify({ date: { value: 'Day 90' }, time: { start: 'noon', end: 'dusk' }, location: { value: 'The river' }, weather: { emoji: '☁', forecast: 'white' } });
+    state.setLastGeneratedData({ ...state.lastGeneratedData, infoBox: box });
+    state.setCommittedTrackerData({ ...state.committedTrackerData, infoBox: box });
+    lw.recordCurrentScene();
+    await persistence.saveChatData({ immediate: true });
+
+    const plan = hub.scenesPlan();
+    const P = hub.adoptReach().pages;
+    const own = (prompt) => { const u = String((prompt && prompt.user) || ''); const m = u.split(/The scene(?:, continued)?:\n/); return m[m.length - 1]; };
+    const legsIn = (prompt) => (own(prompt).match(/On leg-\d{3}/g) || []).map(x => x.slice(3));
+    const wantsLedger = (prompt) => /"ledger": \{"add":/.test(prompt.system) && prompt.user.includes('The ledger so far:');
+    const ledgerShown = (prompt) => { const u = String(prompt.user); const a = u.indexOf('The ledger so far:'); if (a < 0) return ''; const b = u.search(/\n\n(The record so far|The lines just before|The scene)/); return u.slice(a, b > a ? b : u.length); };
+    const record = (prompt) => { const l = legsIn(prompt); return { recap: `The river ran as far as ${l[l.length - 1]}.`, people: [{ name: 'Halla', now: `On the river at ${l[l.length - 1]}.` }], threads: { closed: [], opened: [] } }; };
+    const fact = (prompt) => { const l = legsIn(prompt); return { kind: 'fact', name: `Reach ${l[0]}`, text: `Halla read the water from ${l[0]} to ${l[l.length - 1]}.` }; };
+    // What the narrator's stand-in answers: the record, and the ledger where it was asked for. `shape` changes one answer for a test.
+    let asked = [];
+    let shape = () => null;
+    hub.__setRecapTransport(async (prompt) => {
+        asked.push(prompt);
+        const made = shape(prompt, asked.length);
+        if (made instanceof Error) throw made;
+        if (typeof made === 'string') return made;
+        return JSON.stringify(wantsLedger(prompt) ? { ...record(prompt), ledger: { add: [fact(prompt)], drop: [] } } : record(prompt));
+    });
+    let canonAsked = [];
+    // Canon's own request for a part: the part itself comes after the lines that lead into it (D199).
+    const partOf = (prompt) => { const u = String(prompt.user); const k = u.lastIndexOf('(This part)\n'); return ((k >= 0 ? u.slice(k) : u).match(/On leg-\d{3}/g) || []).map(x => x.slice(3)); };
+    cn.__setCanonTransport(async (prompt) => { canonAsked.push(prompt); const l = partOf(prompt); return JSON.stringify({ add: [{ kind: 'fact', name: `Reach ${l[0]}`, text: `Read alone from ${l[0]}.` }], drop: [] }); });
+    const names = () => ((meta.dooms_canon && meta.dooms_canon.entries) || []).map(x => x.name);
+    const wipe = () => { cn.clearCanon(); hub.dropAdoptRead(); asked = []; canonAsked = []; shape = () => null; };
+
+    check('there is a long chat to read, and its ledger is empty', plan.ok && P >= 4 && P <= 8 && names().length === 0, JSON.stringify([plan.ok, plan.reason, P, names()]));
+
+    // Read once: every request gives the record of its part and the facts of it.
+    const steps = [];
+    const both = await hub.prepareAdopt({ whole: true, ledger: true, onStep: (g) => steps.push(g) });
+    const firsts = asked.map(a => legsIn(a)[0]);
+    const lasts = asked.map(a => { const l = legsIn(a); return l[l.length - 1]; });
+    check('with the ledger asked for, the chat is still read in a request a part, and Canon is not asked for anything by itself', both.ok && asked.length === P && canonAsked.length === 0 && both.pages === P, JSON.stringify([both.ok, both.reason, asked.length, canonAsked.length]));
+    check('every request is asked for the facts of its part beside the record, by Canon\'s own rules, the record first', asked.every(a => wantsLedger(a) && /only what the scenes establish outright, never what you infer/.test(a.system) && /at most 16 adds and 8 drops/.test(a.system) && /The record comes first: write "recap", "people" and "threads" in full before "ledger"\./.test(a.system) && a.system.indexOf('"recap"') < a.system.indexOf('"ledger"')));
+    check('the facts are written to the chat\'s ledger as each answer comes back: a fact a part, in order', both.ledger && same(both.ledger, { pages: P, read: P, missed: [], skipped: 0, added: P }) && same(names(), firsts.map(f => `Reach ${f}`)), JSON.stringify([both.ledger, names()]));
+    check('each request is shown the ledger as the parts before it left it: the first an empty one, the second the first part\'s fact', /The ledger so far:\n\(empty\)/.test(ledgerShown(asked[0])) && ledgerShown(asked[1]).includes(`- Reach ${firsts[0]}: Halla read the water from ${firsts[0]} to ${lasts[0]}.`) && !ledgerShown(asked[1]).includes(`Reach ${firsts[1]}`) && ledgerShown(asked[P - 1]).includes(`Reach ${firsts[P - 2]}`), JSON.stringify([ledgerShown(asked[0]), ledgerShown(asked[1]).slice(0, 200)]));
+    check('the record is what it was without the ledger: carried from request to request, the last word on each person kept', both.recap === `The river ran as far as ${leg(LEGS)}.` && both.continuity.people.length === 1 && both.continuity.people[0].now === `On the river at ${leg(LEGS)}.` && asked.every((a, i) => i === 0 || a.user.includes(`The river ran as far as ${lasts[i - 1]}.`)));
+    check('the panel is told the ledger rides with the record', steps.length === P + 1 && steps.every(g => g.part === 'record' && g.ledger === true));
+    check('the world is not made by the read: the ledger is the one thing it writes before the chat is taken', hub.worldEntry(plan.world.id) === null && hub.adoptPaused() === null);
+
+    // Not asked for, or Canon off: the read is the record's alone, as before.
+    wipe();
+    const plain = await hub.prepareAdopt({ whole: true });
+    check('not asked for, no request mentions the ledger, nothing is written to it and the answer has none', plain.ok && asked.length === P && asked.every(a => !/ledger/i.test(a.system) && !a.user.includes('The ledger so far')) && plain.ledger === null && names().length === 0);
+    wipe();
+    extensionSettings.canon.enabled = false;
+    const off = await hub.prepareAdopt({ whole: true, ledger: true });
+    extensionSettings.canon.enabled = true;
+    cn.onCanonChatChanged();
+    check('with Canon off there is no ledger to fill: the record is read alone though the ledger was asked for', off.ok && asked.every(a => !wantsLedger(a)) && off.ledger === null, JSON.stringify([off.ok, off.ledger]));
+
+    // An answer with the record and no ledger: the part is done for the record, missed for the ledger, and read again for it alone.
+    wipe();
+    shape = (prompt, n) => (n === 2 ? JSON.stringify(record(prompt)) : null);
+    const gap = await hub.prepareAdopt({ whole: true, ledger: true });
+    check('an answer that holds the record and no ledger is not a failed request: the read goes on, and that part is the ledger\'s to read again', gap.ok && asked.length === P && same(gap.ledger, { pages: P, read: P - 1, missed: [1], skipped: 0, added: P - 1 }) && !names().includes(`Reach ${firsts[1]}`) && gap.recap === `The river ran as far as ${leg(LEGS)}.`, JSON.stringify([gap.ok, gap.ledger, asked.length]));
+    const lsteps = [];
+    const again = await hub.readAdoptLedger({ only: gap.ledger.missed, onStep: (g) => lsteps.push(g.states.join(',')) });
+    check('read again for the ledger alone, only that part is asked for: one request, Canon\'s own, and the ledger has its fact', again.ok && again.some === 1 && again.added === 1 && again.skipped === 0 && canonAsked.length === 1 && partOf(canonAsked[0])[0] === firsts[1] && names().includes(`Reach ${firsts[1]}`) && names().length === P, JSON.stringify([again, canonAsked.length, names()]));
+    check('its bars show the other parts done already and that one being read', lsteps[0] === Array.from({ length: P }, (x, k) => (k === 1 ? 'run' : 'done')).join(',') && again.states.every(x => x === 'done'), JSON.stringify(lsteps));
+
+    // An answer that came back and cannot be read (cut short): asked again for the record alone.
+    wipe();
+    shape = (prompt, n) => (n === 2 ? '{"recap":"The river ran as far as leg-0' : null);
+    const cutShort = await hub.prepareAdopt({ whole: true, ledger: true });
+    check('an answer cut short is asked for again without the ledger, so the shorter answer can get through: the record is whole, that part is the ledger\'s to read again', cutShort.ok && asked.length === P + 1 && wantsLedger(asked[1]) && !wantsLedger(asked[2]) && !/ledger/i.test(asked[2].system) && legsIn(asked[1])[0] === legsIn(asked[2])[0] && wantsLedger(asked[3]) && same(cutShort.ledger.missed, [1]) && cutShort.ledger.added === P - 1 && cutShort.recap === `The river ran as far as ${leg(LEGS)}.`, JSON.stringify([cutShort.ok, cutShort.reason, asked.length, cutShort.ledger]));
+
+    // A request that did not come back at all: asked again as it was, ledger and all.
+    wipe();
+    shape = (prompt, n) => (n === 2 ? new Error('429 Too Many Requests') : null);
+    const held = await hub.prepareAdopt({ whole: true, ledger: true });
+    check('a request the connection refused is asked for again as it was, with the ledger: nothing is missed', held.ok && asked.length === P + 1 && wantsLedger(asked[2]) && same(held.ledger, { pages: P, read: P, missed: [], skipped: 0, added: P }), JSON.stringify([held.ok, asked.length, held.ledger]));
+
+    // A ledger that breaks the form, and one written beside the record instead of under it.
+    wipe();
+    shape = (prompt, n) => (n === 1 ? JSON.stringify({ ...record(prompt), ledger: { add: 'everything' } }) : n === 2 ? JSON.stringify({ ...record(prompt), add: [fact(prompt)], drop: [] }) : n === 3 ? JSON.stringify({ ...record(prompt), ledger: { add: [], drop: [] } }) : null);
+    const odd = await hub.prepareAdopt({ whole: true, ledger: true });
+    check('a ledger that breaks the form is a part missed and writes nothing; one written beside the record is taken; an empty one is a sound answer (nothing new in that part)', odd.ok && same(odd.ledger.missed, [0]) && odd.ledger.read === P - 1 && odd.ledger.added === P - 2 && !names().includes(`Reach ${firsts[0]}`) && names().includes(`Reach ${firsts[1]}`) && !names().includes(`Reach ${firsts[2]}`), JSON.stringify([odd.ledger, names()]));
+
+    // Failed twice, taken up again: the ledger goes on with the record.
+    wipe();
+    shape = (prompt) => (legsIn(prompt)[0] === firsts[2] ? new Error('503 from the provider') : null);
+    const stuck = await hub.prepareAdopt({ whole: true, ledger: true });
+    const pausedView = hub.adoptPaused();
+    check('a request that fails twice stops the read there with the record and the ledger as far as they got', stuck.ok === false && stuck.reason === 'pass' && stuck.page === 3 && stuck.ledger === true && !!pausedView && pausedView.ledger === true && same(names(), [`Reach ${firsts[0]}`, `Reach ${firsts[1]}`]), JSON.stringify([stuck, names()]));
+    asked = [];
+    shape = () => null;
+    const resumed = await hub.prepareAdopt({ whole: true, resume: true });
+    check('taken up again it goes on as it began, the ledger with it, though the call does not ask for it again', resumed.ok && asked.length === P - 2 && asked.every(wantsLedger) && same(resumed.ledger, { pages: P, read: P, missed: [], skipped: 0, added: P }) && names().length === P, JSON.stringify([resumed.ok, asked.length, resumed.ledger]));
+    wipe();
+    shape = (prompt) => (legsIn(prompt)[0] === firsts[1] ? new Error('503 from the provider') : null);
+    await hub.prepareAdopt({ whole: true, ledger: true });
+    const skipped = await hub.prepareAdopt({ whole: true, resume: true, skip: true });
+    check('a part skipped is skipped for both: the ledger holds nothing of it, and it is not counted as one to read again', skipped.ok && skipped.skipped === 1 && same(skipped.ledger, { pages: P, read: P - 1, missed: [], skipped: 1, added: P - 1 }) && !names().includes(`Reach ${firsts[1]}`), JSON.stringify(skipped.ledger));
+
+    // In one request: the whole chat, and more facts than a part gives.
+    wipe();
+    shape = (prompt) => JSON.stringify({ ...record(prompt), ledger: { add: Array.from({ length: 40 }, (x, k) => ({ kind: 'thing', name: `Reed ${k + 1}`, text: `Halla named reed ${k + 1} aloud.` })), drop: [] } });
+    const once = await hub.prepareAdopt({ whole: true, once: true, ledger: true });
+    check('read in one request, that one request gives the record and the ledger, and may add more than a part does', once.ok && once.once === true && asked.length === 1 && wantsLedger(asked[0]) && /at most 48 adds/.test(asked[0].system) && once.ledger.added === 40 && same(once.ledger.missed, []) && names().length === 40, JSON.stringify([once.ok, once.reason, once.ledger, names().length]));
+
+    // Taken: the world's memory holds the ledger the read filled.
+    wipe();
+    const fill = await hub.prepareAdopt({ whole: true, ledger: true });
+    const done = await hub.commitAdopt({ recap: fill.recap, continuity: { people: fill.continuity.people.map(x => ({ name: x.name, now: x.now })), opened: [], closed: [] } });
+    const entry = done.ok ? hub.worldEntry(done.worldId) : null;
+    const kept = entry && entry.memory.stores.dooms_canon ? entry.memory.stores.dooms_canon.entries.map(x => x.name) : [];
+    check('taken after it, the world\'s memory holds the ledger and the record, from the one read', done.ok && entry.scenes[0].recap === `The river ran as far as ${leg(LEGS)}.` && firsts.every(f => kept.includes(`Reach ${f}`)) && canonAsked.length === 0, JSON.stringify([done.ok, done.reason, kept.length, canonAsked.length]));
+    hub.__setRecapTransport(null);
+    cn.__setCanonTransport(null);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

@@ -1393,3 +1393,49 @@ what each will be, each opening marked in turn, Listen only with
 Voices, the one being read, one opening alone, none);
 `tools/hub-flow-test.mjs` §24 (the pending start carries the last-lines
 note, the continuity note and the card).
+
+## 47. A long chat read once: the ledger filled from the record's own requests (2026-11-12, D208)
+
+D198 read a long chat whole for Play as scenes, a request a part, and
+then offered the ledger "the same read": as many requests again, each
+part of the chat sent a second time. The owner, of that offer: "Why do I
+need to spend 12 more requests to do that, isn't that what the first one
+was supposed to do?" The two reads were kept apart because they are two
+requests with two forms (the record's, Canon's), not because the chat
+has to be read twice. Asked what was recommended: fold the ledger into
+the first read. "Go ahead."
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D208 | Each request of a whole-chat read is asked for the record of its part and for the ledger's facts of it | **The request.** `buildRecapPrompt` takes a `ledger` (the entries so far, the names the story knows, the player's): the answer's shape gains a last key, `"ledger": {"add": [...], "drop": [...]}`, the rules are Canon's own word for word (`canonAsk`, which Canon's request is now built from too, so the two cannot drift), the request is shown "The ledger so far", told to read this part alone for it (the record so far is not a source: its facts are in the ledger already), that an empty add is a sound answer, and to write the record in full first. A part may add 16 and drop 8, as a scene's page does in Canon's own run; the whole chat in one request 48. **The answer.** The record is read as before; the ledger's part (`ledgerOfReply`: under its key, or written beside the record, or a bare list of adds) is checked and written by Canon (`applyCanonReply`) as a run of its own is, so the next request is shown the ledger as this one left it. A ledger that breaks the form writes nothing and is not held against Canon. **What cannot be made worse.** The longer answer is the likelier one to be cut short, and the read cannot go on without the record. So an answer that came back and could not be read is asked for a second time for the record alone; a request that did not come back at all (the connection, a limit) is asked for again as it was. An answer with the record and no usable ledger is not a failed request: the read goes on and that part is one the ledger missed. A part skipped is skipped for both. **Afterwards.** The review says what the ledger was given ("filled from the same requests: N facts added") and, where parts were missed, how many, with a tick (on) to read those parts alone for the ledger before the chat is taken: `readAdoptLedger({ only })`, Canon's own request for each, the other parts' bars standing as done. **The choice.** With Canon on, the first screen has "Fill the ledger from the same requests", ticked; it cannot be changed while only the last stretch is asked for (there is no whole read to fill it from). Unticked, the read is the record's alone and the ledger's own read of the whole chat is offered at the review as before, unticked now, since it was turned down a moment earlier. A read taken up again after a failure or Stop goes on as it began. With Canon off nothing is different. |
+
+What it does not do. The ledger is now written while the chat is read,
+before the chat is taken: it is the one thing a read changes, as Canon's
+own runs change it while a chat is played, and a read given up leaves
+the facts it found in the chat's ledger. Whether a model writes the
+record or the ledger less well when asked for both in one answer is not
+measured: the tests and the run in the real SillyTavern use a stand-in
+for the model, and the tick is there for the case that it does. An
+answer cut short inside its ledger is not salvaged (the record in it is
+complete by then); it is asked for again, at the cost of one request.
+The facts of every part are stamped with the chat's date as it stands
+now, as the ledger's own read stamped them. The last-stretch read (one
+request, the last forty messages) does not carry the ledger. Run in the
+real SillyTavern at a phone's width, through the panel: the tick, dimmed
+for the last stretch; three parts read in three requests with the
+ledger asked for in each; one answer without a ledger and one cut short
+(asked again for the record alone); the review's line and its offer;
+the two missed parts read for the ledger alone by Canon's request; the
+world's memory holding the three facts. With those two answers made to
+go wrong it took six requests; with none going wrong it takes three,
+where the two reads took six.
+
+Tests: `tools/hub-test.mjs` (the request with and without the ledger,
+Canon's rules in it word for word, the answer's ledger in each form);
+`tools/hub-flow-test.mjs` §26 (read once and Canon never asked by
+itself, the ledger growing from request to request, not asked for,
+Canon off, an answer without a ledger and its part read alone, one cut
+short, a connection refused, a form broken, taken up again, skipped, in
+one request, taken); `tools/atlas-browser-test.mjs` §5g (the tick, the
+line while it reads, a failure, the review in each case, done, a
+phone).

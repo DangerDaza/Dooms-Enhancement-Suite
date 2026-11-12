@@ -161,19 +161,38 @@ function sortForBlock(list) {
 }
 
 /**
+ * What the request asks for, in parts: the JSON's shape, the rules, the
+ * ledger so far and the names the story knows. Canon's own request is
+ * made of them, and so is the request that asks for the ledger together
+ * with something else (docs/long-shot-plan.md D208: the record of a long
+ * chat, a page at a time), so that the two cannot drift apart.
+ * @returns {{ shape: string, rules: string, ledger: string, known: string[] }}
+ */
+export function canonAsk({ entries = [], player = '', names = [], adds = ADDS_PER_RUN, drops = DROPS_PER_RUN } = {}) {
+    const players = (Array.isArray(player) ? player : [player]).map(p => clean(p, MAX_NAME)).filter(Boolean);
+    const known = (Array.isArray(names) ? names : []).map(n => clean(n, MAX_NAME)).filter(Boolean).slice(0, 40);
+    return {
+        shape: '{"add":[{"kind":"person|place|thing|fact|promise|secret","name":"<who or what, as the story spells it>","text":"<one line, present tense: the fact as the scenes establish it now>"}],"drop":["<the name of an entry the scenes have made untrue>"]}',
+        rules: `only what the scenes establish outright, never what you infer; a person's line says who they are to the story now (their place in it, what they want, what they have done), not their looks; a place's line what it is and what happened there; a thing's line what it is and who holds it; a fact is anything else established; a promise is something owed or sworn, by whom to whom; a secret is something revealed to the player that others do not know; an entry that changed is an add under the same kind and name (it replaces the old line); at most ${adds} adds and ${drops} drops, the new and the changed first; nothing already in the ledger unless it changed; names as the story spells them${players.length ? `; the player (${players.join(' / ')}) is never an entry` : ''}`,
+        ledger: ledgerLines(Array.isArray(entries) ? entries : []),
+        known,
+    };
+}
+
+/**
  * The request (D107): the ledger so far, the recent scenes, the exact
  * JSON asked for. Only what the scenes establish, in present tense, one
  * line each; a change to an entry is an add under the same kind and name.
  * @returns {{ system: string, user: string }}
  */
 export function buildCanonPrompt({ entries = [], recent = '', now = {}, player = '', names = [], adds = ADDS_PER_RUN, drops = DROPS_PER_RUN } = {}) {
-    const players = (Array.isArray(player) ? player : [player]).map(p => clean(p, MAX_NAME)).filter(Boolean);
-    const known = (Array.isArray(names) ? names : []).map(n => clean(n, MAX_NAME)).filter(Boolean).slice(0, 40);
+    const ask = canonAsk({ entries, player, names, adds, drops });
+    const known = ask.known;
     const system = `You keep the canon of a roleplay: the facts the story has established, as a ledger of one-line entries. You never write story and you never guess. From the ledger so far and the recent scenes, answer with ONE JSON object and nothing else:
-{"add":[{"kind":"person|place|thing|fact|promise|secret","name":"<who or what, as the story spells it>","text":"<one line, present tense: the fact as the scenes establish it now>"}],"drop":["<the name of an entry the scenes have made untrue>"]}
-Rules: only what the scenes establish outright, never what you infer; a person's line says who they are to the story now (their place in it, what they want, what they have done), not their looks; a place's line what it is and what happened there; a thing's line what it is and who holds it; a fact is anything else established; a promise is something owed or sworn, by whom to whom; a secret is something revealed to the player that others do not know; an entry that changed is an add under the same kind and name (it replaces the old line); at most ${adds} adds and ${drops} drops, the new and the changed first; nothing already in the ledger unless it changed; names as the story spells them${players.length ? `; the player (${players.join(' / ')}) is never an entry` : ''}; no commentary, no code fences.`;
+${ask.shape}
+Rules: ${ask.rules}; no commentary, no code fences.`;
     const user = `The ledger so far:
-${ledgerLines(entries) || '(empty)'}
+${ask.ledger || '(empty)'}
 ${known.length ? `\nNames the story knows: ${known.join(', ')}\n` : ''}
 Now: ${[now.date, now.time].filter(Boolean).join(', ') || 'unknown'}${now.location ? `, at ${now.location}` : ''}.
 

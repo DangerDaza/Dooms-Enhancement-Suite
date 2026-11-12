@@ -14,7 +14,7 @@
  * src/systems/features/hub.js; the window is the Atlas (src/systems/ui/atlas.js).
  */
 import { normalizeWorldState, jsonObjectsIn, sameName } from './liveWorld.js';
-import { normalizeCanon, buildCanonBlock } from './canon.js';
+import { normalizeCanon, buildCanonBlock, canonAsk } from './canon.js';
 import { normalizeHooks, takeHook as takeHookPure, recordTaken, questFromHook } from './questHooks.js';
 import { sceneFactsFrom, cleanWhen } from './questCut.js';
 import { normalizeBook } from './atlas.js';
@@ -40,6 +40,8 @@ export const MAX_TITLE = 60;           // a scene's title
 export const MAX_SCENES = 200;
 export const MAX_CONFLICTS = 6;        // contradictions a scene's record may hold (D190)
 export const RECAP_CHARS = 600;
+export const LEDGER_ADDS = 16;         // what the ledger may add from one part of a long chat when it is asked for with the record (D208): Canon's own cap for a scene's page
+export const LEDGER_DROPS = 8;
 export const OLD_RECAP_CHARS = 200;    // the recaps of all but the last RECENT_RECAPS
 export const RECENT_RECAPS = 20;
 export const RECAP_BUDGET = 24000;     // characters of the scene's text a recap or a Canon run over the scene reads
@@ -1011,21 +1013,43 @@ export function sceneTranscriptParts(chat, { budget = RECAP_BUDGET, persona = 'P
  * (D190), again in the same request.
  * @param {{ canon?: string, lore?: Array<{ name: string, text: string }>, standing?: string }|null} o.check
  */
-export function buildRecapPrompt({ transcript = '', brief = '', player = '', maxChars = RECAP_CHARS, soFar = '', last = true, continuity = null, check = null, lead = '' } = {}) {
+export function buildRecapPrompt({ transcript = '', brief = '', player = '', maxChars = RECAP_CHARS, soFar = '', last = true, continuity = null, check = null, lead = '', ledger = null } = {}) {
     const who = clean(player, 60) || 'the player';
+    // The ledger's facts asked for in the same answer (D208): a long chat is read once, each request giving the record of its
+    // part and what the part established. The ask is Canon's own (canonAsk), so the two requests cannot say different things.
+    const led = isObj(ledger) ? canonAsk({ entries: ledger.entries, player: ledger.players && ledger.players.length ? ledger.players : player, names: ledger.names, adds: ledger.adds || LEDGER_ADDS, drops: ledger.drops || LEDGER_DROPS }) : null;
     const blocks = continuity ? draftBlocks(continuity, { soFar: !!soFar }) : { people: '', threads: '' };
     const told = isObj(check) ? { canon: clean(check.canon, 2400), lore: (Array.isArray(check.lore) ? check.lore : []).filter(l => l && l.name && l.text).map(l => ({ name: clean(l.name, 60), text: clean(l.text, LORE_PER_PERSON) })), standing: clean(check.standing, LORE_STANDING + 400) } : null;
-    const shape = `{"recap": "<what happened in this scene>"${continuity ? ', "people": [{"name": "<someone in the scene>", "now": "<where they stand as the scene ends>"}], "threads": {"closed": [<numbers of the open threads this scene settled>], "opened": ["<a thread this scene leaves open>"]}' : ''}${told ? ', "conflicts": [{"scene": "<what the scene says or shows>", "established": "<what was established that it contradicts>", "source": "<where that was established>"}]' : ''}}`;
+    const shape = `{"recap": "<what happened in this scene>"${continuity ? ', "people": [{"name": "<someone in the scene>", "now": "<where they stand as the scene ends>"}], "threads": {"closed": [<numbers of the open threads this scene settled>], "opened": ["<a thread this scene leaves open>"]}' : ''}${told ? ', "conflicts": [{"scene": "<what the scene says or shows>", "established": "<what was established that it contradicts>", "source": "<where that was established>"}]' : ''}${led ? `, "ledger": ${led.shape}` : ''}}`;
     const against = told
         ? ` "conflicts": only where the scene plainly contradicts something established before it${told.canon ? ', in what the story has established' : ''}${told.lore.length ? ', in a person\'s own notes' : ''}${told.standing ? ', in the story\'s standing notes' : ''}${blocks.people ? ', or in where a person stood before the scene' : ''}: two things that cannot both be true. A change the scene itself brings about is not a contradiction (someone wounded who is healed in it, a debt that is paid in it, a place left). Something the notes do not speak of is not one either. "source" names where it was established (the ledger, a person's notes by their name, the standing notes, where a person stood). At most ${MAX_CONFLICTS}; an empty list when there are none, which is the usual case.`
         : '';
     const more = continuity
         ? ` "people": one entry for each person who took part in the scene or was changed by it, never ${who}; "now" is at most 280 characters, present tense: where they are, what state they are in, how they stand with ${who} and with the others, what they want, owe or have promised next. Where it is given how a person stood before, carry forward what still holds and change what the scene changed; say how things stand, not what kind of person they are. "threads.closed": the numbers of the open threads listed that this scene settled for good (done, answered, paid, given up); a thread that only moved forward stays open. "threads.opened": what the scene leaves unsettled and the story should come back to (a promise not yet kept, a question not answered, a danger not dealt with, a debt, a task taken on): at most 140 characters each, at most 6, none that is listed already. An empty list where there is nothing to say.`
         : '';
-    const system = `You write the record of a scene that has just ended, for the narrator of the next one. You answer with one JSON object and nothing else: ${shape}. Rules for "recap": at most ${maxChars} characters; past tense; ${who} by name; what was said, learned, promised, lost and gained; nothing that did not happen; no advice, no questions, no markup.${more}${against}${soFar ? ' The record so far covers the earlier part of the scene: carry what still matters forward and add what this part adds.' : ''}${!last ? ' This is not the end of the scene yet: the record will be continued.' : ''}`;
+    const alsoLedger = led
+        ? ` "ledger": apart from the record, you keep the canon of the story: the facts it has established, as a ledger of one-line entries. From the ledger so far and this part of the scene alone (not the record so far, whose facts are in the ledger already): ${led.rules}. An empty "add" where this part established nothing new. The record comes first: write "recap"${continuity ? ', "people" and "threads"' : ''} in full before "ledger".`
+        : '';
+    const system = `You write the record of a scene that has just ended, for the narrator of the next one. You answer with one JSON object and nothing else: ${shape}. Rules for "recap": at most ${maxChars} characters; past tense; ${who} by name; what was said, learned, promised, lost and gained; nothing that did not happen; no advice, no questions, no markup.${more}${against}${alsoLedger}${soFar ? ' The record so far covers the earlier part of the scene: carry what still matters forward and add what this part adds.' : ''}${!last ? ' This is not the end of the scene yet: the record will be continued.' : ''}`;
     const established = told ? `${told.canon ? `What the story has established (the ledger):\n${told.canon}\n\n` : ''}${told.lore.length ? `The people's own notes:\n${told.lore.map(l => `[${l.name}] ${l.text}`).join('\n')}\n\n` : ''}${told.standing ? `The story's standing notes:\n${told.standing}\n\n` : ''}` : '';
-    const user = `${brief ? `The scene's brief:\n${clean(brief, MAX_BRIEF)}\n\n` : ''}${established}${blocks.people ? `${blocks.people}\n\n` : ''}${blocks.threads ? `${blocks.threads}\n\n` : ''}${soFar ? `The record so far:\n${clean(soFar, 1500)}\n\n` : ''}${soFar && lead ? `The lines just before this part, already in the record so far (to read on from, not to record again):\n${lead}\n\n` : ''}The scene${soFar ? ', continued' : ''}:\n${transcript || '(nothing was played)'}\n\nAnswer with the JSON object only.`;
+    const user = `${brief ? `The scene's brief:\n${clean(brief, MAX_BRIEF)}\n\n` : ''}${established}${blocks.people ? `${blocks.people}\n\n` : ''}${blocks.threads ? `${blocks.threads}\n\n` : ''}${led ? `The ledger so far:\n${led.ledger || '(empty)'}\n${led.known.length ? `Names the story knows: ${led.known.join(', ')}\n` : ''}\n` : ''}${soFar ? `The record so far:\n${clean(soFar, 1500)}\n\n` : ''}${soFar && lead ? `The lines just before this part, already in the record so far (to read on from, not to record again):\n${lead}\n\n` : ''}The scene${soFar ? ', continued' : ''}:\n${transcript || '(nothing was played)'}\n\nAnswer with the JSON object only.`;
     return { system, user };
+}
+
+/**
+ * The ledger's part of an answer that carried it with the record (D208):
+ * the object under "ledger", or the add and drop a model wrote beside the
+ * record instead of under it. Null when the answer holds neither, which
+ * is a part the ledger got nothing from (read again for it by itself).
+ * @param {object|null} reply  parseRecapReply()'s `reply`
+ * @returns {{ add?: any, drop?: any }|null}
+ */
+export function ledgerOfReply(reply) {
+    if (!isObj(reply)) return null;
+    if (isObj(reply.ledger) && ('add' in reply.ledger || 'drop' in reply.ledger)) return reply.ledger;
+    if (Array.isArray(reply.ledger)) return { add: reply.ledger };    // the adds alone, as a list
+    if ('add' in reply || 'drop' in reply) return { add: reply.add, drop: reply.drop };
+    return null;
 }
 
 /** The recap read: the JSON's recap, else the plain text when the reply is prose; cut to the length, empty when nothing usable. `reply` is the JSON itself (what else it says is read by continuity.js), null for prose. */

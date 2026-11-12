@@ -16,7 +16,7 @@ import {
     sealStores, takeSnapshot, sealSnapshot, factsFrom, weatherText, seedStores,
     personLine, buildBrief, buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle,
     hubMark, readMark, markEnded, sceneHeader, sceneFileName,
-    sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, buildOpenersPrompt as openersPromptOf, buildRecapPrompt, parseRecapReply, isStaleScene, markIsOfFile,
+    sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, buildOpenersPrompt as openersPromptOf, buildRecapPrompt, parseRecapReply, ledgerOfReply, LEDGER_ADDS, LEDGER_DROPS, isStaleScene, markIsOfFile,
     openSceneOf, asideScenes, openScene, setSceneAside, resumeScene, endSceneRecord, reopenScene, sceneByChat, markChatGone, renameSceneChat, removeGoneScene, reconcileScenesWithChats, lastRecaps,
     canDeleteScene, deleteKind, deleteSceneRecord, describeDeleteResult,
     hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE, backupFileName,
@@ -24,7 +24,7 @@ import {
 } from '../src/utils/hub.js';
 import { normalizePack, seedWorldState, countMessage, applyAdvance, reconcileWithChat, seenInScene } from '../src/utils/liveWorld.js';
 import { visitPlace, reconcileVisited } from '../src/utils/worldMap.js';
-import { emptyCanon, applyCanon, countCanonReply, reconcileCanon, buildCanonBlock } from '../src/utils/canon.js';
+import { emptyCanon, applyCanon, countCanonReply, reconcileCanon, buildCanonBlock, buildCanonPrompt, canonAsk } from '../src/utils/canon.js';
 import { emptyHooks, proposeRound } from '../src/utils/questHooks.js';
 
 let failures = 0;
@@ -495,6 +495,29 @@ console.log('\n§9 the lines');
     check('the status line: narrated, counted, the open scene', hubStatusLine({ worldName: 'Harbourside', entry, cardName: 'Mara' }) === 'Harbourside: narrated by Mara; 1 scene played, 1 set aside; scene 3 open at The quay since Day 14.', hubStatusLine({ worldName: 'Harbourside', entry, cardName: 'Mara' }));
     check('no card: says so; no open scene: the world\'s date', hubStatusLine({ worldName: 'W', entry: null }).includes('no narrator card') && hubStatusLine({ worldName: 'W', entry: setSceneAside(entry, 's3').entry }).endsWith("the world's date is Day 14, noon."));
     check('start and end described', describeStartResult({ ok: true, scene: { id: 's3', place: { label: 'The quay' } } }) === 'Scene 3 is open at The quay.' && describeStartResult({ ok: false, reason: 'scene-open' }).includes('still open') && describeStartResult({ ok: false, reason: 'weird', error: 'boom' }).includes('boom') && describeEndResult({ ok: true, recap: 'kept', canon: 'ok', world: 'skipped', book: 'ok' }) === 'The scene is ended and remembered (the recap kept, the ledger read, the world not moved, the continuity book written).' && /the continuity book "FD - Scenes Continuity" made/.test(describeEndResult({ ok: true, recap: 'kept', book: 'ok', bookResult: { made: true, name: 'FD - Scenes Continuity' } })) && /the continuity book not written/.test(describeEndResult({ ok: true, recap: 'kept', book: 'failed' })) && /Kiyoha left as you wrote it in the book/.test(describeEndResult({ ok: true, recap: 'kept', continuityKept: ['Kiyoha'] })) && describeEndResult({ ok: false, reason: 'changed' }).includes('end it again'));
+}
+
+console.log('\nthe ledger asked for with the record (D208)');
+{
+    const entries = [{ id: 'c1', kind: 'person', name: 'Old Marit', text: 'Keeps the ferry and owes Jordan a crossing.', pinned: false, at: 1 }];
+    const base = { transcript: 'Jordan: I pay.\nNarrator: Marit takes the coin.', player: 'Jordan', maxChars: 1200, soFar: 'Jordan came to the ferry.', last: false, continuity: { people: [], threads: [] } };
+    const plain = buildRecapPrompt(base);
+    const both = buildRecapPrompt({ ...base, ledger: { entries, names: ['Old Marit', 'Captain Rey'], players: ['Jordan', 'Jo'] } });
+    const ask = canonAsk({ entries, player: ['Jordan', 'Jo'], names: ['Old Marit', 'Captain Rey'], adds: LEDGER_ADDS, drops: LEDGER_DROPS });
+    check('without the ledger the request is what it was: no word of it', !/ledger/i.test(plain.system) && !plain.user.includes('The ledger so far'));
+    check('with it, the answer\'s shape carries the ledger last, after the record, the people and the threads', both.system.includes(`, "ledger": ${ask.shape}}`) && both.system.indexOf('"recap"') < both.system.indexOf('"people"') && both.system.indexOf('"threads"') < both.system.indexOf('"ledger"'));
+    check('the rules are Canon\'s own, word for word, with a scene\'s caps and the player kept out', both.system.includes(ask.rules) && /at most 16 adds and 8 drops/.test(both.system) && /the player \(Jordan \/ Jo\) is never an entry/.test(both.system) && buildCanonPrompt({ entries, player: ['Jordan', 'Jo'], names: [], adds: LEDGER_ADDS, drops: LEDGER_DROPS }).system.includes(ask.rules));
+    check('it is told to read this part alone for the ledger, that nothing new is a sound answer, and to write the record first', /this part of the scene alone \(not the record so far, whose facts are in the ledger already\)/.test(both.system) && /An empty "add" where this part established nothing new\./.test(both.system) && /The record comes first: write "recap", "people" and "threads" in full before "ledger"\./.test(both.system));
+    check('the request shows the ledger so far and the names the story knows, before the record so far and the part', both.user.includes('The ledger so far:\nPeople:\n- Old Marit: Keeps the ferry and owes Jordan a crossing.\nNames the story knows: Old Marit, Captain Rey\n') && both.user.indexOf('The ledger so far:') < both.user.indexOf('The record so far:') && both.user.indexOf('The record so far:') < both.user.indexOf('The scene, continued:'));
+    check('an empty ledger says so; more adds can be asked for (the whole chat in one request)', buildRecapPrompt({ ...base, ledger: { entries: [] } }).user.includes('The ledger so far:\n(empty)\n') && /at most 48 adds/.test(buildRecapPrompt({ ...base, ledger: { entries: [], adds: 48 } }).system));
+    check('with no continuity asked for, the record is the recap alone and the ledger still follows it', /The record comes first: write "recap" in full before "ledger"\./.test(buildRecapPrompt({ transcript: 't', player: 'Jordan', ledger: { entries: [] } }).system));
+    // The answer's ledger.
+    const reply = (text) => parseRecapReply(text, { maxChars: 1200 });
+    const under = reply('{"recap":"They crossed.","people":[],"threads":{"closed":[],"opened":[]},"ledger":{"add":[{"kind":"fact","name":"The crossing","text":"Jordan crossed at dusk."}],"drop":["Old debt"]}}');
+    check('the ledger under its own key is read with the record', under.ok && under.recap === 'They crossed.' && JSON.stringify(ledgerOfReply(under.reply)) === '{"add":[{"kind":"fact","name":"The crossing","text":"Jordan crossed at dusk."}],"drop":["Old debt"]}');
+    check('adds written beside the record, or the ledger as a bare list of adds, are taken too', JSON.stringify(ledgerOfReply(reply('{"recap":"r","add":[{"kind":"fact","name":"n","text":"t"}],"drop":[]}').reply)) === '{"add":[{"kind":"fact","name":"n","text":"t"}],"drop":[]}' && JSON.stringify(ledgerOfReply(reply('{"recap":"r","ledger":[{"kind":"fact","name":"n","text":"t"}]}').reply)) === '{"add":[{"kind":"fact","name":"n","text":"t"}]}');
+    check('an answer with the record and no ledger, a ledger that is no object, or prose, has none', ledgerOfReply(reply('{"recap":"r","people":[]}').reply) === null && ledgerOfReply(reply('{"recap":"r","ledger":"none"}').reply) === null && ledgerOfReply(reply('They crossed at dusk.').reply) === null && ledgerOfReply(null) === null && ledgerOfReply(reply('{"recap":"r","ledger":{}}').reply) === null);
+    check('an answer cut off inside its ledger holds no record that can be read: it is asked for again', reply('{"recap":"They crossed.","people":[],"ledger":{"add":[{"kind":"fact","name":"The cro').ok === false);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
