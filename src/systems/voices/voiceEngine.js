@@ -30,7 +30,7 @@ import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { hasPendingAliasDecision, structuralCanonical } from '../features/characterAliases.js';
 import { resolveActiveUserName } from '../ui/portraitBar.js';
 import { DOOMS_TRACKER_UPDATE_COMPLETE } from '../generation/apiClient.js';
-import { segmentMessageForTts, bubbleIndex } from './segmenter.js';
+import { segmentMessageForTts, segmentTextForTts, bubbleIndex } from './segmenter.js';
 import { normalizeSegments, dropAlreadyRead, joinSegmentText, hashText } from './segments.js';
 import { trackerRawForMessage, presentNames, isPresentOnPanel } from './presence.js';
 import { resolveVoice, describeReason, lookupByName } from './voiceResolver.js';
@@ -284,8 +284,10 @@ function voiceFor(speaker) {
  * Turns segments into a playable job: one voice per segment, by the scene rule.
  * @param {import('./segments.js').Segment[]} segments
  */
-function buildJob(segments, { messageId = null, source, auto = false, highlightMessage = true }) {
+function buildJob(segments, { messageId = null, source, auto = false, highlightMessage = true, presentNames = null }) {
     const presence = presenceFor(messageId);
+    // People said to be there by the caller (D207: an opening names who is in it, and the tracker of the chat in front is not about it).
+    const named = Array.isArray(presentNames) ? lowerSet(presentNames.map(n => canonicalName(n) || n)) : null;
     const narrator = voices().narratorVoice;
     const deviceCaps = caps();
     const jobSegments = [];
@@ -294,7 +296,7 @@ function buildJob(segments, { messageId = null, source, auto = false, highlightM
     for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
         const speaker = seg.speaker ? canonicalName(seg.speaker) : null;
-        const present = speaker ? isPresentOnPanel(speaker, presence) : false;
+        const present = speaker ? ((named && named.has(String(speaker).toLowerCase())) || isPresentOnPanel(speaker, presence)) : false;
         const own = voiceFor(speaker);
         const { ref, reason } = resolveVoice({ seg: { ...seg, speaker }, present, ref: own, narrator, caps: deviceCaps });
         const provider = routeFor(ref);
@@ -392,6 +394,44 @@ export function speakReasoning(messageId, text) {
     if (toggleIfSame('reasoning', messageId)) return;
     const segments = normalizeSegments([{ speaker: null, kind: 'narration', text }]);
     play(buildJob(segments, { messageId, source: 'reasoning', highlightMessage: false }));
+}
+
+/**
+ * A text that is no message of the chat, read as one would be
+ * (docs/long-shot-plan.md D207: an opening on the Start sheet). Speech in
+ * dialogue colours goes to its speaker's voice where they are among
+ * `present` (or on the panel), the rest to the Narrator. Pressed again
+ * for the text it is reading, it stops.
+ * @param {string} text
+ * @param {{ key?: string, present?: string[], name?: string }} [opts]  `key` names this text among others (one opening of three)
+ * @returns {'playing'|'stopped'|'empty'|'off'}
+ */
+export function speakText(text, { key = '', present = null, name = '' } = {}) {
+    if (toggleIfSame('text', null, key)) return 'stopped';
+    const segments = segmentTextForTts(text, { resolveSpeaker: canonicalName, name });
+    if (!segments.length) { toast('info', 'Nothing to read there.', 3000); return 'empty'; }
+    const job = buildJob(segments, { messageId: null, source: 'text', highlightMessage: false, presentNames: present });
+    job.key = key;
+    if (!job.segments.length) return 'off';    // no voice service connected: said once by buildJob
+    play(job);
+    return 'playing';
+}
+
+/** Whether a voice service is set up here, so that something can be read at all. Says nothing itself. */
+export function canSpeak() {
+    return anyProviderConnected();
+}
+
+/** The key of the text being read by speakText, or '' when none is. */
+export function speakingTextKey() {
+    const cur = player.getCurrentJob();
+    return cur && cur.source === 'text' ? String(cur.key ?? '') : '';
+}
+
+/** Stops a text being read by speakText; anything else that is playing is left alone. */
+export function stopText() {
+    const cur = player.getCurrentJob();
+    if (cur && cur.source === 'text') player.stop();
 }
 
 /**

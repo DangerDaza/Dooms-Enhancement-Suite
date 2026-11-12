@@ -106,6 +106,33 @@ export function segmentMessageForTts(messageId, opts = {}) {
     return normalize(rawFromHtml(messageId, msg));
 }
 
+/**
+ * A text that is no message of the chat, split as a message would be
+ * (docs/long-shot-plan.md D207: an opening on the Start sheet, before its
+ * chat exists). Formatted as SillyTavern formats a message, then read
+ * with the bubble parser: speech marked with dialogue colours goes to its
+ * speaker, the rest is narration. A text the parser cannot take is one
+ * line of narration.
+ * @param {string} text
+ * @param {{ name?: string, resolveSpeaker?: (n: string) => string|null }} [opts]
+ * @returns {import('./segments.js').Segment[]}
+ */
+export function segmentTextForTts(text, opts = {}) {
+    const raw = String(text ?? '');
+    if (!raw.trim()) return [];
+    const maxSegments = Number(extensionSettings.voices?.maxSegmentsPerMessage) || 24;
+    const div = document.createElement('div');
+    try { div.innerHTML = messageFormatting(raw, opts.name || '', false, false, -1); } catch (e) { div.textContent = raw; }
+    div.querySelectorAll(STRIP_SELECTOR).forEach(el => el.remove());
+    let segs = null;
+    try {
+        removeGfxBlocks(div);
+        segs = parseSegmentsForTts(div, null).map(seg => ({ speaker: seg.narrator ? null : seg.speaker, kind: seg.narrator ? 'narration' : 'dialogue', text: htmlToText(seg.html) }));
+    } catch (e) { segs = null; }
+    if (!segs || !segs.length) segs = [{ speaker: null, kind: 'narration', text: div.textContent || raw }];
+    return normalizeSegments(segs, { maxSegments, resolveSpeaker: opts.resolveSpeaker });
+}
+
 /** DOM index of a bubble among its message's bubbles (for "read from here"). */
 export function bubbleIndex(bubbleEl) {
     const mes = bubbleEl?.closest('.mes');

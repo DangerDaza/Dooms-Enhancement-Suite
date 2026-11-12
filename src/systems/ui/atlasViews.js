@@ -215,7 +215,7 @@ export function atlasSetupHtml({ step = 'notes', notes = '', reach = 'recent', c
  * @param {string} o.whereNew        a place typed in that is not on any map yet
  * @param {{ kind: string, label?: string }|null} o.from   what the scene is started from, said under the title
  */
-export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: '' }, sceneNo = 0, people = [], cast = [], extra = '', gap = { id: 'now', words: '' }, journey = '', seedText = '', note = '', error = '', pending = null, card = '', places = null, whereNew = '', from = null } = {}) {
+export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: '' }, sceneNo = 0, people = [], cast = [], extra = '', gap = { id: 'now', words: '' }, journey = '', seedText = '', note = '', error = '', pending = null, card = '', places = null, whereNew = '', from = null, chosen = 0, voices = false, listening = -1 } = {}) {
     const known = !!(place && place.label);
     const where = known ? place.label : (pending && pending.place && pending.place.label) || 'here';
     const title = `${sceneNo ? `Scene ${sceneNo}` : 'A scene'}${known ? ` at ${e(where)}` : ''}`;
@@ -224,14 +224,22 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
     if (step === 'pick') {
         const p = pending && typeof pending === 'object' ? pending : { openers: [], when: null };
         const when = p.when ? [p.when.date, p.when.time].filter(Boolean).join(', ') : '';
-        const openers = (Array.isArray(p.openers) ? p.openers : []).map((o, i) => `<li class="dooms-atlas-opener">
-                <h4>${e(o.title || `Opening ${i + 1}`)}</h4>
+        // The three openings are the swipes of the scene's first message (D207): one of them is shown first, which is all
+        // there is to choose, so there is one Start and a mark on the one to show. Each can be heard where Voices is on.
+        const list = Array.isArray(p.openers) ? p.openers : [];
+        const first = Math.min(Math.max(0, chosen | 0), Math.max(0, list.length - 1));
+        // The one marked is the first swipe; the others follow it in their order, so they are numbered from 2 as they will be in the chat.
+        let nth = 1;
+        const openers = list.map((o, i) => `<li class="dooms-atlas-opener${i === first ? ' is-chosen' : ''}" data-choice="${i}">
+                <label class="dooms-atlas-opener-head"><input type="radio" name="dooms-atlas-opener" class="dooms-atlas-opener-pick" value="${i}"${i === first ? ' checked' : ''} />
+                    <h4>${e(o.title || `Opening ${i + 1}`)}</h4>
+                    <span class="dooms-atlas-opener-tag">${i === first ? 'shown first' : `swipe ${++nth}`}</span></label>
                 <p>${e(o.text)}</p>
-                <button type="button" class="dooms-atlas-btn is-primary" data-act="scene-pick" data-choice="${i}"><i class="fa-solid fa-play" aria-hidden="true"></i> <span>Open with this</span></button>
+                ${voices ? `<button type="button" class="dooms-atlas-btn dooms-atlas-listen${listening === i ? ' is-on' : ''}" data-act="scene-listen" data-choice="${i}" aria-pressed="${listening === i ? 'true' : 'false'}" title="Read this opening aloud with Voices"><i class="fa-solid ${listening === i ? 'fa-stop' : 'fa-volume-high'}" aria-hidden="true"></i> <span>${listening === i ? 'Stop' : 'Listen'}</span></button>` : ''}
             </li>`).join('');
         return `<div class="dooms-atlas-setup-card is-review is-scene">
             <h3>How does ${sceneNo ? `scene ${sceneNo}` : 'the scene'} open?</h3>
-            <p>${e(where)}${when ? ` · ${e(when)}` : ''}. Pick one; the other two stay as swipes on the first message.</p>
+            <p>${e(where)}${when ? ` · ${e(when)}` : ''}. ${list.length > 1 ? `All ${list.length === 3 ? 'three' : list.length} are swipes of the scene's first message. Mark the one to show first.` : ''}</p>
             ${tailLine(p.tail)}
             ${loreLine(p.lore)}
             ${contLine(p.continuity)}
@@ -240,6 +248,7 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
             <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">Or write the opening yourself</span>
                 <textarea class="dooms-atlas-input dooms-atlas-scene-own" maxlength="4000" placeholder="The first message of the scene, in the narrator's voice."></textarea></label>
             <div class="dooms-atlas-setup-actions">
+                ${list.length ? `<button type="button" class="dooms-atlas-btn is-primary" data-act="scene-pick"><i class="fa-solid fa-play" aria-hidden="true"></i> <span>Start ${sceneNo ? `scene ${sceneNo}` : 'the scene'}</span></button>` : ''}
                 <button type="button" class="dooms-atlas-btn" data-act="scene-own"><i class="fa-solid fa-pen" aria-hidden="true"></i> <span>Open with mine</span></button>
                 <button type="button" class="dooms-atlas-btn" data-act="scene-again"><i class="fa-solid fa-rotate" aria-hidden="true"></i> <span>Ask again</span></button>
                 <button type="button" class="dooms-atlas-btn" data-act="scene-back">Back</button>

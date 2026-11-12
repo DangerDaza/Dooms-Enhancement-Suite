@@ -1357,3 +1357,39 @@ newest deleted, one from the middle, no log, the Undo of an End, ended
 twice, a log gone); `tools/hub-test.mjs` (which scenes, the words);
 `tools/atlas-browser-test.mjs` §5k (Delete on ended scenes, the
 question in each case, scene 0, a chat gone).
+
+## 46. The pick of openings: one Start, and each opening can be heard (2026-11-12, D207)
+
+The sheet that asks how a scene opens (D174) showed three openings with
+a button under each, "Open with this". The owner, of that screen: "Can
+we add the option to have these read by the AI", and "it's kind of
+weird that we have three start with this buttons [when they] all just
+go into the swipes anyway". Both are true of what was built: whichever
+was pressed, all three became swipes of the scene's first message
+(D119), so the three buttons chose only which one was in front.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D207 | One Start for the three openings, a mark on the one shown first, and Listen on each where Voices is on | **One Start.** The sheet has one primary button, "Start scene N", and each opening is a card with a mark (a radio) in its title: the marked one is the first swipe, the others follow it in their order, and each says what it will be ("shown first", "swipe 2", "swipe 3"). The first is marked until another is; a press anywhere on a card marks it; the mark is changed in place, so what is typed in "Or write the opening yourself" stays. Open with mine, Ask again and Back are as they were. With no opening written there is no Start, as before. **Listen.** Where DES Voices is on, each card has a Listen button. It reads the opening as a message of the chat is read: the text is formatted as SillyTavern formats a message and split by the same parser (`segmentTextForTts`), speech in dialogue colours goes to its speaker's voice, the rest to the Narrator's; the people the opening names count as present for the scene rule, since the tracker of the chat in front is not about a scene that does not exist yet (`speakText`, `presentNames`). The one being read says Stop; pressed, it stops; another one pressed takes its place; read to its end, it says Listen again (the buttons follow Voices' own `dooms:voices-state`, in place). The reading is stopped when the sheet goes away: Start, Ask again, Back, Close, Escape, the Atlas closed. With Voices on and no voice service set up, Listen says so every time it is pressed (the engine says it once in a session, and a button that does nothing is no answer). With Voices off there is no button. **Found on the way.** The sheet is drawn from the pending start (`pendingStart`), which carried neither the note of which last lines the openings were shown (D205) nor the continuity note (D178): both were in the view and in what `prepareScene` returned, and never on the screen. It carries them now, with the name of the card that will speak. |
+
+What it does not do. An opening is plain prose, so most of one is read
+in the Narrator's voice, speech in quotes included: only speech marked
+with a dialogue colour has a speaker to give it to, as in a chat
+message. What is typed in the player's own box cannot be listened to.
+Listen costs what reading a message costs (a request to the voice
+service for each stretch), and is not kept: the same opening heard
+again in the chat is asked for again. Run in the real SillyTavern at a
+phone's width with the voice service stubbed: no button with Voices
+off, the notice with no service, the text and voice of each request,
+one reading taking another's place, stopped by a second press, the
+button back to Listen at the end, the mark moved by a press on a card
+and on a title with the typed text kept, Start pressed during a reading
+(it stopped, the scene opened on the marked opening with the other two
+as swipes 2 and 3), and the D205 line on the screen. Not heard with a
+real voice, and not on a real phone.
+
+Tests: `tools/atlas-browser-test.mjs` §5h (one Start, the marks and
+what each will be, each opening marked in turn, Listen only with
+Voices, the one being read, one opening alone, none);
+`tools/hub-flow-test.mjs` §24 (the pending start carries the last-lines
+note, the continuity note and the card).

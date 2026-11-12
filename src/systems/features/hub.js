@@ -978,7 +978,9 @@ export function setHubHookAside(worldId, hookId) {
 
 /** The pending Start, for the picker. */
 export function pendingStart() {
-    return pending ? { token: pending.token, world: { id: pending.worldId, name: pending.pack.name }, place: pending.place, cast: pending.cast, gap: pending.gap, openers: pending.openers, when: pending.when, errors: pending.errors, notes: pending.notes, lore: pending.lore || null } : null;
+    return pending ? { token: pending.token, world: { id: pending.worldId, name: pending.pack.name }, place: pending.place, cast: pending.cast, gap: pending.gap, openers: pending.openers, when: pending.when, errors: pending.errors, notes: pending.notes, lore: pending.lore || null,
+        // What the openings were written with, for the sheet to say (D178, D205), and the card that will speak them (D207).
+        continuity: pending.continuity || null, tail: pending.tail || null, card: { name: (pending.card && pending.card.name) || '' } } : null;
 }
 
 /** Ask again (D119): three more; the old ones stay until the new land. */

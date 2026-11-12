@@ -251,6 +251,14 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-opener h4 { margin: 0; font-size: 1em; font-family: var(--atlas-display); color: var(--atlas-text); overflow-wrap: anywhere; }
 .dooms-atlas-setup-card .dooms-atlas-opener p { flex: 1 1 auto; font-size: 0.88em; line-height: 1.45; max-height: 210px; overflow: auto; overflow-wrap: anywhere; }
 .dooms-atlas-opener .dooms-atlas-btn { align-self: flex-start; }
+/* The opening shown first is marked, not started from its own button (D207): all three are swipes of the first message. */
+.dooms-atlas-opener-head { display: flex; align-items: center; gap: 8px; cursor: pointer; min-width: 0; }
+.dooms-atlas-opener-head input { flex: 0 0 auto; margin: 0; width: 1.05em; height: 1.05em; accent-color: var(--atlas-accent); }
+.dooms-atlas-opener-head h4 { flex: 1 1 auto; min-width: 0; }
+.dooms-atlas-opener-tag { flex: 0 0 auto; font-size: 0.72em; letter-spacing: 0.04em; text-transform: uppercase; color: var(--atlas-muted); border: 1px solid var(--atlas-line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.dooms-atlas-opener.is-chosen { border-color: var(--atlas-accent); box-shadow: inset 0 0 0 1px var(--atlas-accent); }
+.dooms-atlas-opener.is-chosen .dooms-atlas-opener-tag { color: var(--atlas-accent2); border-color: var(--atlas-accent2); }
+.dooms-atlas-listen.is-on { border-color: var(--atlas-accent2); color: var(--atlas-accent2); }
 /* Ending a scene (D176): what End does, a part a row, with its state at the right. */
 .dooms-atlas-parts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .dooms-atlas-part { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); font-size: 0.88em; }

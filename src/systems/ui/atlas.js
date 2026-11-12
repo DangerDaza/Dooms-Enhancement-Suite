@@ -28,6 +28,7 @@ import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHt
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
 import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml } from './atlasViews.js';
 import { isCanonOn } from '../features/canon.js';
+import { isVoicesEnabled, getEngine, getEngineIfLoaded, unlockVoicesAudio } from '../voices/voiceBoot.js';
 import { sceneAway, deletePlan, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, hubWorldIds, cardOf, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
 import { describeStartResult, describeEndResult, describeDeleteResult, gapOf, hubConfig } from '../../utils/hub.js';
 
@@ -564,10 +565,11 @@ function showMarker(id) {
 /** The set-up's panel drawn (or put away). */
 function renderSetup() {
     const $p = $(`${root()} .dooms-atlas-setup`);
+    if (!setup || !setup.start || setup.step !== 'pick') stopListening();    // an opening being read belongs to the pick that is going away (D207)
     $(root()).toggleClass('has-sheet', !!setup);    // on a phone the sidebar makes way for a sheet (D196)
     if (!setup) { $p.prop('hidden', true).empty(); return; }
     const scroll = $p.find('.dooms-atlas-setup-list').scrollTop() || 0;
-    $p.prop('hidden', false).html(setup.gen ? atlasWorldGenHtml(setup) : setup.naming ? atlasNamesHtml(setup) : setup.end ? atlasEndSceneHtml(setup) : setup.start ? atlasStartSceneHtml(setup) : setup.scenes ? atlasScenesHtml(setup) : setup.fill ? atlasFillHtml({ ...setup, step: setup.step }) : atlasSetupHtml({ ...setup, onMap: model ? model.all.length : 0 }));
+    $p.prop('hidden', false).html(setup.gen ? atlasWorldGenHtml(setup) : setup.naming ? atlasNamesHtml(setup) : setup.end ? atlasEndSceneHtml(setup) : setup.start ? atlasStartSceneHtml({ ...setup, voices: voicesOn(), listening: listeningIndex() }) : setup.scenes ? atlasScenesHtml(setup) : setup.fill ? atlasFillHtml({ ...setup, step: setup.step }) : atlasSetupHtml({ ...setup, onMap: model ? model.all.length : 0 }));
     $p.find('.dooms-atlas-setup-list').scrollTop(scroll);
     // A read with a bar a request (D198): the one being asked for is kept in view in a long list.
     const now = $p.find('.dooms-atlas-pass.is-run, .dooms-atlas-pass.is-retry, .dooms-atlas-pass.is-failed')[0];
@@ -882,14 +884,73 @@ async function writeOpenings() {
     const p = await prepareScene({ worldId: setup.worldId, seed, place: f.place.id || f.place.label ? f.place : null, cast: f.cast, gap: f.gap, note: f.note });
     if (!setup || !setup.start) { cancelStart(); return; }    // the sheet was closed meanwhile
     if (!p.ok) { setup = { ...setup, step: 'form', error: describeStartResult(p) }; renderSetup(); return; }
-    setup = { ...setup, step: 'pick', pending: pendingStart() || p, error: p.errors && p.errors.length ? p.errors.join(' ') : '' };
+    setup = { ...setup, step: 'pick', chosen: 0, pending: pendingStart() || p, error: p.errors && p.errors.length ? p.errors.join(' ') : '' };
     renderSetup();
 }
 
 /** The scene started with one of the openings, or the player's own: its chat is written and opened, and the Atlas makes way for it. */
+/** Whether Voices is switched on, so that an opening can be heard. */
+const voicesOn = () => { try { return isVoicesEnabled(); } catch (e) { return false; } };
+/** Which opening of the pick in front is being read, or -1. */
+function listeningIndex() {
+    try {
+        const engine = getEngineIfLoaded();
+        const key = engine && typeof engine.speakingTextKey === 'function' ? engine.speakingTextKey() : '';
+        const p = pendingStart();
+        const mine = p ? `opening:${p.token}:` : '';
+        const i = mine && key.startsWith(mine) ? Number(key.slice(mine.length)) : NaN;
+        return Number.isInteger(i) && i >= 0 ? i : -1;
+    } catch (e) { return -1; }
+}
+
+/** The key Voices knows an opening by while it reads it: the Start it belongs to and which of its openings it is. */
+const openingKey = (i) => { const p = pendingStart(); return `opening:${p ? p.token : 0}:${i}`; };
+
+/**
+ * An opening read aloud with Voices (D207), as a message of the chat is:
+ * speech in dialogue colours in its speaker's voice (the people of the
+ * opening count as present), the rest in the Narrator's. Pressed again
+ * for the one being read, it stops; another one takes its place.
+ */
+function listenToOpening(i) {
+    const pending = pendingStart();
+    const o = pending && Array.isArray(pending.openers) ? pending.openers[i] : null;
+    if (!setup || !setup.start || setup.step !== 'pick' || !o) return;
+    try { unlockVoicesAudio(); } catch (e) { /* the browser allows sound after a press either way */ }
+    const present = [...(Array.isArray(o.who) ? o.who : []), ...(Array.isArray(pending.cast) ? pending.cast : [])];
+    getEngine().then((engine) => {
+        // No voice service set up: said every time Listen is pressed, here (the engine says it once in a session, and a button that does nothing is no answer).
+        if (typeof engine.canSpeak === 'function' && !engine.canSpeak()) { try { toastr.info('No voice service is connected yet. Settings \u2192 Voices sets one up.', 'Listen', { timeOut: 6000 }); } catch (err) { /* no notices */ } return; }
+        engine.speakText(o.text, { key: openingKey(i), present, name: (pending.card && pending.card.name) || '' });
+        syncListening();
+    })
+        .catch((e) => { try { toastr.warning('Voices could not start.', 'Listen', { timeOut: 5000 }); } catch (err) { /* no notices */ } console.error('[Dooms Tracker] Listen failed:', e); });
+}
+
+/** The Listen buttons brought up to what is being read, in place: the sheet is not drawn again (what was typed and scrolled stays). */
+function syncListening() {
+    const engine = getEngineIfLoaded();
+    const key = engine && typeof engine.speakingTextKey === 'function' ? engine.speakingTextKey() : '';
+    $(`${root()} .dooms-atlas-listen`).each(function () {
+        const on = !!key && key === openingKey(Number(this.getAttribute('data-choice')) || 0);
+        this.classList.toggle('is-on', on);
+        this.setAttribute('aria-pressed', on ? 'true' : 'false');
+        const icon = this.querySelector('i');
+        if (icon) { icon.classList.toggle('fa-stop', on); icon.classList.toggle('fa-volume-high', !on); }
+        const label = this.querySelector('span');
+        if (label) label.textContent = on ? 'Stop' : 'Listen';
+    });
+}
+
+/** An opening being read is stopped: the sheet it is on is going away, or its openings are being replaced. */
+function stopListening() {
+    try { const engine = getEngineIfLoaded(); if (engine && typeof engine.stopText === 'function') engine.stopText(); } catch (e) { /* nothing was playing */ }
+}
+
 async function openWith(choice, ownText = '') {
     const pending = pendingStart();
     if (!setup || !setup.start || setup.step !== 'pick' || !pending) return;
+    stopListening();
     const keep = setup;
     setup = { ...setup, step: 'opening', error: '' };
     renderSetup();
@@ -908,7 +969,7 @@ async function askOpeningsAgain() {
     renderSetup();
     const r = await askOpenersAgain(pending.token);
     if (!setup || !setup.start) return;
-    setup = { ...setup, step: 'pick', pending: pendingStart() || setup.pending, error: r.ok ? '' : (r.errors ? r.errors.join(' ') : describeStartResult(r)) };
+    setup = { ...setup, step: 'pick', chosen: r.ok ? 0 : (setup.chosen || 0), pending: pendingStart() || setup.pending, error: r.ok ? '' : (r.errors ? r.errors.join(' ') : describeStartResult(r)) };
     renderSetup();
     if (own) $(`${root()} .dooms-atlas-scene-own`).val(own);
 }
@@ -1440,15 +1501,17 @@ function build() {
             }
             if (act === 'hook-drop') { if (between()) { result = setHubHookAside(source.worldId, this.getAttribute('data-hook')) ? 'Set aside; it will not be offered again.' : 'That hook could not be set aside.'; render(); } return; }
             if (act === 'scene-write') { await writeOpenings(); return; }
-            if (act === 'scene-pick') { await openWith(Number(this.getAttribute('data-choice')) || 0); return; }
+            // One Start for the three openings (D207): the one marked is shown first, the others are its swipes.
+            if (act === 'scene-pick') { const marked = Number($(`${root()} .dooms-atlas-opener-pick:checked`).val()); await openWith(Number.isInteger(marked) && marked >= 0 ? marked : 0); return; }
+            if (act === 'scene-listen') { listenToOpening(Number(this.getAttribute('data-choice')) || 0); return; }
             if (act === 'scene-own') {
                 const own = String($(`${root()} .dooms-atlas-scene-own`).val() || '').trim();
                 if (!own) { if (setup && setup.start) { setup = { ...setup, error: 'Write the opening first, or pick one above.' }; renderSetup(); } return; }
                 await openWith(0, own);
                 return;
             }
-            if (act === 'scene-again') { await askOpeningsAgain(); return; }
-            if (act === 'scene-back') { cancelStart(); if (setup && setup.start) { setup = { ...setup, step: 'form', pending: null, error: '' }; renderSetup(); } return; }
+            if (act === 'scene-again') { stopListening(); await askOpeningsAgain(); return; }
+            if (act === 'scene-back') { stopListening(); cancelStart(); if (setup && setup.start) { setup = { ...setup, step: 'form', pending: null, error: '' }; renderSetup(); } return; }
             if (act === 'setup-draft') { await runSetup(); return; }
             if (act === 'setup-stop') { stopSetup(); if (setup) { setup = { ...setup, progress: { ...setup.progress, word: 'Stopping after this part…' } }; renderSetup(); } return; }
             if (act === 'setup-back') { if (setup) { setup = { ...setup, step: 'notes', error: '' }; renderSetup(); } return; }
@@ -1659,6 +1722,26 @@ function build() {
         startFromLine(kind, this.textContent, i === null ? -1 : Number(i));
     });
     $(document).on('change', `${root()} .dooms-atlas-scene-where`, function () { sceneWhereChanged(); });
+    // The opening marked to be shown first (D207): kept, and shown on the cards in place (what was typed below stays).
+    $(document).on('change', `${root()} .dooms-atlas-opener-pick`, function () {
+        const i = Number($(this).val()) || 0;
+        if (setup && setup.start) setup = { ...setup, chosen: i };
+        let nth = 1;    // the others follow the marked one in their order: swipes 2 and 3, as they will be in the chat
+        $(`${root()} .dooms-atlas-opener`).each(function () {
+            const mine = Number(this.getAttribute('data-choice')) || 0;
+            this.classList.toggle('is-chosen', mine === i);
+            const tag = this.querySelector('.dooms-atlas-opener-tag');
+            if (tag) tag.textContent = mine === i ? 'shown first' : `swipe ${++nth}`;
+        });
+    });
+    // A press anywhere on an opening marks it, not only on its title (its Listen button is its own).
+    $(document).on('click', `${root()} .dooms-atlas-opener`, function (ev) {
+        if ($(ev.target).closest('button, label, input, a').length) return;
+        const radio = this.querySelector('.dooms-atlas-opener-pick');
+        if (radio && !radio.checked) { radio.checked = true; $(radio).trigger('change'); }
+    });
+    // Voices says when a reading starts or ends: the Listen buttons follow.
+    document.addEventListener('dooms:voices-state', () => { if (isOpen && setup && setup.start && setup.step === 'pick') syncListening(); });
     $(document).on('change', `${root()} .dooms-atlas-world-select`, function () { pickWorld(String($(this).val() || '')); });
     $(document).on('keydown', (ev) => {
         if (!isOpen || isFacePopoverOpen() || !takesEscape('atlas', ev)) return;
@@ -1738,6 +1821,7 @@ export function closeAtlas() {
     roading = null;
     cardMode = 'view';
     if (setup && setup.step === 'busy') { stopSetup(); if (setup.scenes) stopAdopt(); }    // a read in hand stops after its request; what it read is kept to carry on from
+    stopListening();
     setup = null;
     undoBook = null;
     picked = '';         // the Atlas opens on the chat in front again
