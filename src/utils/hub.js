@@ -1226,6 +1226,7 @@ export function describeStartResult(r) {
         openers: 'The narrator wrote no usable opener; write your own, ask again, or start without one.',
         file: 'SillyTavern refused the new chat file.',
         open: 'The chat is written; open it from Scenes.',
+        'chat-gone': 'That scene\'s chat file is not there any more, so it was not opened. Its record stays in the list.',
         busy: 'Another request is running; try again in a moment.',
         cancelled: 'Nothing was started.',
     };

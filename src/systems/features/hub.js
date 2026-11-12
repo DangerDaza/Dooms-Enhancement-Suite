@@ -205,6 +205,17 @@ function defaultBridge() {
         name2: () => { try { return String(ctx().name2 || ''); } catch (e) { return ''; } },
         selectCharacterById: (i) => call('selectCharacterById', i),
         openCharacterChat: (file) => call('openCharacterChat', file),
+        // SillyTavern is told which card is in front, the way a click on it in its character list tells it (D202). It
+        // records that only from its own clicks, not from a card selected for it: without this a reload goes back to
+        // the card that was last clicked, not to the scene's.
+        setActive: (avatar) => {
+            try {
+                if (typeof ST.setActiveCharacter !== 'function') return false;
+                ST.setActiveCharacter(avatar);
+                if (typeof ST.saveSettingsDebounced === 'function') ST.saveSettingsDebounced();
+                return true;
+            } catch (e) { return false; }
+        },
         unshallowCharacter: async (i) => { try { if (typeof ctx().unshallowCharacter === 'function') await ctx().unshallowCharacter(i); } catch (e) { /* an older build */ } },
         getCharacters: async () => { try { if (typeof ctx().getCharacters === 'function') await ctx().getCharacters(); } catch (e) { /* an older build */ } },
         saveChat: async () => { try { if (typeof ctx().saveChat === 'function') return await ctx().saveChat(); } catch (e) { /* fall through */ } return saveChatConditional(); },
@@ -988,6 +999,7 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
             if (String(b.characterId()) !== String(p.card.index) || b.groupId()) throw new Error('the narrator card could not be selected (a generation running?)');
         }
         await b.openCharacterChat(fileName);
+        b.setActive(p.card.avatar);    // a reload comes back to this card, and so to this scene (D202)
     } catch (e) {
         const error = String(e && e.message || e);
         log('the scene chat could not be opened', error);
@@ -2089,7 +2101,15 @@ export function setSceneAside(worldId, id) {
     return true;
 }
 
-/** Opens a scene's chat on its card (Resume, Open the chat). */
+/**
+ * A scene's chat put in front (D123). The file is looked for first (D202):
+ * SillyTavern asked to open a chat that is not there makes an empty one of
+ * that name and shows it, which reads as a scene that lost its messages.
+ * A scene whose file is gone is marked so and not opened. The card is
+ * then recorded as the one in front, so a reload comes back to it. The
+ * answer says when the chat came up with nothing in it.
+ * @returns {Promise<{ ok: boolean, reason?: string, error?: string, empty?: boolean, messages?: number }>}
+ */
 export async function openSceneChat(worldId, id) {
     const e = store().worlds[String(worldId || '')];
     const s = e ? e.scenes.find(x => x.id === id) : null;
@@ -2098,6 +2118,16 @@ export async function openSceneChat(worldId, id) {
     if (!card) return { ok: false, reason: 'card-gone' };
     const b = bridge();
     if (ST.is_send_press === true) return { ok: false, reason: 'busy' };
+    // Is the file there? Asked of SillyTavern's own list of the card's chats. A list that cannot be had is no answer:
+    // the chat is opened as before.
+    const same = (a, c) => String(a || '').replace(/\.jsonl$/i, '').toLowerCase() === String(c || '').replace(/\.jsonl$/i, '').toLowerCase();
+    let listed = null;
+    try { listed = (await b.listChats(card.avatar)).map(c => String(c.file_name || c.file_id || '')); } catch (err) { listed = null; log('the card\'s chats could not be listed before the scene was opened', String(err && err.message || err)); }
+    if (listed && !listed.some(n => same(n, s.chat))) {
+        log(`scene ${id}: its chat "${s.chat}" is not among the ${listed.length} chats of ${card.avatar}; it is not opened`, listed.slice(0, 40));
+        try { await refreshScenes(String(worldId)); } catch (err) { /* the list says so when it is next read */ }
+        return { ok: false, reason: 'chat-gone', missing: s.chat };
+    }
     if (!(await flushChat())) log('the chat in front could not be flushed before the switch; its last edits may be lost');
     try {
         await b.unshallowCharacter(card.index);
@@ -2108,7 +2138,10 @@ export async function openSceneChat(worldId, id) {
             if (String(b.characterId()) !== String(card.index) || b.groupId()) throw new Error('the narrator card could not be selected (a generation running?)');
         }
         await b.openCharacterChat(s.chat);
-        return { ok: true };
+        b.setActive(card.avatar);
+        const messages = (chatArray() || []).filter(m => m && !m.is_system).length;
+        log(`scene ${id}: "${s.chat}" of ${card.avatar} is in front with ${messages} ${messages === 1 ? 'message' : 'messages'}`);
+        return { ok: true, empty: messages === 0, messages };
     } catch (e) {
         return { ok: false, reason: 'open', error: String(e && e.message || e) };
     }

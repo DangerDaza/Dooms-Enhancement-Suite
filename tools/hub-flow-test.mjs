@@ -42,7 +42,9 @@ const patched = before
     .replace('export const saveChatConditional = anything;', 'export const saveChatConditional = async () => { globalThis.__DES_SAVES__.immediate++; if (globalThis.__DES_PERSIST__) globalThis.__DES_PERSIST__(); };')
     .replace('export const getRequestHeaders = anything;', 'export const getRequestHeaders = () => ({});')
     .replace('export const user_avatar = anything;', "export const user_avatar = 'jordan.png';")
-    + '\nexport let is_send_press = false;\nexport const __setSendPress = (v) => { is_send_press = v; };\n';
+    + '\nexport let is_send_press = false;\nexport const __setSendPress = (v) => { is_send_press = v; };\n'
+    // SillyTavern's own record of the card in front (what a reload comes back to), told by name (D202).
+    + 'export const setActiveCharacter = (a) => { (globalThis.__DES_ACTIVE__ = globalThis.__DES_ACTIVE__ || []).push(a); };\n';
 if (patched === before || !patched.includes('getRequestHeaders = () => ({})')) { console.error('FAIL: the script stub was not patched (an import changed name?)'); process.exit(1); }
 writeFileSync(scriptStub, patched);
 const extStub = `${SANDBOX}/scripts/extensions.js`;
@@ -145,6 +147,7 @@ const lw = await import(`${DES}/src/systems/features/liveWorld.js`);
 const cn = await import(`${DES}/src/systems/features/canon.js`);
 const inv = await import(`${DES}/src/systems/features/inventory.js`);
 const hub = await import(`${DES}/src/systems/features/hub.js`);
+const hubUtils = await import(`${DES}/src/utils/hub.js`);
 
 let failures = 0;
 const check = (label, cond, extra = '') => {
@@ -538,6 +541,7 @@ console.log('\n§9 a chat already played, taken as where a campaign\'s scenes be
     const p = await hub.prepareScene({ worldId: 'first-descent', place: { id: storyPlaces[0], label: 'Hask' }, cast: ['Kiyoha'], gap: { id: 'now' } });
     const r = p.ok ? await hub.commitScene(p.token, { choice: 0 }) : p;
     const saved = r.ok ? files.get(r.file) : null;
+    check('SillyTavern is told the scene\'s card is the one in front, so a reload comes back to the scene (D202)', (globalThis.__DES_ACTIVE__ || []).includes('The Redward.png'), JSON.stringify(globalThis.__DES_ACTIVE__));
     check('a first scene starts from it: scene 1 on the narrator\'s card, told what happened last time', p.ok && r.ok && r.scene.id === 's1' && saved.avatar === 'The Redward.png' && openers.user.includes('Last scene: The company came up from the Fourth Landing') && saved.header.chat_metadata.dooms_hub.brief.includes('Last time: The company came up'), JSON.stringify([p.ok, p.reason, r.ok, r.reason]));
     check('the scene opens on the player\'s map: the book rides the scene\'s header', !!saved && same(saved.header.chat_metadata.dooms_atlas.spots, { 'pin:hask': { x: 1, y: 1 } }) && saved.header.chat_metadata.dooms_atlas.made[0].label === 'Hask' && saved.header.chat_metadata.dooms_world.pack === 'first-descent');
     check('a scene chat cannot itself be taken', hub.isScene() && hub.scenesPlan().reason === 'scene' && (await hub.commitAdopt({ recap: 'x' })).reason === 'scene');
@@ -1548,6 +1552,39 @@ console.log('\n§21 a long chat read whole: a request a page, stopped, failed, t
     chat.length = 1;
     hub.__setRecapTransport(null);
     cn.__setCanonTransport(null);
+}
+
+console.log('\n§22 a scene opened from the list: its file looked for first, its card recorded as the one in front (D202)');
+{
+    const W = 'first-descent';
+    ctxTarget.characterId = ctxTarget.characters.findIndex(c => c.avatar === 'Saga.png');
+    ctxTarget.name2 = 'Saga';
+    await openPlain('Saga - elsewhere');
+    const sc = hub.worldEntry(W).scenes.find(x => x.id === 's1');
+    const kept = files.get(sc.chat);
+    globalThis.__DES_ACTIVE__ = [];
+    opens.length = 0;
+    const ok = await hub.openSceneChat(W, 's1');
+    check('a scene whose chat is there is opened from another card\'s chat, and the answer says how many messages came up', ok.ok && ok.empty === false && ok.messages >= 1 && ctxTarget.chatId === sc.chat && ctxTarget.characters[ctxTarget.characterId].avatar === 'The Redward.png', JSON.stringify([ok, ctxTarget.chatId]));
+    check('SillyTavern is told the scene\'s card is the one in front: a reload comes back to it, not to the card last clicked', same(globalThis.__DES_ACTIVE__, ['The Redward.png']), JSON.stringify(globalThis.__DES_ACTIVE__));
+    // The file gone: SillyTavern asked for it would make an empty chat of that name and show it.
+    ctxTarget.characterId = ctxTarget.characters.findIndex(c => c.avatar === 'Saga.png');
+    ctxTarget.name2 = 'Saga';
+    await openPlain('Saga - elsewhere');
+    files.delete(sc.chat);
+    globalThis.__DES_ACTIVE__ = [];
+    opens.length = 0;
+    const gone = await hub.openSceneChat(W, 's1');
+    check('a scene whose chat file is not there is not opened: nothing is asked of SillyTavern, the chat in front stays, and the answer names the file', gone.ok === false && gone.reason === 'chat-gone' && gone.missing === sc.chat && !opens.some(o => o.startsWith('open:')) && ctxTarget.chatId === 'Saga - elsewhere' && globalThis.__DES_ACTIVE__.length === 0, JSON.stringify([gone, opens]));
+    check('its record is marked gone and kept, and the words say what happened', hub.worldEntry(W).scenes.find(x => x.id === 's1').gone === true && /chat file is not there any more/.test(hubUtils.describeStartResult(gone)), hubUtils.describeStartResult(gone));
+    files.set(sc.chat, kept);
+    await hub.refreshScenes(W);
+    check('the file back, the record is a scene again', hub.worldEntry(W).scenes.find(x => x.id === 's1').gone === false);
+    // A chat that is there with nothing in it: opened, and said.
+    files.set(sc.chat, { ...kept, messages: [] });
+    const empty = await hub.openSceneChat(W, 's1');
+    check('a chat that comes up with nothing in it is opened and the answer says so, for the player to be told', empty.ok && empty.empty === true && empty.messages === 0, JSON.stringify(empty));
+    files.set(sc.chat, kept);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

@@ -1364,7 +1364,11 @@ function build() {
             if (act === 'sc-resume' || act === 'sc-open') {
                 const world = hubWorld();
                 const r = act === 'sc-resume' ? await resumeScene(world, sid) : await openSceneChat(world, sid);
-                if (r.ok) closeAtlas(); else { result = describeStartResult(r); render(); }
+                if (r.ok) {
+                    closeAtlas();
+                    // A chat that came up with nothing in it is said, not left to be read as a blank screen (D202).
+                    if (r.empty) { try { toastr.warning('This scene\'s chat opened with no messages in it. If it had some, SillyTavern keeps copies of chats in its backups folder (data, your user, backups).', 'Scene', { timeOut: 15000 }); } catch (e) { /* no notices */ } }
+                } else { result = describeStartResult(r); render(); }
                 return;
             }
             if (act === 'sc-end') {

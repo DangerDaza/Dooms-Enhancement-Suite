@@ -1161,3 +1161,31 @@ it, a click held back 330, 420 and 700 ms (the owner's report, which
 the first guard fails), an entry elsewhere pressed at once, the scene's
 list there, three taps to close, a short screen, the choice taken
 back).
+
+## 41. A scene opened: its file looked for, its card the one in front (2026-11-12, D202)
+
+The owner, after updating and reloading: opening a scene gave a chat
+with nothing in it ("are scenes not saving?"), and a reload should come
+back to the scene that was being played, as it does for an ordinary
+chat. The cause of the empty chat was not found by reading; running a
+real SillyTavern here to reproduce it was not permitted in this
+session. What was read is SillyTavern 1.19.0's own source, and it gives
+two things the Hub did not allow for.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D202 | A scene's file is looked for before it is opened, and its card is recorded as the one in front | **Looked for first.** SillyTavern asked to open a chat that is not on the disk does not refuse: its reader returns nothing, it shows an empty chat, and it saves an empty file under that name ("make sure the chat appears on the server", `getChatResult`). From the Scenes list that reads as a scene that lost its messages. So `openSceneChat` asks SillyTavern's own list of the card's chats first; a scene whose file is not in it is marked gone and not opened, and the Atlas says "That scene's chat file is not there any more, so it was not opened". A list that cannot be had is no answer, and the chat is opened as before. **Said when it is empty.** A chat that is there and comes up with no messages is opened, and a notice says so and where SillyTavern keeps its copies of chats. **The card in front.** SillyTavern's "Auto-load Last Chat" comes back, after a reload, to its `active_character`, and it records that only from its own clicks (the character list, the welcome screen, `/go`), not when a card is selected for it. A scene opened by the Hub on a card other than the one last clicked was therefore not what a reload came back to. The Hub now records the scene's card (`setActiveCharacter`, where the build has it) when it opens a scene's chat, from the list or as a new scene. The chat the card opens on was already the scene: SillyTavern's `openCharacterChat` keeps that on the card. |
+
+What it does not do. It does not explain the owner's empty chat; if the
+file is missing the Atlas will now say so, and if it is there and empty
+the notice will, and either answer narrows it. The log line written at
+each open (the file asked for, the card, how many messages came up) is
+there for a report. A reload comes back to a scene only where
+SillyTavern's own "Auto-load Last Chat" is on; that is its setting, and
+the Hub does not open chats by itself at startup. Opening a scene from
+SillyTavern's own chat list goes through none of this.
+
+Tests: `tools/hub-flow-test.mjs` §22 (a scene opened from another
+card's chat, the card recorded; the file gone: nothing asked of
+SillyTavern, the record marked, the words; the file back; a chat with
+nothing in it) and §9 (a new scene records its card).
