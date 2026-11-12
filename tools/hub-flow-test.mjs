@@ -44,7 +44,8 @@ const patched = before
     .replace('export const user_avatar = anything;', "export const user_avatar = 'jordan.png';")
     + '\nexport let is_send_press = false;\nexport const __setSendPress = (v) => { is_send_press = v; };\n'
     // SillyTavern's own record of the card in front (what a reload comes back to), told by name (D202).
-    + 'export const setActiveCharacter = (a) => { (globalThis.__DES_ACTIVE__ = globalThis.__DES_ACTIVE__ || []).push(a); };\n';
+    + 'export const setActiveCharacter = (a) => { (globalThis.__DES_ACTIVE__ = globalThis.__DES_ACTIVE__ || []).push(a); };\n'
+    + 'export const closeCurrentChat = async () => (typeof globalThis.__DES_CLOSE_CHAT__ === "function" ? globalThis.__DES_CLOSE_CHAT__() : false);\n';
 if (patched === before || !patched.includes('getRequestHeaders = () => ({})')) { console.error('FAIL: the script stub was not patched (an import changed name?)'); process.exit(1); }
 writeFileSync(scriptStub, patched);
 const extStub = `${SANDBOX}/scripts/extensions.js`;
@@ -80,6 +81,7 @@ const ctxTarget = {
     saveChat: async () => { saves.immediate++; persist(); },
     getCharacters: async () => {},
     unshallowCharacter: async () => {},
+    tags: [], tagMap: {},    // SillyTavern's tags and which card has which (D209)
 };
 const opens = [];
 /** SillyTavern's save: the chat in front written to its file, metadata and messages. */
@@ -126,6 +128,7 @@ globalThis.fetch = async (url, init) => {
         return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
     }
     if (url === '/api/chats/save') {
+        if (globalThis.__DES_CHAT_SAVE_FAILS__) return { ok: false, status: 500, json: async () => ({}), text: async () => 'no' };
         files.set(body.file_name, { header: body.chat[0], messages: body.chat.slice(1), avatar: body.avatar_url, chName: body.ch_name });
         return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
     }
@@ -157,8 +160,25 @@ globalThis.fetch = async (url, init) => {
         return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
     }
     if (url === '/api/characters/create') {
-        ctxTarget.characters.push({ name: body.ch_name, avatar: `${body.ch_name}.png`, chat: `${body.ch_name} - new` });
-        return { ok: true, status: 200, text: async () => body.ch_name, json: async () => ({}) };
+        // SillyTavern's own route: the file is named after the card, with a number where that name is taken; what it was sent is kept.
+        if (globalThis.__DES_CREATE_FAILS__) return { ok: false, status: 500, json: async () => ({}), text: async () => 'no' };
+        let base = String(body.ch_name);
+        for (let k = 1; ctxTarget.characters.some(c => c.avatar === `${base}.png`); k++) base = `${body.ch_name}${k}`;
+        ctxTarget.characters.push({ name: body.ch_name, avatar: `${base}.png`, chat: `${body.ch_name} - new`, data: { creator_notes: body.creator_notes, alternate_greetings: body.alternate_greetings }, description: body.description, first_mes: body.first_mes });
+        return { ok: true, status: 200, text: async () => `${base}.png`, json: async () => ({}) };
+    }
+    if (url === '/api/characters/delete') {
+        // SillyTavern's own route: the card goes, and its chats with it when asked. Its list is read again by the one who asked:
+        // here the card in front keeps its place in the list by its avatar, as SillyTavern's getCharacters keeps it.
+        const i = ctxTarget.characters.findIndex(c => c.avatar === body.avatar_url);
+        if (globalThis.__DES_CARD_DELETE_FAILS__ || i < 0) return { ok: false, status: 400, json: async () => ({}), text: async () => '' };
+        if (ctxTarget.characterId === i) throw new Error('the card in front was deleted: SillyTavern would reload the page');
+        if (body.delete_chats) for (const [name, f] of [...files]) if (f.avatar === body.avatar_url) files.delete(name);
+        const front = ctxTarget.characterId !== undefined && ctxTarget.characterId !== null ? ctxTarget.characters[ctxTarget.characterId] : null;
+        ctxTarget.characters.splice(i, 1);
+        if (front) ctxTarget.characterId = ctxTarget.characters.indexOf(front);
+        opens.push(`delete-card:${body.avatar_url}`);
+        return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
     }
     return { ok: false, status: 404, json: async () => ({}), text: async () => '' };
 };
@@ -223,6 +243,9 @@ extensionSettings.perChatCharacterTracking = true;
 extensionSettings.characterInjection = { 'Old Marit': { description: 'Keeps the Anchor; a net-mender with debts.', lorebook: '' } };
 extensionSettings.liveWorld = { ...lwUtils.defaultLiveWorldConfig(), enabled: true, pack: 'blank', every: 50, customPacks: { harbourside: JSON.stringify(example), elsewhere: JSON.stringify(elsewhere) } };
 extensionSettings.canon = { enabled: true, every: 50, recentMessages: 6, inject: true, depth: 3, role: 'system', maxChars: 1500 };
+// Every scene a chat on the world's one narrator card (D114), which is what the sections below were written for; §27 is the
+// other way, a card for every scene (D209), which is what a new install does.
+extensionSettings.hub = { ...(extensionSettings.hub || {}), sceneCards: false };
 extensionSettings.quests = { main: 'None', optional: [] };
 hub.__setHubTiming({ idleStepMs: 5, idleMaxMs: 200, retryMs: 10, rateMs: 120 });
 // The lorebooks, as SillyTavern keeps them (D189): a shelf of books by name, the ones switched on, and what was filed where.
@@ -2003,6 +2026,164 @@ console.log('\n§26 the ledger filled from the record\'s own requests: a long ch
     check('taken after it, the world\'s memory holds the ledger and the record, from the one read', done.ok && entry.scenes[0].recap === `The river ran as far as ${leg(LEGS)}.` && firsts.every(f => kept.includes(`Reach ${f}`)) && canonAsked.length === 0, JSON.stringify([done.ok, done.reason, kept.length, canonAsked.length]));
     hub.__setRecapTransport(null);
     cn.__setCanonTransport(null);
+}
+
+console.log('\n§27 a narrator card of its own for every scene: made at Start, its openings its greetings, gone with the scene (D209)');
+{
+    const W = 'cardland';
+    extensionSettings.liveWorld.customPacks[W] = JSON.stringify({ ...example, id: W, name: 'Cardland' });
+    ctxTarget.characters.push({ name: 'Teller', avatar: 'Teller.png', chat: 'Teller - plain' });
+    const at = (avatar) => ctxTarget.characters.findIndex(c => c.avatar === avatar);
+    ctxTarget.characterId = at('Teller.png');
+    ctxTarget.name2 = 'Teller';
+    files.set('Teller - plain', { header: { chat_metadata: {} }, messages: [], avatar: 'Teller.png', chName: 'Teller' });
+    await openPlain('Teller - plain');
+    extensionSettings.hub.styleLaw = false;
+    hub.__setBookApi(shelfApi);
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 1","time":"morning"},"openers":[{"title":"The weir","text":"The weir is loud this morning.","who":[]},{"title":"The lane","text":"The lane is empty.","who":[]},{"title":"The court","text":"Word has come from the court.","who":[]}]}');
+    hub.__setGapTransport(async () => '{"elapsed":"a day","now":{"date":"Day 9","time":"dawn"},"clocks":{},"moved":[],"blurb":"x","heard":[]}');
+    let recapReply = '{"recap":"x"}';
+    hub.__setRecapTransport(async () => recapReply);
+    const entry = () => hub.worldEntry(W);
+    const sceneOf = (id) => entry().scenes.find(x => x.id === id);
+    const start = async (pick = { choice: 0 }) => { const p = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'now' } }); return p.ok ? hub.commitScene(p.token, pick) : p; };
+    const play = async (date) => {
+        chat.push(user(`We go on, ${date}.`));
+        chat.push({ is_user: false, name: 'Narrator', mes: `It is ${date}.`, extra: {} });
+        const box = JSON.stringify({ date: { value: date }, time: { start: 'noon', end: 'noon' }, location: { value: `The road, ${date}` }, weather: { emoji: '☁', forecast: 'grey' } });
+        state.setLastGeneratedData({ ...state.lastGeneratedData, infoBox: box });
+        state.setCommittedTrackerData({ ...state.committedTrackerData, infoBox: box });
+        recapReply = JSON.stringify({ recap: `What happened on ${date}.`, people: [], threads: { closed: [], opened: [] } });
+        return hub.endScene({ skipCanon: true, skipWorld: true });
+    };
+    const created = () => calls.filter(c => c.url === '/api/characters/create');
+    const cardsNow = () => ctxTarget.characters.map(c => c.avatar);
+    const tagOf = (avatar) => (ctxTarget.tagMap[avatar] || []).map(id => (ctxTarget.tags.find(t => t.id === id) || {}).name);
+
+    // The old way first, on this world: one narrator card, every scene a chat on it.
+    check('with scenes on the world\'s one card (the setting off), a world with no narrator cannot start a scene', hub.startPlanFor(W).ok === false && hub.startPlanFor(W).reason === 'no-card');
+    check('(the world is given a narrator)', hub.bindCard(W, 'Teller.png').ok);
+    const before = created().length;
+    const old = await start();
+    check('the old way: the scene is a chat on the world\'s narrator card, and no card is made', old.ok && files.get(old.file).avatar === 'Teller.png' && created().length === before && sceneOf('s1').card === 'Teller.png' && !sceneOf('s1').ownCard, JSON.stringify([old.ok, old.reason, sceneOf('s1')]));
+    await play('Day 1');
+
+    // A card for every scene.
+    extensionSettings.hub.sceneCards = true;
+    const plan = hub.startPlanFor(W);
+    check('with a card for every scene, the plan says a new card is made and what the narrator is called', plan.ok && plan.newCard === true && plan.card === 'Narrator' && plan.number === 2, JSON.stringify(plan));
+    extensionSettings.liveWorld.customPacks.nocard = JSON.stringify({ ...example, id: 'nocard', name: 'Nocard' });
+    check('a world with no narrator card of its own can start one too, and asking does not make it a world of the hub', hub.startPlanFor('nocard').ok && hub.startPlanFor('nocard').newCard === true && hub.worldEntry('nocard') === null);
+    globalThis.__DES_ACTIVE__ = [];
+    const c2 = await start({ choice: 1 });
+    const made = created().slice(before);
+    const body = made.length ? made[0].body : {};
+    check('Start makes one card for the scene, called Narrator, blank but for the line that says what it is', c2.ok && made.length === 1 && body.ch_name === 'Narrator' && body.description === 'You are the narrator of Cardland. The player\'s character is {{user}}. This chat is one scene of the story: the scene\'s brief says where it opens, who is there and what came before.' && body.personality === '' && body.scenario === '' && body.mes_example === '' && body.system_prompt === '' && body.world === '', JSON.stringify([c2.ok, c2.reason, c2.error, body.ch_name, body.description]));
+    check('the three openings are the card\'s greetings: the one marked is its first message, the other two its alternates in their order', body.first_mes === 'The lane is empty.' && same(body.alternate_greetings, ['The weir is loud this morning.', 'Word has come from the court.']), JSON.stringify([body.first_mes, body.alternate_greetings]));
+    check('its note, which SillyTavern shows under the name in its list and never sends, says which scene of which world it is for', /^Cardland · Scene 2: The lane · /.test(body.creator_notes) && /deleting the scene deletes this card/.test(body.creator_notes), body.creator_notes);
+    check('it is tagged with its world, the tag made as a closed folder', same(tagOf('Narrator.png'), ['Cardland: scenes']) && ctxTarget.tags.find(t => t.name === 'Cardland: scenes').folder_type === 'CLOSED', JSON.stringify([ctxTarget.tagMap, ctxTarget.tags]));
+    const f2 = files.get(c2.file);
+    check('the scene\'s chat is written under that card, its first message the narrator\'s with the three openings as swipes, the marked one in front', !!f2 && f2.avatar === 'Narrator.png' && f2.chName === 'Narrator' && f2.messages.length === 1 && f2.messages[0].name === 'Narrator' && f2.messages[0].mes === 'The lane is empty.' && same(f2.messages[0].swipes, ['The lane is empty.', 'The weir is loud this morning.', 'Word has come from the court.']), JSON.stringify(f2 && [f2.avatar, f2.chName, f2.messages[0] && f2.messages[0].swipes]));
+    check('the scene\'s record names its card and that the card is its own; the world\'s narrator is not changed', sceneOf('s2').card === 'Narrator.png' && sceneOf('s2').ownCard === true && entry().card === 'Teller.png');
+    check('the scene is in front on its own card, and SillyTavern is told that card is the one in front', ctxTarget.characterId === at('Narrator.png') && ctxTarget.chatId === c2.file && hub.currentScene().scene.id === 's2' && same(globalThis.__DES_ACTIVE__, ['Narrator.png']), JSON.stringify([ctxTarget.characterId, at('Narrator.png'), ctxTarget.chatId, globalThis.__DES_ACTIVE__]));
+    await play('Day 2');
+
+    // The next scene: another card, the same tag.
+    const c3 = await start({ choice: 'own', ownText: 'I wrote this opening myself.' });
+    const body3 = created()[created().length - 1].body;
+    check('the next scene gets a card of its own, another file in SillyTavern\'s list, under the same one tag', c3.ok && sceneOf('s3').card === 'Narrator1.png' && files.get(c3.file).avatar === 'Narrator1.png' && same(tagOf('Narrator1.png'), ['Cardland: scenes']) && ctxTarget.tags.filter(t => t.name === 'Cardland: scenes').length === 1, JSON.stringify([c3.ok, c3.reason, sceneOf('s3') && sceneOf('s3').card, cardsNow()]));
+    check('opened with the player\'s own words, those are the card\'s one greeting', body3.first_mes === 'I wrote this opening myself.' && same(body3.alternate_greetings, []) && /^Cardland · Scene 3/.test(body3.creator_notes), JSON.stringify([body3.first_mes, body3.alternate_greetings]));
+
+    // Going between scenes is going between cards.
+    const back = await hub.openSceneChat(W, 's2');
+    check('a scene opened from the list comes up on its own card', back.ok && ctxTarget.characterId === at('Narrator.png') && ctxTarget.chatId === c2.file, JSON.stringify([back, ctxTarget.characterId, ctxTarget.chatId]));
+    const older = await hub.openSceneChat(W, 's1');
+    check('and one from before, on the world\'s narrator card, on that', older.ok && ctxTarget.characterId === at('Teller.png') && ctxTarget.chatId === old.file);
+    await hub.openSceneChat(W, 's3');
+
+    // A chat renamed in SillyTavern is the scene's when it is under the scene's card.
+    await hub.onHubChatRenamed({ oldFileName: `${c2.file}.jsonl`, newFileName: 'Renamed elsewhere.jsonl', avatarId: 'Teller.png' });
+    check('a chat of that name renamed under another card is not the scene', sceneOf('s2').chat === c2.file);
+
+    // What deleting it would take.
+    files.set('Narrator - by hand', { header: { chat_metadata: {} }, messages: [], avatar: 'Narrator.png', chName: 'Narrator' });
+    const p2 = await hub.deletePlan(W, 's2');
+    const p3 = await hub.deletePlan(W, 's3');
+    const p1 = await hub.deletePlan(W, 's1');
+    check('the question before a scene is deleted knows its card goes too, and how many other chats are on that card', p2.ok && same(p2.card, { own: true, others: 1 }) && p3.ok && same(p3.card, { own: true, others: 0 }) && p1.ok && p1.card === undefined, JSON.stringify([p2.card, p3.card, p1.card]));
+
+    // The scene in front deleted: another scene is opened first, on its own card, then the card goes.
+    const opensAt = opens.length;
+    const d3 = await hub.deleteScene(W, 's3');
+    check('the scene in front, never ended, deleted: the world\'s latest other scene is opened in its place, then the card is deleted with its chat', d3.ok && d3.card === 'deleted' && d3.chat === 'deleted' && d3.opened && d3.opened.name === c2.file && ctxTarget.characterId === at('Narrator.png') && ctxTarget.chatId === c2.file && !cardsNow().includes('Narrator1.png') && !files.has(c3.file) && !sceneOf('s3') && opens.slice(opensAt).includes('delete-card:Narrator1.png') && ctxTarget.tagMap['Narrator1.png'] === undefined, JSON.stringify([d3, cardsNow(), opens.slice(opensAt)]));
+    check('it is said in words', hubUtils.describeDeleteResult(d3) === `Scene 3 is deleted, and its narrator card and its chat are deleted. "${c2.file}" is open in its place.`, hubUtils.describeDeleteResult(d3));
+    check('the world\'s tag stays while another of its scene cards carries it', ctxTarget.tags.some(t => t.name === 'Cardland: scenes') && same(tagOf('Narrator.png'), ['Cardland: scenes']));
+
+    // An ended scene, not in front, deleted: the card goes with every chat on it, what it changed is taken back, the chat in front stays.
+    await hub.openSceneChat(W, 's1');
+    const front = [ctxTarget.characters[ctxTarget.characterId].avatar, ctxTarget.chatId];
+    const d2 = await hub.deleteScene(W, 's2');
+    check('an ended scene deleted from elsewhere: its card goes with every chat on it, its changes are taken back, and the chat in front is still the one it was', d2.ok && d2.card === 'deleted' && d2.opened === null && d2.taken && d2.taken.log === true && !cardsNow().includes('Narrator.png') && !files.has(c2.file) && !files.has('Narrator - by hand') && same([ctxTarget.characters[ctxTarget.characterId].avatar, ctxTarget.chatId], front), JSON.stringify([d2.ok, d2.reason, d2.card, d2.opened, d2.taken, cardsNow()]));
+
+    check('with the last of its scene cards gone, the tag made for them goes too', !ctxTarget.tags.some(t => t.name === 'Cardland: scenes') && Object.keys(ctxTarget.tagMap).length === 0, JSON.stringify([ctxTarget.tags, ctxTarget.tagMap]));
+
+    // A card that cannot be made: nothing is started, and the Start is still there to try again.
+    const scenesWere = entry().scenes.length;
+    const filesWere = files.size;
+    const pend = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'now' } });
+    globalThis.__DES_CREATE_FAILS__ = true;
+    const noCard = await hub.commitScene(pend.token, { choice: 0 });
+    globalThis.__DES_CREATE_FAILS__ = false;
+    check('when SillyTavern will not make the card nothing is started: no scene, no file, and it says why', noCard.ok === false && noCard.reason === 'card' && entry().scenes.length === scenesWere && files.size === filesWere && hub.pendingStart() !== null && /could not make the scene's narrator card/.test(hubUtils.describeStartResult(noCard)), JSON.stringify(noCard));
+    // A file that cannot be written: the card made for it is taken away again.
+    const cardsWere = cardsNow().length;
+    globalThis.__DES_CHAT_SAVE_FAILS__ = true;
+    const noFile = await hub.commitScene(pend.token, { choice: 0 });
+    globalThis.__DES_CHAT_SAVE_FAILS__ = false;
+    check('when the chat file cannot be written the card made for it is deleted again: no card is left with no scene', noFile.ok === false && noFile.reason === 'file' && cardsNow().length === cardsWere && entry().scenes.length === scenesWere, JSON.stringify([noFile, cardsNow()]));
+    const again = await hub.commitScene(pend.token, { choice: 0 });
+    check('tried again, the same Start goes through', again.ok && sceneOf(again.scene.id).ownCard === true && files.get(again.file).avatar === sceneOf(again.scene.id).card, JSON.stringify([again.ok, again.reason]));
+
+    // The only other chat to go to is gone: the chat is closed before the card in front is deleted.
+    const only = again.scene.id;
+    for (const x of entry().scenes.filter(y => y.id !== only)) { const f = files.get(x.chat); if (f) files.delete(x.chat); }
+    let closed = 0;
+    globalThis.__DES_CLOSE_CHAT__ = async () => { closed++; ctxTarget.characterId = undefined; ctxTarget.chatId = undefined; return true; };
+    const dOnly = await hub.deleteScene(W, only);
+    check('with no other scene to go to, the chat is closed and then the card is deleted', dOnly.ok && dOnly.card === 'deleted' && closed === 1 && dOnly.opened && dOnly.opened.closed === true && /No chat is open now\./.test(hubUtils.describeDeleteResult(dOnly)), JSON.stringify([dOnly, closed]));
+    globalThis.__DES_CLOSE_CHAT__ = null;
+
+    // A card deleted in SillyTavern itself took its chat with it.
+    ctxTarget.characterId = at('Teller.png');
+    await openPlain('Teller - plain');
+    const c5 = await start();
+    const lostCard = sceneOf(c5.scene.id).card;
+    await hub.openSceneChat(W, 's1').catch(() => {});
+    ctxTarget.characterId = at('Teller.png');
+    await openPlain('Teller - plain');
+    ctxTarget.characters.splice(at(lostCard), 1);
+    ctxTarget.characterId = at('Teller.png');
+    files.delete(c5.file);
+    const unreachable = await hub.openSceneChat(W, c5.scene.id);
+    const refreshed = await hub.refreshScenes(W);
+    check('a scene whose card was deleted in SillyTavern cannot be opened, and the list marks its chat as gone without asking SillyTavern about it', unreachable.ok === false && unreachable.reason === 'card-gone' && refreshed.ok && sceneOf(c5.scene.id).gone === true && sceneOf(c5.scene.id).status === 'aside', JSON.stringify([unreachable, refreshed.ok, sceneOf(c5.scene.id)]));
+    const cardCallsWere = calls.filter(c => c.url === '/api/characters/delete').length;
+    const dGone = await hub.deleteScene(W, c5.scene.id);
+    check('its record is deleted and nothing is asked of SillyTavern: there is no card left to delete', dGone.ok && dGone.chat === 'gone' && !sceneOf(c5.scene.id) && calls.filter(c => c.url === '/api/characters/delete').length === cardCallsWere, JSON.stringify(dGone));
+
+    // Going straight on in a fresh chat (D181) is a Start like any other: the next scene has a card of its own.
+    const c6 = await start();
+    chat.push(user('We go on.'));
+    chat.push({ is_user: false, name: 'Narrator', mes: 'It is Day 7.', extra: {} });
+    recapReply = JSON.stringify({ recap: 'What happened on Day 7.', people: [], threads: { closed: [], opened: [] } });
+    const on = await hub.continueScene({});
+    const nextId = on.ok && on.scene ? on.scene.id : '';
+    check('a scene gone straight on from: the one before is ended on its card, and the next is opened on a new card of its own', c6.ok && on.ok && sceneOf(c6.scene.id).status === 'ended' && !!nextId && sceneOf(nextId).ownCard === true && sceneOf(nextId).card !== sceneOf(c6.scene.id).card && cardsNow().includes(sceneOf(nextId).card) && cardsNow().includes(sceneOf(c6.scene.id).card) && ctxTarget.characterId === at(sceneOf(nextId).card), JSON.stringify([c6.ok, on.ok, on.reason, on.stage, nextId, cardsNow()]));
+
+    extensionSettings.hub.sceneCards = false;
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+    hub.__setRecapTransport(null);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

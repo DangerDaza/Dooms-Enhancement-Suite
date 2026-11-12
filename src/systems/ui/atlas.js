@@ -800,7 +800,7 @@ function openSceneStart({ id = '', seed = null, place = null, cast = null } = {}
     const asked = Array.isArray(cast) ? cast.map(n => String(n || '').trim()).filter(Boolean) : [];
     const sd = seed && typeof seed === 'object' ? seed : null;
     setup = {
-        start: true, step: 'form', worldId: startPlan.worldId, sceneNo: startPlan.number, card: startPlan.card,
+        start: true, step: 'form', worldId: startPlan.worldId, sceneNo: startPlan.number, card: startPlan.card, newCard: !!startPlan.newCard,
         place: at, people, cast: asked.length ? asked.filter(n => people.some(p => p.name === n)) : people.filter(p => p.here).map(p => p.name),
         extra: asked.filter(n => !people.some(p => p.name === n)).join(', '),
         places: m ? null : placesForStart(), whereNew: !at.id && at.label ? at.label : '',

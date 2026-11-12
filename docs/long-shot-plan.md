@@ -1439,3 +1439,52 @@ short, a connection refused, a form broken, taken up again, skipped, in
 one request, taken); `tools/atlas-browser-test.mjs` §5g (the tick, the
 line while it reads, a failure, the review in each case, done, a
 phone).
+
+## 48. A narrator card of its own for every scene (2026-11-12, D209)
+
+hub-plan D114 bound a world to one narrator card and made every scene a
+chat on it. The owner had asked for something else and said so more than
+once: "When you start a scene it's supposed to create a new narrator
+card with three starting messages", and, when asked which of the two
+existing cards new scenes should be chats of, "I have been telling you
+to create a new narrator card with the 3 openings the whole time." What
+was built was not what was asked for, and the question put was one that
+only the wrong build raised. Asked whether the new card should copy its
+description from the story card or from the world's narrator: "Should we
+just run with a blank card from the start?" Yes.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D209 | Starting a scene makes a new narrator card for it: blank, its three openings the card's greetings | **The card** (`sceneCardFields`, `makeSceneCard`). Made through SillyTavern's create route as Make a narrator card makes one. Named `Narrator`, whatever the world and the scene: that is the name on its messages. Its description is one line (it is the narrator of this world, the player is `{{user}}`, the chat is one scene and the brief says the rest) and every other field is empty: nothing is copied from the story card or the world's narrator, so no other card's text is in a scene's context. The scene's brief is sent with every reply as before (hub-plan D120), and the story so far reaches the narrator through the ledger, the continuity book and the lorebooks. **The openings.** The one marked on the pick (D207) is the card's first message and the other two its alternate greetings, in their order, which SillyTavern shows as the first message's swipes; opened with the player's own words, those are its one greeting. The scene's chat is still written by the Start (hub-plan D118), under the new card, its first message carrying the same three as swipes. **Which is which.** The card's note, which SillyTavern shows under the name in its character list and never sends, says the world, the scene's number and title, the place and the date. The card is tagged `<World>: scenes`, the tag made as a closed folder: with SillyTavern's "tags as folders" on, a world's scene cards are one folder in the list. **The record.** A scene's record names its card (D204) and now says the card is its own (`ownCard`). A scene is opened, resumed and gone to on its own card; going straight on in a fresh chat (D181) makes the next one's. A world needs no narrator card of its own to start a scene. **Deleted with the scene** (D197, D206). The card goes through SillyTavern's delete route, with its chat and any other chat started on it by hand: the question before a delete says so and how many. SillyTavern cannot lose the card that is in front (its list read again without it, the page is reloaded), so when the scene is in front the world's latest other scene is opened first, on its own card, else the chat is closed; SillyTavern's own delete is not used because it closes whatever chat is in front, whichever card is deleted. The tag goes with the last card that carries it. A card that cannot be made starts nothing; a chat file that cannot be written takes the card made for it away again. A card deleted in SillyTavern itself took its chat with it: the scene is marked as gone from the list SillyTavern already has (`markCardsGone`), no request a card. **The setting.** "A narrator card for every scene", in Settings under The Hub, on. Off, every scene is a chat on the world's one narrator card as before (D114), and the scenes already played stay on the cards they are on either way. |
+
+What it does not do. A lorebook linked to the story card itself fires
+only in chats on that card, so it does not fire in a scene: lore that
+is on globally, or through the Lore Library's campaign, does. A scene's
+card is not kept in step with its scene afterwards: a title changed, an
+opening edited in the chat, a place moved to are not written back to
+the card. A chat started on a scene's card by hand opens on the same
+three greetings and is not a scene (hub-plan D113). The character list
+holds a card a scene; without "tags as folders" they are in the list,
+each with its note. Every card is called Narrator, so SillyTavern's own
+search by name finds them all. The scene's brief is not moved into the
+card: it stays in the slot the extension sends with every reply, which a
+preset cannot leave out. Run in the real SillyTavern at a phone's width:
+a scene started through the panel with the third opening marked (the
+card, its note in SillyTavern's list, its tag, its greetings as
+SillyTavern saved them, the chat under it with three swipes), the page
+reloaded (back in the scene on its card), the scene ended and the next
+started (a second card), one opened from the list across cards, the one
+in front deleted (the other opened in its place, the card and its chat
+folder gone from disk, no reload of the page), the other deleted from
+another chat (that chat still in front). Not on a real phone, and not
+with SillyTavern's "tags as folders" switched on.
+
+Tests: `tools/hub-test.mjs` (the card's fields, the tag, the record's
+flag, cards gone, the words, the setting); `tools/hub-flow-test.mjs`
+§27 (the old way and the new on one world, the card and its greetings,
+the tag, the file under it, in front, the next scene, between cards, a
+rename under another card, the question, deleted in front and from
+elsewhere, a card that cannot be made, a file that cannot be written,
+no other scene to go to, a card deleted in SillyTavern, straight on);
+`tools/atlas-browser-test.mjs` §5h (the sheet and the pick), §5k (the
+question).

@@ -33,7 +33,7 @@ import { buildHooksPrompt, parseHooksReply, validateHooks, proposeRound, failRou
 import {
     HUB_META_KEY, hubConfig, normalizeHub, normalizeWorldEntry, gapOf, gapMoves, takeSnapshot, seedStores, personLine, buildBrief,
     buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle, hubMark, readMark, markEnded, sceneHeader,
-    sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, ledgerOfReply, openSceneOf, openScene, setSceneAside as setAsidePure,
+    sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, ledgerOfReply, sceneCardFields, sceneCardTag, markCardsGone, SCENE_NARRATOR_NAME, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
@@ -234,6 +234,51 @@ function defaultBridge() {
             const res = await post('/api/characters/create', fields);
             return String(await res.text()).trim();
         },
+        // A card deleted with its chats (D209: a scene's own card goes when the scene does), by SillyTavern's server route.
+        // Not its own deleteCharacter, which closes whatever chat is in front first; so the card must not be the one in
+        // front. SillyTavern's list is read again by the caller (getCharacters).
+        deleteCharacter: async (avatar) => {
+            const c = ctx();
+            const list = Array.isArray(c.characters) ? c.characters : [];
+            const index = list.findIndex(x => x && x.avatar === avatar);
+            const character = index >= 0 ? list[index] : null;
+            await post('/api/characters/delete', { avatar_url: avatar, delete_chats: true });
+            try {
+                if (c.tagMap && typeof c.tagMap === 'object') {
+                    const had = Array.isArray(c.tagMap[avatar]) ? c.tagMap[avatar] : [];
+                    delete c.tagMap[avatar];
+                    // A tag made for a world's scene cards (tagCard) that no card carries any more goes with the last of them.
+                    if (Array.isArray(c.tags)) for (const id of had) {
+                        const i = c.tags.findIndex(t => t && t.id === id);
+                        if (i >= 0 && /: scenes$/.test(String(c.tags[i].name)) && !Object.values(c.tagMap).some(list => Array.isArray(list) && list.includes(id))) c.tags.splice(i, 1);
+                    }
+                }
+            } catch (e) { /* no tags */ }
+            try { const types = c.eventTypes || c.event_types; if (character && c.eventSource && types && types.CHARACTER_DELETED) await c.eventSource.emit(types.CHARACTER_DELETED, { id: index, character }); } catch (e) { /* nobody to tell */ }
+            try { if (typeof ST.saveSettingsDebounced === 'function') ST.saveSettingsDebounced(); } catch (e) { /* saved later */ }
+            return true;
+        },
+        // A card given a tag, the tag made where there is none of that name, as a closed folder: with SillyTavern's
+        // "tags as folders" on, a world's scene cards are one folder in its list and not a card each.
+        tagCard: (avatar, name) => {
+            try {
+                const c = ctx();
+                if (!Array.isArray(c.tags) || !c.tagMap || typeof c.tagMap !== 'object' || !avatar || !name) return false;
+                let tag = c.tags.find(t => t && String(t.name).toLowerCase() === String(name).toLowerCase());
+                if (!tag) {
+                    let id = '';
+                    try { id = crypto.randomUUID(); } catch (e) { id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
+                    tag = { id, name: String(name), folder_type: 'CLOSED', filter_state: 'UNDEFINED', sort_order: Math.max(0, ...c.tags.map(t => Number(t && t.sort_order) || 0)) + 1, is_hidden_on_character_card: false, color: '', color2: '', create_date: Date.now() };
+                    c.tags.push(tag);
+                }
+                const mine = Array.isArray(c.tagMap[avatar]) ? c.tagMap[avatar] : [];
+                if (!mine.includes(tag.id)) c.tagMap[avatar] = [...mine, tag.id];
+                if (typeof ST.saveSettingsDebounced === 'function') ST.saveSettingsDebounced();
+                return true;
+            } catch (e) { return false; }
+        },
+        // No chat in front: SillyTavern's home, as its own Close chat leaves it.
+        closeChat: async () => { try { if (typeof ST.closeCurrentChat === 'function') return (await ST.closeCurrentChat()) !== false; } catch (e) { /* stays as it is */ } return false; },
         // A chat's messages read from its file without opening it (D205), as SillyTavern reads one: its server route, by the card's avatar.
         readChat: async ({ chName, avatar, fileName }) => {
             const res = await post('/api/chats/get', { ch_name: chName, file_name: fileName, avatar_url: avatar });
@@ -420,8 +465,11 @@ export async function onHubChatRenamed(ev) {
     const s = store();
     let changed = false;
     for (const [id, entry] of Object.entries(s.worlds)) {
-        if (e.avatarId && entry.card && entry.card !== e.avatarId) continue;
-        if (!sceneByChat(entry, oldName)) continue;
+        const named = sceneByChat(entry, oldName);
+        if (!named) continue;
+        // The chat renamed is the scene's when it is under the scene's card: its own (D204, D209), else the world's narrator.
+        const on = named.card || entry.card;
+        if (e.avatarId && on && on !== e.avatarId) continue;
         s.worlds[id] = renameSceneChat(entry, oldName, newName).entry;
         changed = true;
     }
@@ -695,6 +743,62 @@ export function onHubBookDeleted(name) {
     }
 }
 
+// ─── A scene's own narrator card (D209) ─────────────────────────────────
+
+/**
+ * The card for a scene, made through SillyTavern's create endpoint as
+ * Make a narrator card makes one: blank but for the line that says what
+ * it is, the scene's openings its greetings, a note of which scene it is
+ * for, and the world's tag. SillyTavern's list is read again so the card
+ * is among its characters.
+ * @returns {Promise<{ ok: boolean, error?: string, card?: { index: number, avatar: string, name: string, chat: string } }>}
+ */
+async function makeSceneCard({ pack, sceneNo, title, place, date, openers }) {
+    const f = sceneCardFields({ world: pack.name, sceneNo, title, place, date, openers });
+    const fields = {
+        ch_name: f.name, description: f.description, first_mes: f.first_mes, personality: '', scenario: '', mes_example: '', creator_notes: f.creator_notes,
+        system_prompt: '', post_history_instructions: '', creator: '', character_version: '', tags: [], talkativeness: '0.5', world: '', depth_prompt_prompt: '', depth_prompt_depth: '4', depth_prompt_role: 'system', fav: 'false', alternate_greetings: f.alternate_greetings, extensions: '{}',
+    };
+    try {
+        const b = bridge();
+        const key = await b.createCharacter(fields);
+        if (!key) return { ok: false, error: 'SillyTavern returned no card.' };
+        const avatar = /\.png$/i.test(key) ? key : `${key}.png`;
+        b.tagCard(avatar, sceneCardTag(pack.name));
+        await b.getCharacters();
+        const list = b.characters();
+        const index = list.findIndex(c => c && c.avatar === avatar);
+        if (index < 0) return { ok: false, error: `SillyTavern made the card (${avatar}) and does not list it.` };
+        log(`made the narrator card for scene ${sceneNo} (${avatar})`);
+        return { ok: true, card: { index, avatar, name: String(list[index].name || f.name), chat: String(list[index].chat || '') } };
+    } catch (e) {
+        const error = String(e && e.message || e);
+        log('the scene\'s narrator card could not be made', error);
+        return { ok: false, error };
+    }
+}
+
+/**
+ * A scene's own card deleted, with whatever chats are on it. Never the
+ * card in front: SillyTavern reloads the page when the card in front is
+ * gone from its list. True when it is gone (or was already).
+ */
+async function dropSceneCard(avatar) {
+    const b = bridge();
+    const list = b.characters();
+    const index = list.findIndex(c => c && c.avatar === avatar);
+    if (index < 0) return true;
+    if (String(b.characterId()) === String(index) && !b.groupId()) { log(`the scene's card ${avatar} is in front and is not deleted`); return false; }
+    try {
+        await b.deleteCharacter(avatar);
+        await b.getCharacters();
+        return true;
+    } catch (e) {
+        log('the scene\'s narrator card could not be deleted', String(e && e.message || e));
+        return false;
+    }
+}
+
 // ─── Start (D117, D118, D119) ───────────────────────────────────────────
 
 function guardStart(worldId) {
@@ -705,12 +809,15 @@ function guardStart(worldId) {
     const b = bridge();
     for (const name of ['selectCharacterById', 'openCharacterChat']) if (!b.has(name)) return { ok: false, reason: 'too-old', missing: name };
     const e = store().worlds[id];
-    if (!e || !e.card) return { ok: false, reason: 'no-card' };
-    const card = cardOf(id);
+    // A card of its own for every scene (D209): none is needed beforehand, the Start makes it. Otherwise the scene is a
+    // chat on the world's one narrator card (D114), which has to be there.
+    const own = cfg().sceneCards;
+    if (!own && (!e || !e.card)) return { ok: false, reason: 'no-card' };
+    const card = own ? { index: -1, avatar: '', name: SCENE_NARRATOR_NAME, chat: '', fresh: true } : cardOf(id);
     if (!card) return { ok: false, reason: 'card-gone' };
-    const open = openSceneOf(e);
+    const open = e ? openSceneOf(e) : null;
     if (open && !open.gone) return { ok: false, reason: 'scene-open', scene: JSON.parse(JSON.stringify(open)) };
-    return { ok: true, id, entry: e, card };
+    return { ok: true, id, entry: e || normalizeWorldEntry(null), card };
 }
 
 /** A place's own label (not the path the Map window prints). */
@@ -1028,8 +1135,18 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     const entry = entryOf(p.worldId);
     const n = entry.seq + 1;
     const title = sceneTitle({ opener: list[0] || null, seed: p.seed, place: p.place.label });
+    // The scene's own card (D209), made now: blank but for a line that says what it is, the openings its greetings. It is
+    // made before the file, which is written under it; a file that cannot be written takes the card away again.
+    let card = p.card;
+    let ownCard = false;
+    if (card.fresh) {
+        const made = await makeSceneCard({ pack: p.pack, sceneNo: n, title, place: p.place.label, date: (p.when && p.when.date) || (p.memory && p.memory.facts && p.memory.facts.date) || '', openers: list });
+        if (!made.ok) return { ok: false, reason: 'card', error: made.error };
+        card = made.card;
+        ownCard = true;
+    }
     let existing = [];
-    try { existing = (await b.listChats(p.card.avatar)).map(c => String(c.file_name || c.file_id || '')); } catch (e) { log('the card\'s chats could not be listed; the name is trusted', String(e && e.message || e)); }
+    if (!ownCard) { try { existing = (await b.listChats(card.avatar)).map(c => String(c.file_name || c.file_id || '')); } catch (e) { log('the card\'s chats could not be listed; the name is trusted', String(e && e.message || e)); } }
     const fileName = sceneFileName(n, title, existing);
     const now = Date.now();
     // The memory as it stands now, not as the Start read it: a hooks round that landed while the openers waited on the line
@@ -1048,15 +1165,16 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     const mark = hubMark({ world: p.worldId, scene: `s${n}`, title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, startedAt: now, startDate: seeded.facts.date, file: fileName, brief });
     // The brief rides DES's own slot every generation (D120): a chat-completion preset may not send the scenario at all.
     const header = sceneHeader({ stores: seeded.stores, mark, scenario: '', worldInfo: '', integrity: b.uuid(), persona: b.userAvatar() });
-    const message = list.length ? openerMessage({ name: p.card.name, openers: list, chosen: 0, sendDate: b.timestamp(), tracker: seeded.tracker, title }) : null;
+    const message = list.length ? openerMessage({ name: card.name, openers: list, chosen: 0, sendDate: b.timestamp(), tracker: seeded.tracker, title }) : null;
     try {
-        await b.saveChatFile({ chName: p.card.name, avatar: p.card.avatar, fileName, header, messages: message ? [message] : [] });
+        await b.saveChatFile({ chName: card.name, avatar: card.avatar, fileName, header, messages: message ? [message] : [] });
     } catch (e) {
         const error = String(e && e.message || e);
         log('the scene file could not be written', error);
+        if (ownCard) await dropSceneCard(card.avatar);    // the card was made for a scene that is not there
         return { ok: false, reason: 'file', error };
     }
-    const opened = openScene(entry, { title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, chat: fileName, card: p.card.avatar, startedAt: now, startDate: seeded.facts.date });
+    const opened = openScene(entry, { title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, chat: fileName, card: card.avatar, ownCard, startedAt: now, startDate: seeded.facts.date });
     // The record and the world moved by the gap are written together, once the file exists (D117, §2.2); a hook played
     // leaves the memory's round, the way it left the chat's copy (§4.4), and one the round no longer holds (another
     // round landed while the Start waited) is recorded as played from the seed. A world with no memory gets none here.
@@ -1072,16 +1190,16 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     log(`scene ${n} written: "${fileName}"`);
     if (!(await flushChat())) log('the chat in front could not be flushed before the switch; its last edits may be lost');
     try {
-        await b.unshallowCharacter(p.card.index);
+        await b.unshallowCharacter(card.index);
         // The card's remembered chat is the scene first, so a select loads the scene and never a stray chat.
         const cards = b.characters();
-        if (cards[p.card.index]) cards[p.card.index].chat = fileName;
-        if (String(b.characterId()) !== String(p.card.index) || b.groupId()) {
-            await b.selectCharacterById(p.card.index);
-            if (String(b.characterId()) !== String(p.card.index) || b.groupId()) throw new Error('the narrator card could not be selected (a generation running?)');
+        if (cards[card.index]) cards[card.index].chat = fileName;
+        if (String(b.characterId()) !== String(card.index) || b.groupId()) {
+            await b.selectCharacterById(card.index);
+            if (String(b.characterId()) !== String(card.index) || b.groupId()) throw new Error('the narrator card could not be selected (a generation running?)');
         }
         await b.openCharacterChat(fileName);
-        b.setActive(p.card.avatar);    // a reload comes back to this card, and so to this scene (D202)
+        b.setActive(card.avatar);    // a reload comes back to this card, and so to this scene (D202)
     } catch (e) {
         const error = String(e && e.message || e);
         log('the scene chat could not be opened', error);
@@ -1463,7 +1581,7 @@ export function sceneStartPlan() {
     }
     const g = guardStart(worldId);
     if (!g.ok) return { ok: false, reason: g.reason, scene: g.scene };
-    return { ok: true, reason: '', worldId, number: g.entry.seq + 1, card: g.card.name };
+    return { ok: true, reason: '', worldId, number: g.entry.seq + 1, card: g.card.name, newCard: !!g.card.fresh };
 }
 
 /**
@@ -1474,7 +1592,7 @@ export function sceneStartPlan() {
 export function startPlanFor(worldId) {
     const g = guardStart(worldId);
     if (!g.ok) return { ok: false, reason: g.reason, scene: g.scene };
-    return { ok: true, reason: '', worldId: g.id, number: g.entry.seq + 1, card: g.card.name };
+    return { ok: true, reason: '', worldId: g.id, number: g.entry.seq + 1, card: g.card.name, newCard: !!g.card.fresh };
 }
 
 // ─── The world's map (D172, D173) ───────────────────────────────────────
@@ -2099,7 +2217,7 @@ function continueRefusal(r) {
     if (r.reason === 'running') return 'This is already being done.';
     return `The scene could not be ended (${r.reason || 'unknown'}). Use End scene.`;
 }
-const describeStartWord = (r) => (r.reason === 'scene-open' ? 'another scene is open' : r.reason === 'busy' ? 'another request is running' : r.reason === 'card-gone' ? 'the narrator card is gone' : r.reason || 'unknown');
+const describeStartWord = (r) => (r.reason === 'scene-open' ? 'another scene is open' : r.reason === 'busy' ? 'another request is running' : r.reason === 'card-gone' ? 'the narrator card is gone' : r.reason === 'card' ? 'SillyTavern could not make the scene\'s narrator card' : r.reason || 'unknown');
 
 /** What a handover is doing, said where there is no strip to say it (D200): one notice that changes with each step and goes when it is done. */
 let handoverToast = null;
@@ -2329,7 +2447,14 @@ export function removeGoneScene(worldId, id) {
  * an empty chat of that name the next time the card is opened. The record
  * goes only once the file has: a chat that could not be deleted keeps its
  * scene. A scene whose chat is gone already loses its record alone.
- * @returns {Promise<{ ok: boolean, reason?: string, error?: string, scene?: object, chat?: 'deleted'|'gone', opened?: { name: string, fresh: boolean, card: string }|null }>}
+ *
+ * A scene with a card of its own (D209) loses the card, and with it the
+ * chat and any other chat on that card: when the scene is the one in
+ * front, another scene of the world is opened first (on its own card),
+ * else the chat is closed, because SillyTavern cannot lose the card that
+ * is in front. `card` says how that went: 'deleted', or 'kept' when the
+ * card could not be deleted (the chat is deleted by itself then).
+ * @returns {Promise<{ ok: boolean, reason?: string, error?: string, scene?: object, chat?: 'deleted'|'gone', card?: 'deleted'|'kept', opened?: { name: string, fresh: boolean, card: string }|null }>}
  */
 export async function deleteScene(worldId, id) {
     const world = String(worldId || '').trim();
@@ -2344,7 +2469,7 @@ export async function deleteScene(worldId, id) {
     const remembered = scene.status === 'ended' || scene.reopened;
     const ends = remembered ? await readSceneLog(scene) : null;
     if (remembered && ends) { try { await syncFromBook(world); } catch (err) { /* the book as it was last read */ } }
-    const finish = async (chat, opened) => {
+    const finish = async (chat, opened, cardOut = '') => {
         const latest = store().worlds[world];
         const back = ends ? undoChanges(latest, ends) : null;
         const r = deleteSceneRecord(back ? back.entry : latest, id);
@@ -2358,15 +2483,43 @@ export async function deleteScene(worldId, id) {
             taken = back ? { log: true, ...shownCounts(back), book: await bookAfterTakeBack(world, trackBefore) } : { log: false, undone: 0, kept: 0, areas: [] };
             if (scene.log) { try { await bridge().deleteUserFile(scene.log); } catch (err) { log('the scene\'s log could not be deleted', String(err && err.message || err)); } }
         }
-        log(`scene ${id} deleted`, { chat, opened: opened ? opened.name : '', taken });
-        return { ok: true, scene: JSON.parse(JSON.stringify(scene)), chat, opened: opened || null, taken };
+        log(`scene ${id} deleted`, { chat, card: cardOut, opened: opened ? opened.name : '', taken });
+        return { ok: true, scene: JSON.parse(JSON.stringify(scene)), chat, ...(cardOut ? { card: cardOut } : {}), opened: opened || null, taken };
     };
-    if (scene.gone || !scene.chat) return finish('gone', null);
     const card = cardOfScene(world, scene);    // the file is under the card the chat is on (D204)
-    if (!card) return { ok: false, reason: 'card-gone', scene };
     const b = bridge();
     const file = scene.chat;
     const same = (a, c) => String(a || '').replace(/\.jsonl$/i, '').toLowerCase() === String(c || '').replace(/\.jsonl$/i, '').toLowerCase();
+    // A card made for the scene goes with it (D209), chat and all. Its card gone already (deleted in SillyTavern): the record alone.
+    if (scene.ownCard && scene.card) {
+        if (!card) return finish('gone', null);
+        const cardInFront = String(b.characterId()) === String(card.index) && !b.groupId();
+        let opened = null;
+        if (cardInFront) {
+            if (!(await flushChat())) log('the chat in front could not be flushed before its card is deleted');
+            // Somewhere else to stand: the world's latest other scene whose chat can be opened, on its own card; else no chat at all.
+            const others = e.scenes.slice().reverse().filter(x => x.id !== id && !x.gone && x.chat && (x.card || e.card) !== scene.card);
+            for (const o of others) {
+                const went = await openSceneChat(world, o.id);
+                if (went.ok) { const oc = cardOfScene(world, o); opened = { name: o.chat, fresh: false, card: oc ? oc.name : '' }; break; }
+            }
+            if (!opened) {
+                if (!(await b.closeChat())) return { ok: false, reason: 'switch', error: 'the scene is in front and no other chat could be opened in its place', scene };
+                opened = { name: '', fresh: false, card: '', closed: true };
+            }
+            const now = b.characters().findIndex(c => c && c.avatar === scene.card);
+            if (now >= 0 && String(b.characterId()) === String(now) && !b.groupId()) return { ok: false, reason: 'switch', error: 'the scene\'s card is still in front', scene };
+        }
+        if (await dropSceneCard(scene.card)) {
+            const out = await finish(scene.gone || !file ? 'gone' : 'deleted', opened, 'deleted');
+            if (out.ok && file && !scene.gone) await b.chatDeleted(file);
+            return out;
+        }
+        log(`scene ${id}: its card could not be deleted; its chat is deleted by itself`);
+        if (cardInFront) return { ok: false, reason: 'card', error: 'SillyTavern would not delete the scene\'s card', scene, opened };
+    }
+    if (scene.gone || !scene.chat) return finish('gone', null);
+    if (!card) return { ok: false, reason: 'card-gone', scene };
     const inFront = String(b.characterId()) === String(card.index) && !b.groupId() && same(chatId(), file);
     const pointed = same(card.chat, file);
     // The chat to stand in for it, where one is needed: the world's latest other scene whose chat is there, else any
@@ -2403,7 +2556,7 @@ export async function deleteScene(worldId, id) {
         if (cards[card.index]) cards[card.index].chat = other.name;
         try { await b.setCardChat({ avatar: card.avatar, fileName: other.name }); } catch (err) { log('the card could not be pointed at another chat; SillyTavern may open an empty one of the old name', String(err && err.message || err)); }
     }
-    const out = await finish('deleted', opened);
+    const out = await finish('deleted', opened, scene.ownCard ? 'kept' : '');
     if (out.ok) await b.chatDeleted(file);    // after the record has gone: DES's own listener finds nothing left to mark
     return out;
 }
@@ -2487,11 +2640,18 @@ export async function deletePlan(worldId, id) {
     if (!can.ok) return { ok: false, kind: '', reason: can.reason };
     // One the world remembers (a scene whose chat is gone is asked about too: its log is still there to take its changes back).
     const kind = scene.status === 'ended' || scene.reopened ? 'ended' : 'unended';
-    if (kind !== 'ended') return { ok: true, kind };
+    // Its own card goes with it (D209), and so does any other chat started on that card by hand: how many is said.
+    let card = null;
+    if (scene.ownCard && scene.card && cardOfScene(world, scene)) {
+        let others = 0;
+        try { others = (await bridge().listChats(scene.card)).map(c => String(c.file_name || c.file_id || '').replace(/\.jsonl$/i, '')).filter(n => n && n.toLowerCase() !== String(scene.chat || '').toLowerCase()).length; } catch (err) { others = 0; }
+        card = { own: true, others };
+    }
+    if (kind !== 'ended') return { ok: true, kind, ...(card ? { card } : {}) };
     const ends = await readSceneLog(scene);
-    if (!ends) return { ok: true, kind, log: false, undone: 0, kept: 0, areas: [] };
+    if (!ends) return { ok: true, kind, log: false, undone: 0, kept: 0, areas: [], ...(card ? { card } : {}) };
     try { await syncFromBook(world); } catch (err) { /* the book as it was last read */ }
-    return { ok: true, kind, log: true, ...shownCounts(undoChanges(entryOf(world), ends)) };
+    return { ok: true, kind, log: true, ...shownCounts(undoChanges(entryOf(world), ends)), ...(card ? { card } : {}) };
 }
 
 /**
@@ -2620,14 +2780,19 @@ let stripToken = 0;
 /** The records against the card's chats (D128): gone files marked, marked chats the list lost brought back. */
 export async function refreshScenes(worldId) {
     const id = String(worldId || '');
-    const e = store().worlds[id];
+    let e = store().worlds[id];
+    if (!e) return { ok: false, reason: 'no-world' };
+    // Scenes with a card of their own (D209): a card deleted in SillyTavern took its chats with it. Read from the list
+    // SillyTavern already has; no request a card.
+    const cards = markCardsGone(e, bridge().characters().map(c => (c && c.avatar) || ''));
+    if (cards.changed) { putEntry(id, cards.entry, { source: 'refresh', world: id }); e = store().worlds[id]; }
     const card = cardOf(id);
-    if (!e || !card) return { ok: false, reason: card ? 'no-world' : 'card-gone' };
+    if (!card) return cards.changed || e.scenes.some(x => x.ownCard) ? { ok: true, changed: cards.changed, scenes: JSON.parse(JSON.stringify(e.scenes)) } : { ok: false, reason: 'card-gone' };
     try {
         const chats = await bridge().listChats(card.avatar, { metadata: true });
         const r = reconcileScenesWithChats(e, chats.map(c => ({ file: c.file_name || c.file_id || '', meta: c.chat_metadata || null })), id, { card: card.avatar });
         if (r.changed) putEntry(id, r.entry, { source: 'refresh', world: id });
-        return { ok: true, changed: r.changed, scenes: JSON.parse(JSON.stringify(r.entry.scenes)) };
+        return { ok: true, changed: r.changed || cards.changed, scenes: JSON.parse(JSON.stringify(r.entry.scenes)) };
     } catch (err) {
         return { ok: false, reason: 'error', error: String(err && err.message || err) };
     }
@@ -2639,7 +2804,7 @@ export async function hubStatusLines() {
     for (const id of hubWorldIds()) {
         const res = await loadPack(id);
         const card = cardOf(id);
-        out.push({ id, name: res.ok ? res.pack.name : id, card: card ? card.avatar : '', cardName: card ? card.name : '', line: hubStatusLine({ worldName: res.ok ? res.pack.name : id, entry: store().worlds[id] || null, cardName: card ? card.name : '' }) });
+        out.push({ id, name: res.ok ? res.pack.name : id, card: card ? card.avatar : '', cardName: card ? card.name : '', line: hubStatusLine({ worldName: res.ok ? res.pack.name : id, entry: store().worlds[id] || null, cardName: card ? card.name : '', sceneCards: cfg().sceneCards }) });
     }
     return out;
 }

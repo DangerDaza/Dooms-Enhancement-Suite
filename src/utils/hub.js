@@ -71,6 +71,7 @@ const CONFIG_DEFAULTS = Object.freeze({
     styleLaw: false,       // the count of repeated phrases at a scene's end and the list held against the next (D179): off until switched on (the owner, D180)
     nudgeAt: 60,           // messages after which a scene suggests going on in a fresh chat (D181); 0 never
     strip: false,          // the strip above a scene's chat (D121): off, the scene's options are in the Doom button's menu (the owner, D200)
+    sceneCards: true,      // every scene gets a narrator card of its own, its openings the card's greetings (the owner, D209); off: every scene is a chat on the world's one narrator card (D114)
 });
 
 export function defaultHubConfig() {
@@ -90,6 +91,7 @@ export function hubConfig(settings) {
         // (the button hidden, or set to open Settings directly), where the strip is the only place for a scene's options.
         // (A knock that opens the fly-out reaches it with no button at all, D201.)
         strip: typeof h.strip === 'boolean' ? h.strip : !!(settings && isObj(settings.fab) && settings.fab.knock !== 'menu' && (settings.fab.hidden === true || settings.fab.bypassFlyout === true)),
+        sceneCards: typeof h.sceneCards === 'boolean' ? h.sceneCards : CONFIG_DEFAULTS.sceneCards,
     };
 }
 
@@ -225,6 +227,7 @@ export function normalizeScene(raw, seq = 0) {
         reopened: r.reopened === true,
         gone: r.gone === true,
         noRecap: r.noRecap === true,
+        ...(r.ownCard === true ? { ownCard: true } : {}),    // its card was made for it (D209) and goes when it does; absent for a scene on the world's narrator card or on the player's own
         ...(r.log ? { log: clean(r.log, 160) } : {}),    // the file that holds what its End changed in the world (D206); absent for a scene ended before that was kept
         ...(conflicts.length ? { conflicts } : {}),    // what the scene's record found against what was established (D190); absent when it found nothing
     };
@@ -1085,11 +1088,11 @@ export function asideScenes(entry) {
  * it is set aside (one open scene at a time). Returns the entry and the
  * scene.
  */
-export function openScene(entry, { title = '', seed = null, place = null, cast = [], gap = null, chat = '', card = '', startedAt = 0, startDate = '' } = {}) {
+export function openScene(entry, { title = '', seed = null, place = null, cast = [], gap = null, chat = '', card = '', ownCard = false, startedAt = 0, startDate = '' } = {}) {
     const next = touch(normalizeWorldEntry(entry));
     next.scenes = next.scenes.map(s => (s.status === 'open' ? { ...s, status: 'aside' } : s));
     next.seq += 1;
-    const scene = normalizeScene({ id: `s${next.seq}`, title, seed, place, cast, gap, chat, card, startedAt, startDate, status: 'open' }, next.seq);
+    const scene = normalizeScene({ id: `s${next.seq}`, title, seed, place, cast, gap, chat, card, ownCard: ownCard === true, startedAt, startDate, status: 'open' }, next.seq);
     next.scenes.push(scene);
     return { entry: capScenes(next), scene };
 }
@@ -1215,8 +1218,12 @@ export function describeDeleteResult(r) {
     if (!r) return '';
     const n = String(r.scene && r.scene.id || '').replace(/^s/, '');
     if (r.ok) {
-        const went = r.chat === 'gone' ? 'its chat was gone already' : 'its chat is deleted';
-        const moved = r.opened ? (r.opened.fresh ? ` A new chat is open on ${r.opened.card || 'the card'}.` : ` "${r.opened.name}" is open in its place.`) : '';
+        // A scene with a card of its own (D209): the card goes with it, chat and all; one that could not be deleted is said.
+        const went = r.card === 'deleted' ? (r.chat === 'gone' ? 'its narrator card is deleted (its chat was gone already)' : 'its narrator card and its chat are deleted')
+            : r.chat === 'gone' ? 'its chat was gone already'
+            : r.card === 'kept' ? 'its chat is deleted; its narrator card could not be deleted and is still in SillyTavern\'s list'
+            : 'its chat is deleted';
+        const moved = r.opened ? (r.opened.closed ? ' No chat is open now.' : r.opened.fresh ? ` A new chat is open on ${r.opened.card || 'the card'}.` : ` "${r.opened.name}" is open in its place.`) : '';
         // An ended scene (D206): what it changed in the world, taken back as far as it still stood.
         const t = r.taken && typeof r.taken === 'object' ? r.taken : null;
         const back = !t ? ''
@@ -1234,6 +1241,7 @@ export function describeDeleteResult(r) {
         busy: 'A reply or a request is running; try again when it is done.',
         switch: `The scene's chat is in front and another could not be opened in its place${r.error ? ` (${r.error})` : ''}. Nothing was deleted.`,
         file: `SillyTavern did not delete the chat${r.error ? ` (${r.error})` : ''}. The scene is still in the list.`,
+        card: `SillyTavern did not delete the scene's narrator card${r.error ? ` (${r.error})` : ''}. The scene is still in the list.`,
     };
     return why[r.reason] || `Nothing was deleted: ${r.error || r.reason || 'unknown'}.`;
 }
@@ -1297,15 +1305,17 @@ export function lastRecaps(entry, count = 2) {
 // ─── The lines ──────────────────────────────────────────────────────────
 
 /** One line for the hub's foot and the Settings status (D128). */
-export function hubStatusLine({ worldName = '', entry = null, cardName = '' } = {}) {
+export function hubStatusLine({ worldName = '', entry = null, cardName = '', sceneCards = false } = {}) {
     const name = clean(worldName, 80) || 'This world';
-    if (!entry || !entry.card) return `${name}: no narrator card yet; pick one to play it from the hub.`;
+    // With a card made for every scene (D209) a world needs none of its own to be played.
+    if (!sceneCards && (!entry || !entry.card)) return `${name}: no narrator card yet; pick one to play it from the hub.`;
+    if (!entry) return `${name}: every scene gets a narrator card of its own; no scene played yet.`;
     const open = openSceneOf(entry);
     const ended = entry.scenes.filter(s => s.status === 'ended').length;
     const aside = entry.scenes.filter(s => s.status === 'aside' && !s.gone).length;
     const facts = entry.memory && entry.memory.facts;
     const when = facts && facts.date ? `the world's date is ${facts.date}${facts.time ? `, ${facts.time}` : ''}` : 'no scene ended yet';
-    const narrated = cardName ? `narrated by ${clean(cardName, 80)}` : 'narrator card set';
+    const narrated = sceneCards ? 'every scene gets a narrator card of its own' : cardName ? `narrated by ${clean(cardName, 80)}` : 'narrator card set';
     const count = `${ended} scene${ended === 1 ? '' : 's'} played${aside ? `, ${aside} set aside` : ''}`;
     const now = open ? `scene ${open.id.replace(/^s/, '')} open${open.place.label ? ` at ${open.place.label}` : ''}${open.startDate ? ` since ${open.startDate}` : ''}` : when;
     return `${name}: ${narrated}; ${count}; ${now}.`;
@@ -1318,6 +1328,7 @@ export function describeStartResult(r) {
     const why = {
         off: 'Live World is off (Settings → Live World).',
         'no-card': 'This world has no narrator card yet.',
+        card: 'SillyTavern could not make the scene\'s narrator card, so nothing was started.',
         'card-gone': 'The narrator card is gone; pick another.',
         'no-world': 'No world to play.',
         'scene-open': 'A scene is still open: end it or set it aside first.',
@@ -1332,6 +1343,58 @@ export function describeStartResult(r) {
         cancelled: 'Nothing was started.',
     };
     return why[r.reason] || `Nothing was started: ${r.error || r.reason || 'unknown'}.`;
+}
+
+// ─── A scene's own narrator card (D209) ─────────────────────────────────
+
+/** What every scene's narrator is called: the name on its messages. Which scene a card is for is said in its note, shown under the name in SillyTavern's list. */
+export const SCENE_NARRATOR_NAME = 'Narrator';
+
+/** The tag a world's scene cards carry, so that SillyTavern can show them as one folder. */
+export function sceneCardTag(worldName) {
+    return `${clean(worldName, 60) || 'World'}: scenes`;
+}
+
+/**
+ * The card made for a scene (D209): blank, but for one line that says
+ * what it is. Nothing is copied from another card: the scene's brief is
+ * sent with every reply, and the story so far reaches the narrator
+ * through the ledger, the continuity book and the lorebooks. The scene's
+ * openings are the card's greetings (the first shown, the others its
+ * alternates, which SillyTavern shows as the first message's swipes), so
+ * a chat started on the card by hand opens the same way. The note, which
+ * is never sent, says which scene of which world the card is for.
+ * @returns {{ name: string, description: string, first_mes: string, alternate_greetings: string[], creator_notes: string }}
+ */
+export function sceneCardFields({ world = '', sceneNo = 0, title = '', place = '', date = '', openers = [] } = {}) {
+    const w = clean(world, 80) || 'this world';
+    const texts = (Array.isArray(openers) ? openers : []).map(o => String(o && typeof o === 'object' ? o.text : o || '').trim()).filter(Boolean);
+    return {
+        name: SCENE_NARRATOR_NAME,
+        description: `You are the narrator of ${w}. The player's character is {{user}}. This chat is one scene of the story: the scene's brief says where it opens, who is there and what came before.`,
+        first_mes: texts[0] || '',
+        alternate_greetings: texts.slice(1),
+        creator_notes: [`${w} · Scene ${sceneNo || '?'}${clean(title, MAX_TITLE) ? `: ${clean(title, MAX_TITLE)}` : ''}`, clean(place, 80), clean(date, 80)].filter(Boolean).join(' · ') + '. Made for this scene by Doom\'s Enhancement Suite; deleting the scene deletes this card.',
+    };
+}
+
+/**
+ * Scenes whose own card is no longer among SillyTavern's (D209: a card
+ * deleted there takes its chats with it): their chats are gone. One whose
+ * card is there again is not brought back from here: its chat is looked
+ * for when it is opened.
+ * @param {string[]} avatars  the cards there are
+ */
+export function markCardsGone(entry, avatars) {
+    const next = touch(normalizeWorldEntry(entry));
+    const there = new Set((Array.isArray(avatars) ? avatars : []).map(String));
+    let changed = 0;
+    next.scenes = next.scenes.map(s => {
+        if (!s.ownCard || !s.card || s.gone || there.has(s.card)) return s;
+        changed++;
+        return { ...s, gone: true, status: s.status === 'open' ? 'aside' : s.status };
+    });
+    return { entry: changed ? next : entry, changed };
 }
 
 /** One line for the End sheet after End ran. */

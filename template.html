@@ -1965,8 +1965,21 @@
                     </div>
                     <div class="rpg-setting-row rpg-world-sub">
                         <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">A narrator card for every scene</span>
+                            <span class="rpg-setting-hint">Starting a scene makes a new, blank narrator card for it, with the scene's
+                                three openings as the card's greetings. The card is tagged with its world and goes when the scene is
+                                deleted. Off: every scene is a chat on the world's one narrator card, picked below.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-hub-scene-cards" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row rpg-world-sub">
+                        <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Narrator card</span>
-                            <span class="rpg-setting-hint">The character card the world's scenes are chats of: any card, one card
+                            <span class="rpg-setting-hint">The character card the world's scenes are chats of when scenes do not
+                                get a card each: any card, one card
                                 per world. Make a narrator card builds one from the world, with no greeting of its own.</span>
                             <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
                                 <button id="rpg-hub-make" class="rpg-accordion-action-btn" type="button" title="A card named after the world, its description from the world's; no greeting"><i class="fa-solid fa-id-card"></i> Make a narrator card</button>

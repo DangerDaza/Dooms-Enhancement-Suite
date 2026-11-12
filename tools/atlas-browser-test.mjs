@@ -1258,7 +1258,21 @@ console.log('\n§5h starting a scene from a place (D174)');
     v = await panel();
     pk = await picks();
     check('one opening alone: nothing to mark is said, it is shown first, and Start is still there', !/swipes of the scene's first message/.test(v.text) && pk.radios === '0*' && pk.tags === 'shown first' && pk.starts.length === 1, JSON.stringify(pk));
+    // A narrator card of its own for the scene (D209): the sheet and the pick say so.
+    await page.evaluate((o) => window.__sceneStart(o), { ...form, newCard: true });
+    v = await panel();
+    check('with a card for every scene, the sheet says the scene is a fresh chat on a narrator card of its own, and names no card', /A fresh chat on a narrator card of its own that opens here, told what happened before and who is in it\./.test(v.text) && !/with The Redward/.test(v.text) && v.inside && !v.overflow);
+    const cardLine = () => page.evaluate(() => { const el = document.querySelector('.dooms-atlas-setup-card .dooms-atlas-card-line'); return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; });
+    await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending, newCard: true });
+    v = await panel();
+    check('the pick says a new narrator card is made with the three openings as its greetings, and that no other card\'s text is sent', (await cardLine()) === 'Starting makes a new narrator card for this scene, with these openings as its greetings. It is blank otherwise: no other card\'s text is sent in this scene.' && v.inside && !v.overflow, await cardLine());
+    await shot('7ze3-scene-openings-card');
+    await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { ...pending, openers: pending.openers.slice(0, 1) }, newCard: true });
+    check('one opening: it is the card\'s greeting', /with this opening as its greeting\./.test(await cardLine()));
+    await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { when: null, openers: [] }, newCard: true });
+    check('none: the card is made with no greeting', (await cardLine()) === 'Starting makes a new narrator card for this scene. It is blank otherwise: no other card\'s text is sent in this scene.', await cardLine());
     await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending });
+    check('with scenes on the world\'s one card there is no such line', (await cardLine()) === '');
     await shot('7ze-scene-openings');
     await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { ...pending, lore: { found: ['Kiyoha', 'Lysandra'], missing: ['Dagger'], standing: true, books: ['FD - Campaign Complete', 'FD - Continuity'] } } });
     v = await panel();
@@ -1636,6 +1650,20 @@ console.log('\n§5k the scenes of a world in the Atlas: the list, the ways in, t
         await list({ deleting: 's1', removal: { id: 's1', loading: false, log: false, undone: 0, kept: 0, areas: [] } });
         sd = await side();
         check('a scene that ended before a log was kept: the world keeps what happened in it, and it says so before anything goes', (await asked('s1')) === 'Delete scene 1 and its chat? The chat is removed from SillyTavern. This scene ended before a log of what it changed was kept, so the world keeps what happened in it: only its record and its chat go. This cannot be undone.' && same(row('s1').acts, ['sc-delete-go', 'sc-delete-no']), await asked('s1'));
+        // A scene with a narrator card of its own (D209): the card goes with it, and the question says so.
+        {
+            const own = (extra) => page.evaluate(([sc, x]) => window.__side({ tab: 'scenes', scenesTab: true, body: window.__V.atlasSceneListHtml({ scenes: sc.map(y => (y.id === 's1' || y.id === 's4' ? { ...y, ownCard: true, card: 'Narrator.png' } : y)), plan: { ok: false, reason: 'scene-open' }, why: 'x', front: 's4', ...x }) }), [scenes.filter(y => y.id !== 's5'), extra]);
+            await own({ deleting: 's4', removal: { id: 's4', loading: false, ok: true, kind: 'unended', card: { own: true, others: 0 } } });
+            sd = await side();
+            check('a scene on a card of its own, in front and never ended: the question says its card and its chat go, and that another scene opens in its place', (await asked('s4')) === 'Delete scene 4 and its chat? Its narrator card and its chat are removed from SillyTavern, and another scene opens in its place. Nothing of this scene was remembered, so the world stays as it is. This cannot be undone.' && sd.fits, await asked('s4'));
+            await own({ deleting: 's1', removal: { id: 's1', loading: false, ok: true, kind: 'ended', log: true, undone: 2, kept: 0, areas: ['the ledger'], card: { own: true, others: 2 } } });
+            check('an ended one, with other chats started on its card by hand: it says how many go with it, and what is taken back', (await asked('s1')) === 'Delete scene 1 and take back what it changed? Its narrator card and its chat are removed from SillyTavern. 2 other chats on that card go with it. 2 things it changed in the world (the ledger) are taken back. This cannot be undone.', await asked('s1'));
+            await own({ deleting: 's1', removal: { id: 's1', loading: false, ok: true, kind: 'ended', log: true, undone: 2, kept: 0, areas: ['the ledger'], card: { own: true, others: 1 } } });
+            check('one other chat: said as one', /1 other chat on that card goes with it\./.test(await asked('s1')));
+            await own({ deleting: 's2', removal: { id: 's2', loading: false, ok: true, kind: 'ended', log: true, undone: 2, kept: 0, areas: ['the ledger'] } });
+            check('a scene on the world\'s one card is asked about as before: no word of a card', (await asked('s2')).startsWith('Delete scene 2 and take back what it changed? The chat is removed from SillyTavern. 2 things'));
+            await shot('68d-scene-delete-own-card');
+        }
         // Scene 0 is never deleted; a remembered scene whose chat is gone, with its log, is deleted so that its changes go too.
         await page.evaluate(([sc]) => window.__side({ tab: 'scenes', scenesTab: true, body: window.__V.atlasSceneListHtml({ scenes: [{ id: 's0', title: 'Before the scenes', status: 'ended', chat: 'Long', recap: 'x' }, ...sc.map(x => (x.id === 's3' ? { ...x, status: 'ended', log: 'des-scene-log-w-s3-1.json' } : x))], plan: { ok: false, reason: 'scene-open' }, why: 'x', front: 's5', deleting: 's3', removal: { id: 's3', loading: false, log: true, undone: 2, kept: 0, areas: ['the ledger'] } }) }), [scenes]);
         sd = await side();

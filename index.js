@@ -567,6 +567,7 @@ function renderHubSettings() {
     $('#rpg-hub-style-law').prop('checked', hubConfig(extensionSettings).styleLaw);
     $('#rpg-hub-nudge').val(hubConfig(extensionSettings).nudgeAt);
     $('#rpg-hub-strip').prop('checked', hubConfig(extensionSettings).strip);
+    $('#rpg-hub-scene-cards').prop('checked', hubConfig(extensionSettings).sceneCards);
     renderHubStatus();
 }
 
@@ -576,7 +577,7 @@ function renderHubStatus() {
     if (!worldId) { $('#rpg-hub-status').text('Build a world of your own in the World Builder, then pick its narrator card here.'); return; }
     const card = cardOf(worldId);
     const name = String($('#rpg-hub-world option:selected').text() || worldId);
-    $('#rpg-hub-status').text(hubStatusLine({ worldName: name, entry: worldEntry(worldId), cardName: card ? card.name : '' }));
+    $('#rpg-hub-status').text(hubStatusLine({ worldName: name, entry: worldEntry(worldId), cardName: card ? card.name : '', sceneCards: hubConfig(extensionSettings).sceneCards }));
 }
 
 /** The Canon rules block in settings, made to exist. */
@@ -2272,6 +2273,8 @@ function bindSettingsUI() {
     // The length from which a scene's strip suggests a fresh chat (docs/long-shot-plan.md D181); the field shows what is in force (0 to 500).
     // The strip above a scene's chat (docs/long-shot-plan.md D200): off, the scene's options are in the Doom button's menu.
     $(document).on('change', '#rpg-hub-strip', function () { _hubRules().strip = $(this).prop('checked'); saveSettings(); onHubChatChanged(); });
+    // A narrator card of its own for every scene (docs/long-shot-plan.md D209), or every scene a chat on the world's one card (D114).
+    $(document).on('change', '#rpg-hub-scene-cards', function () { _hubRules().sceneCards = $(this).prop('checked'); saveSettings(); renderHubStatus(); window.dispatchEvent(new CustomEvent('dooms:hub-changed', { detail: { source: 'rules' } })); });
     $(document).on('change', '#rpg-hub-nudge', function () { _hubRules().nudgeAt = Number($(this).val()); $(this).val(hubConfig(extensionSettings).nudgeAt); saveSettings(); onHubChatChanged(); });
     window.addEventListener('dooms:hub-changed', () => { try { renderHubStatus(); } catch (e) { /* not mounted */ } });
     $(document).on('click', '#rpg-world-builder', function () {

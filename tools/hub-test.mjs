@@ -16,7 +16,7 @@ import {
     sealStores, takeSnapshot, sealSnapshot, factsFrom, weatherText, seedStores,
     personLine, buildBrief, buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle,
     hubMark, readMark, markEnded, sceneHeader, sceneFileName,
-    sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, buildOpenersPrompt as openersPromptOf, buildRecapPrompt, parseRecapReply, ledgerOfReply, LEDGER_ADDS, LEDGER_DROPS, isStaleScene, markIsOfFile,
+    sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, buildOpenersPrompt as openersPromptOf, buildRecapPrompt, parseRecapReply, ledgerOfReply, LEDGER_ADDS, LEDGER_DROPS, sceneCardFields, sceneCardTag, markCardsGone, SCENE_NARRATOR_NAME, isStaleScene, markIsOfFile,
     openSceneOf, asideScenes, openScene, setSceneAside, resumeScene, endSceneRecord, reopenScene, sceneByChat, markChatGone, renameSceneChat, removeGoneScene, reconcileScenesWithChats, lastRecaps,
     canDeleteScene, deleteKind, deleteSceneRecord, describeDeleteResult,
     hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE, backupFileName,
@@ -40,7 +40,8 @@ const clock = pack.clocks[0];
 
 console.log('\n§1 the rules');
 {
-    check('defaults: later that day, 600 characters, the count of repeated phrases off, no bar above a scene\'s chat', same(defaultHubConfig(), { gap: 'later', recapChars: 600, styleLaw: false, nudgeAt: 60, strip: false }));
+    check('defaults: later that day, 600 characters, the count of repeated phrases off, no bar above a scene\'s chat, a narrator card for every scene', same(defaultHubConfig(), { gap: 'later', recapChars: 600, styleLaw: false, nudgeAt: 60, strip: false, sceneCards: true }));
+    check('a card for every scene is on unless switched off, by exactly that; the setting is kept with the hub\'s', hubConfig({}).sceneCards === true && hubConfig({ hub: { sceneCards: false } }).sceneCards === false && hubConfig({ hub: { sceneCards: 'no' } }).sceneCards === true && normalizeHub({ sceneCards: false }).sceneCards === false);
     check('a fresh chat is suggested after sixty messages unless the player says otherwise: any number from 0 (never) to 500', hubConfig({}).nudgeAt === 60 && hubConfig({ hub: { nudgeAt: 0 } }).nudgeAt === 0 && hubConfig({ hub: { nudgeAt: '80' } }).nudgeAt === 80 && hubConfig({ hub: { nudgeAt: 9999 } }).nudgeAt === 500 && hubConfig({ hub: { nudgeAt: -5 } }).nudgeAt === 0 && hubConfig({ hub: { nudgeAt: 'soon' } }).nudgeAt === 60 && hubConfig({ hub: { nudgeAt: '' } }).nudgeAt === 60);
     check('the count of repeated phrases is on only when switched on, by exactly that', hubConfig({}).styleLaw === false && hubConfig({ hub: { styleLaw: true } }).styleLaw === true && hubConfig({ hub: { styleLaw: 'yes' } }).styleLaw === false && hubConfig({ hub: { styleLaw: 1 } }).styleLaw === false);
     check('no settings: the defaults', same(hubConfig(null), defaultHubConfig()) && same(hubConfig({ hub: 'x' }), defaultHubConfig()));
@@ -518,6 +519,37 @@ console.log('\nthe ledger asked for with the record (D208)');
     check('adds written beside the record, or the ledger as a bare list of adds, are taken too', JSON.stringify(ledgerOfReply(reply('{"recap":"r","add":[{"kind":"fact","name":"n","text":"t"}],"drop":[]}').reply)) === '{"add":[{"kind":"fact","name":"n","text":"t"}],"drop":[]}' && JSON.stringify(ledgerOfReply(reply('{"recap":"r","ledger":[{"kind":"fact","name":"n","text":"t"}]}').reply)) === '{"add":[{"kind":"fact","name":"n","text":"t"}]}');
     check('an answer with the record and no ledger, a ledger that is no object, or prose, has none', ledgerOfReply(reply('{"recap":"r","people":[]}').reply) === null && ledgerOfReply(reply('{"recap":"r","ledger":"none"}').reply) === null && ledgerOfReply(reply('They crossed at dusk.').reply) === null && ledgerOfReply(null) === null && ledgerOfReply(reply('{"recap":"r","ledger":{}}').reply) === null);
     check('an answer cut off inside its ledger holds no record that can be read: it is asked for again', reply('{"recap":"They crossed.","people":[],"ledger":{"add":[{"kind":"fact","name":"The cro').ok === false);
+}
+
+console.log('\na scene\'s own narrator card (D209)');
+{
+    const openers = [{ title: 'The lane', text: 'The lane is empty.' }, { title: 'The weir', text: ' The weir is loud. ' }, { title: 'The court', text: 'Word has come.' }];
+    const f = sceneCardFields({ world: 'The Eld', sceneNo: 4, title: 'The lane', place: 'Redfall Castle', date: 'Day 44', openers });
+    check('the card is called Narrator, whatever the world and the scene', f.name === 'Narrator' && SCENE_NARRATOR_NAME === 'Narrator');
+    check('it is blank but for one line that says what it is: the world, the player, that the chat is one scene', f.description === 'You are the narrator of The Eld. The player\'s character is {{user}}. This chat is one scene of the story: the scene\'s brief says where it opens, who is there and what came before.');
+    check('the openings are its greetings in the order given: the first its first message, the rest its alternates, trimmed', f.first_mes === 'The lane is empty.' && same(f.alternate_greetings, ['The weir is loud.', 'Word has come.']));
+    check('the note says which scene of which world, where and when, and that the card goes with the scene', f.creator_notes === 'The Eld · Scene 4: The lane · Redfall Castle · Day 44. Made for this scene by Doom\'s Enhancement Suite; deleting the scene deletes this card.');
+    const bare = sceneCardFields({ world: 'The Eld', sceneNo: 5, openers: [] });
+    check('with no opening the card has no greeting, and a note with what is known', bare.first_mes === '' && same(bare.alternate_greetings, []) && bare.creator_notes.startsWith('The Eld · Scene 5. Made for this scene'));
+    check('openings given as plain text are taken too; empty ones are passed over', same(sceneCardFields({ openers: ['One.', '', { text: 'Two.' }] }).alternate_greetings, ['Two.']) && sceneCardFields({ openers: ['One.'] }).first_mes === 'One.');
+    check('a world\'s scene cards share one tag, named after the world', sceneCardTag('The Eld') === 'The Eld: scenes' && sceneCardTag('') === 'World: scenes');
+    // The record.
+    let e = openScene(normalizeWorldEntry(null), { title: 'a', chat: 'Scene 1 - a', card: 'Narrator.png', ownCard: true }).entry;
+    e = openScene(e, { title: 'b', chat: 'Scene 2 - b', card: 'Teller.png' }).entry;
+    check('a scene\'s record says when its card is its own, and keeps saying it; one on the world\'s card says nothing', e.scenes[0].ownCard === true && normalizeWorldEntry(JSON.parse(JSON.stringify(e))).scenes[0].ownCard === true && !('ownCard' in e.scenes[1]));
+    const gone = markCardsGone(e, ['Teller.png', 'Someone.png']);
+    check('a scene whose own card is no longer among SillyTavern\'s is marked as gone, and set aside if it was open', gone.changed === 1 && gone.entry.scenes[0].gone === true && gone.entry.scenes[0].status === 'aside' && gone.entry.scenes[1].gone === false);
+    check('one on the world\'s card is not judged by this, nor one whose card is there', markCardsGone(e, ['Narrator.png']).changed === 0 && markCardsGone(e, ['Narrator.png']).entry === e);
+    // The words.
+    const sc = { id: 's4' };
+    check('deleted with its card', describeDeleteResult({ ok: true, scene: sc, chat: 'deleted', card: 'deleted', opened: null }) === 'Scene 4 is deleted, and its narrator card and its chat are deleted.');
+    check('its chat gone already', describeDeleteResult({ ok: true, scene: sc, chat: 'gone', card: 'deleted', opened: null }) === 'Scene 4 is deleted, and its narrator card is deleted (its chat was gone already).');
+    check('a card that could not be deleted is said, with where it still is', describeDeleteResult({ ok: true, scene: sc, chat: 'deleted', card: 'kept', opened: null }) === 'Scene 4 is deleted, and its chat is deleted; its narrator card could not be deleted and is still in SillyTavern\'s list.');
+    check('the chat closed for want of another', describeDeleteResult({ ok: true, scene: sc, chat: 'deleted', card: 'deleted', opened: { name: '', fresh: false, card: '', closed: true } }).endsWith('are deleted. No chat is open now.'));
+    check('a scene on the world\'s card is said as before', describeDeleteResult({ ok: true, scene: sc, chat: 'deleted', opened: null }) === 'Scene 4 is deleted, and its chat is deleted.');
+    check('a card that would not go while the scene was in front', /did not delete the scene's narrator card \(no\)\. The scene is still in the list\./.test(describeDeleteResult({ ok: false, reason: 'card', error: 'no', scene: sc })));
+    check('a card that could not be made', describeStartResult({ ok: false, reason: 'card', error: 'x' }) === 'SillyTavern could not make the scene\'s narrator card, so nothing was started.');
+    check('the status line: with a card for every scene a world needs no narrator to be played', hubStatusLine({ worldName: 'The Eld', entry: null, sceneCards: true }) === 'The Eld: every scene gets a narrator card of its own; no scene played yet.' && /^The Eld: every scene gets a narrator card of its own; /.test(hubStatusLine({ worldName: 'The Eld', entry: e, sceneCards: true })) && hubStatusLine({ worldName: 'The Eld', entry: null }) === 'The Eld: no narrator card yet; pick one to play it from the hub.');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

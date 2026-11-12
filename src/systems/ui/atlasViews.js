@@ -215,7 +215,7 @@ export function atlasSetupHtml({ step = 'notes', notes = '', reach = 'recent', c
  * @param {string} o.whereNew        a place typed in that is not on any map yet
  * @param {{ kind: string, label?: string }|null} o.from   what the scene is started from, said under the title
  */
-export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: '' }, sceneNo = 0, people = [], cast = [], extra = '', gap = { id: 'now', words: '' }, journey = '', seedText = '', note = '', error = '', pending = null, card = '', places = null, whereNew = '', from = null, chosen = 0, voices = false, listening = -1 } = {}) {
+export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: '' }, sceneNo = 0, people = [], cast = [], extra = '', gap = { id: 'now', words: '' }, journey = '', seedText = '', note = '', error = '', pending = null, card = '', places = null, whereNew = '', from = null, chosen = 0, voices = false, listening = -1, newCard = false } = {}) {
     const known = !!(place && place.label);
     const where = known ? place.label : (pending && pending.place && pending.place.label) || 'here';
     const title = `${sceneNo ? `Scene ${sceneNo}` : 'A scene'}${known ? ` at ${e(where)}` : ''}`;
@@ -240,6 +240,7 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
         return `<div class="dooms-atlas-setup-card is-review is-scene">
             <h3>How does ${sceneNo ? `scene ${sceneNo}` : 'the scene'} open?</h3>
             <p>${e(where)}${when ? ` · ${e(when)}` : ''}. ${list.length > 1 ? `All ${list.length === 3 ? 'three' : list.length} are swipes of the scene's first message. Mark the one to show first.` : ''}</p>
+            ${newCard ? `<p class="dooms-atlas-start-note dooms-atlas-card-line"><i class="fa-solid fa-id-card" aria-hidden="true"></i> Starting makes a new narrator card for this scene${list.length ? `, with ${list.length === 1 ? 'this opening as its greeting' : 'these openings as its greetings'}` : ''}. It is blank otherwise: no other card's text is sent in this scene.</p>` : ''}
             ${tailLine(p.tail)}
             ${loreLine(p.lore)}
             ${contLine(p.continuity)}
@@ -273,7 +274,7 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
         </fieldset>` : '';
     return `<div class="dooms-atlas-setup-card is-scene">
         <h3>${title}</h3>
-        <p>A fresh chat${card ? ` with ${e(card)}` : ''} that opens ${known ? 'here' : 'there'}, told what happened before and who is in it.</p>
+        <p>${newCard ? 'A fresh chat on a narrator card of its own' : `A fresh chat${card ? ` with ${e(card)}` : ''}`} that opens ${known ? 'here' : 'there'}, told what happened before and who is in it.</p>
         ${sceneFromLine(from)}
         ${whereField}
         <fieldset class="dooms-atlas-scene-field"><legend class="dooms-atlas-card-label">Who is there</legend>
@@ -348,7 +349,11 @@ export function atlasSceneListHtml({ scenes = [], plan = { ok: false }, why = ''
     const ask = (s) => {
         const n = e(sceneNoOf(s.id));
         const here = !!front && s.id === front;
-        const chatLine = s.gone ? 'Its chat is gone already.' : `The chat is removed from SillyTavern${here ? ', and another chat opens in its place' : ''}.`;
+        // A scene with a card of its own (D209): the card goes with it, and so does anything else on that card.
+        const r0 = removal && removal.id === s.id && removal.card ? removal.card : null;
+        const others = r0 && r0.others ? ` ${r0.others} other ${r0.others === 1 ? 'chat' : 'chats'} on that card ${r0.others === 1 ? 'goes' : 'go'} with it.` : '';
+        const chatLine = s.ownCard && !s.gone ? `Its narrator card and its chat are removed from SillyTavern${here ? ', and another scene opens in its place' : ''}.${others || (r0 ? '' : ' Any other chat on that card goes with it.')}`
+            : s.gone ? 'Its chat is gone already.' : `The chat is removed from SillyTavern${here ? ', and another chat opens in its place' : ''}.`;
         if (!remembered(s)) return `Delete scene ${n} and its chat? ${chatLine} Nothing of this scene was remembered, so the world stays as it is. This cannot be undone.`;
         const r = removal && removal.id === s.id ? removal : null;
         if (!r || r.loading) return `Reading what scene ${n} changed in the world…`;
