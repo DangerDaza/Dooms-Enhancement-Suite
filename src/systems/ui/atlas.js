@@ -28,7 +28,7 @@ import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHt
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
 import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml } from './atlasViews.js';
 import { isCanonOn } from '../features/canon.js';
-import { sceneAway, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, hubWorldIds, cardOf, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
+import { sceneAway, deletePlan, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, hubWorldIds, cardOf, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
 import { describeStartResult, describeEndResult, describeDeleteResult, gapOf, hubConfig } from '../../utils/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
@@ -99,6 +99,7 @@ let worlds = [];          // the worlds that can be picked: [{ id, name, card }]
 let worldsToken = 0;
 let deleting = '';        // the scene whose Delete was pressed and waits for "Delete scene N" or "Keep it" (D197)
 let deletingNow = '';     // the scene being deleted
+let removal = null;       // what deleting the scene asked about would take back (D206): { id, loading } until its log is read, then the plan
 /** The pack the Atlas draws: the picked world's, else the chat's. */
 const thePack = () => (picked ? pickedPack : getActivePack());
 let startPlan = { ok: false, reason: '' };    // whether a scene can be started from here, and in which world (D174); read anew on every draw
@@ -399,7 +400,7 @@ function tabBody({ state, pack, cfg }) {
         const entry = id ? worldEntry(id) : null;
         let front = '';
         try { const cur = currentScene(); if (cur && cur.worldId === id) front = cur.mark.scene; } catch (e) { front = ''; }
-        return atlasSceneListHtml({ scenes: entry ? entry.scenes : [], plan: startPlan, why: whyNoStart(), front, deleting, busy: deletingNow });
+        return atlasSceneListHtml({ scenes: entry ? entry.scenes : [], plan: startPlan, why: whyNoStart(), front, deleting, busy: deletingNow, removal });
     }
     // Under the hooks, the quests completed in this chat (the old Map window's own panel; the owner kept it, 2026-11-10).
     if (tab === 'hooks') {
@@ -1386,12 +1387,22 @@ function build() {
                 return;
             }
             // Delete (D197): asked for, then confirmed on the scene's own row; the record and the chat go together.
-            if (act === 'sc-delete') { deleting = sid; render(); return; }
-            if (act === 'sc-delete-no') { deleting = ''; render(); return; }
+            if (act === 'sc-delete') {
+                deleting = sid;
+                removal = { id: sid, loading: true };
+                render();
+                // What deleting it would take back is read from the scene's log before the question is put (D206).
+                let p = null;
+                try { p = await deletePlan(hubWorld(), sid); } catch (e) { p = { ok: true, kind: 'ended', log: false, undone: 0, kept: 0, areas: [] }; }
+                if (deleting === sid) { removal = { id: sid, loading: false, ...p }; render(); }
+                return;
+            }
+            if (act === 'sc-delete-no') { deleting = ''; removal = null; render(); return; }
             if (act === 'sc-delete-go') {
                 if (deletingNow) return;
                 const world = hubWorld();
                 deleting = '';
+                removal = null;
                 deletingNow = sid;
                 result = '';
                 render();

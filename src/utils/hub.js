@@ -223,6 +223,7 @@ export function normalizeScene(raw, seq = 0) {
         reopened: r.reopened === true,
         gone: r.gone === true,
         noRecap: r.noRecap === true,
+        ...(r.log ? { log: clean(r.log, 160) } : {}),    // the file that holds what its End changed in the world (D206); absent for a scene ended before that was kept
         ...(conflicts.length ? { conflicts } : {}),    // what the scene's record found against what was established (D190); absent when it found nothing
     };
 }
@@ -1152,9 +1153,21 @@ export function renameSceneChat(entry, oldFile, newFile) {
  */
 export function canDeleteScene(scene) {
     if (!scene) return { ok: false, reason: 'no-scene' };
-    if (scene.status === 'ended') return { ok: false, reason: 'ended' };
-    if (scene.reopened) return { ok: false, reason: 'remembered' };
+    // Scene 0 is the chat the world's scenes began from: its chat is the player's own long chat, and its memory is where the world starts.
+    if (scene.id === ADOPTED_ID) return { ok: false, reason: 'first' };
     return { ok: true, reason: '' };
+}
+
+/**
+ * What deleting a scene does (D197, D206): 'unended' for one that never
+ * ended (nothing of it was remembered: its record and its chat go),
+ * 'ended' for one the world remembers (what it changed is taken back as
+ * far as its log says and it still stands), '' for one that is not
+ * deleted (scene 0) or whose chat is gone (that one is removed).
+ */
+export function deleteKind(scene) {
+    if (!scene || scene.gone || !canDeleteScene(scene).ok) return '';
+    return scene.status === 'ended' || scene.reopened ? 'ended' : 'unended';
 }
 
 /**
@@ -1180,12 +1193,18 @@ export function describeDeleteResult(r) {
     if (r.ok) {
         const went = r.chat === 'gone' ? 'its chat was gone already' : 'its chat is deleted';
         const moved = r.opened ? (r.opened.fresh ? ` A new chat is open on ${r.opened.card || 'the card'}.` : ` "${r.opened.name}" is open in its place.`) : '';
-        return `Scene ${n} is deleted, and ${went}.${moved}`;
+        // An ended scene (D206): what it changed in the world, taken back as far as it still stood.
+        const t = r.taken && typeof r.taken === 'object' ? r.taken : null;
+        const back = !t ? ''
+            : !t.log ? ' The world keeps what happened in it: it ended before a log of what it changed was kept.'
+            : !t.undone && !t.kept ? ' Its End had changed nothing in the world, so there was nothing to take back.'
+            : !t.undone ? ` Nothing it changed in the world could be taken back: ${t.kept} ${t.kept === 1 ? 'thing stays as it is' : 'things stay as they are'}, changed again since.`
+            : ` ${t.undone} ${t.undone === 1 ? 'thing' : 'things'} it changed in the world ${t.undone === 1 ? 'is' : 'are'} taken back${t.kept ? `; ${t.kept} ${t.kept === 1 ? 'stays' : 'stay'} as ${t.kept === 1 ? 'it is' : 'they are'}, changed again since` : ''}.`;
+        return `Scene ${n} is deleted, and ${went}.${back}${moved}`;
     }
     const why = {
         'no-scene': 'That scene is no longer in the list.',
-        ended: 'An ended scene is not deleted: the world remembers it.',
-        remembered: 'That scene was ended once and the world remembers it: it is not deleted.',
+        first: 'Scene 0 is the chat the scenes began from: it is not deleted. Play as scenes on that chat again starts the world over from it.',
         'no-world': 'No world to delete it from.',
         'card-gone': 'The narrator card is gone, so its chat cannot be reached.',
         busy: 'A reply or a request is running; try again when it is done.',

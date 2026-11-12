@@ -1511,9 +1511,9 @@ console.log('\n§5k the scenes of a world in the Atlas: the list, the ways in, t
     check('a world played as scenes has a sixth tab, Scenes, and all six fit the sidebar', same(sd.tabs, ['places', 'people', 'news', 'rumours', 'hooks', 'scenes*']) && sd.tabsFit && sd.fits);
     check('the list: the scene being played first, then the one set aside, then the ended ones newest first', same(sd.rows.map(r => r.id), ['s5', 's4', 's3', 's2', 's1']));
     const row = (id) => sd.rows.find(r => r.id === id);
-    check('the scene in front is being played: it is ended or set aside from here', same(row('s5').tags, ['being played', 'reopened']) && same(row('s5').acts, ['sc-end', 'sc-aside']) && /is-open/.test(row('s5').cls) && /is-front/.test(row('s5').cls) && row('s5').meta === 'Saltport, the quay · Kiyoha · from 14th of Frostfall');
-    check('one set aside is resumed, or ended; an ended one is read again or gone on from; one whose chat is gone can only be removed', same(row('s4').acts, ['sc-resume', 'sc-end', 'sc-delete']) && same(row('s1').acts, ['sc-open', 'sc-continue!']) && same(row('s3').acts, ['sc-remove']) && same(row('s3').tags, ['chat gone']));
-    check('Delete is for a scene that never ended (D197): the one set aside has it; an ended one has none, nor has one that was ended and reopened, though it is being played', row('s4').acts.includes('sc-delete') && !row('s1').acts.includes('sc-delete') && !row('s2').acts.includes('sc-delete') && !row('s5').acts.includes('sc-delete'));
+    check('the scene in front is being played: it is ended or set aside from here', same(row('s5').tags, ['being played', 'reopened']) && same(row('s5').acts, ['sc-end', 'sc-aside', 'sc-delete']) && /is-open/.test(row('s5').cls) && /is-front/.test(row('s5').cls) && row('s5').meta === 'Saltport, the quay · Kiyoha · from 14th of Frostfall');
+    check('one set aside is resumed, or ended; an ended one is read again or gone on from; one whose chat is gone can only be removed', same(row('s4').acts, ['sc-resume', 'sc-end', 'sc-delete']) && same(row('s1').acts, ['sc-open', 'sc-continue!', 'sc-delete']) && same(row('s3').acts, ['sc-remove']) && same(row('s3').tags, ['chat gone']));
+    check('every scene can be deleted (D197, D206): one set aside, an ended one, one that was ended and reopened; one whose chat is gone and has no log is only removed', row('s4').acts.includes('sc-delete') && row('s1').acts.includes('sc-delete') && row('s2').acts.includes('sc-delete') && row('s5').acts.includes('sc-delete') && !row('s3').acts.includes('sc-delete'));
     {
         // Delete asks on the scene's own row before anything goes.
         const list = (o) => page.evaluate(([sc, extra]) => window.__side({ tab: 'scenes', scenesTab: true, body: window.__V.atlasSceneListHtml({ scenes: sc, plan: { ok: false, reason: 'scene-open' }, why: 'Scene 6 is open: end it or set it aside first.', front: 's6', ...extra }) }), [[...scenes.filter(x => x.id !== 's5'), { id: 's6', title: 'A wrong turn', status: 'open', place: { id: '', label: 'The moor' }, cast: ['Kiyoha'], startDate: '15th of Frostfall' }], o]);
@@ -1524,7 +1524,7 @@ console.log('\n§5k the scenes of a world in the Atlas: the list, the ways in, t
         sd = await side();
         const ask = await page.evaluate(() => { const li = document.querySelector('.dooms-atlas-scene[data-id="s4"]'); const c = li.querySelector('.dooms-atlas-scene-confirm'); const go = c.querySelector('[data-act="sc-delete-go"]'); const b = c.getBoundingClientRect(); const body = document.querySelector('.dooms-atlas-body').getBoundingClientRect(); return { text: c.textContent.replace(/\s+/g, ' ').trim(), role: c.getAttribute('role'), go: go.textContent.trim(), goBg: getComputedStyle(go).backgroundColor, inside: b.left >= body.left && b.right <= body.right + 1 }; });
         check('pressed, Delete asks on the scene\'s own row: what goes, that the world stays as it is, that it cannot be undone', same(row('s4').acts, ['sc-delete-go', 'sc-delete-no']) && ask.role === 'alertdialog' && /^Delete scene 4 and its chat\? The chat is removed from SillyTavern\. Nothing of this scene was remembered, so the world stays as it is\. This cannot be undone\./.test(ask.text) && ask.go === 'Delete scene 4' && ask.inside && sd.fits, JSON.stringify(ask));
-        check('the other scenes keep their own buttons while one is asked about', same(row('s6').acts, ['sc-end', 'sc-aside', 'sc-delete']) && same(row('s1').acts, ['sc-open', 'sc-continue!']));
+        check('the other scenes keep their own buttons while one is asked about', same(row('s6').acts, ['sc-end', 'sc-aside', 'sc-delete']) && same(row('s1').acts, ['sc-open', 'sc-continue!', 'sc-delete']));
         await shot('68b-scene-delete-ask');
         await list({ deleting: 's6' });
         sd = await side();
@@ -1533,9 +1533,32 @@ console.log('\n§5k the scenes of a world in the Atlas: the list, the ways in, t
         await list({ busy: 's4' });
         sd = await side();
         check('while one is being deleted its row says so, and no other Delete can be pressed', /Deleting…/.test(await page.evaluate(() => document.querySelector('.dooms-atlas-scene[data-id="s4"]').textContent)) && same(row('s4').acts, []) && same(row('s6').acts, ['sc-end', 'sc-aside', 'sc-delete!']));
+        // An ended scene (D206): what deleting it would take back is read from its log first, then asked.
+        const asked = async (id) => page.evaluate((id) => { const c = document.querySelector(`.dooms-atlas-scene[data-id="${id}"] .dooms-atlas-scene-confirm`); return c ? c.querySelector('p').textContent.replace(/\s+/g, ' ').trim() : ''; }, id);
         await list({ deleting: 's1' });
         sd = await side();
-        check('an ended scene is never asked about, whatever is asked for', same(row('s1').acts, ['sc-open', 'sc-continue!']) && !(await page.evaluate(() => !!document.querySelector('.dooms-atlas-scene-confirm'))));
+        check('an ended scene asked about: until its log is read it says so, and only Keep it can be pressed', (await asked('s1')) === 'Reading what scene 1 changed in the world…' && same(row('s1').acts, ['sc-delete-no']));
+        await list({ deleting: 's1', removal: { id: 's2', loading: false, log: true, undone: 3, kept: 0, areas: [] } });
+        sd = await side();
+        check('a plan read for another scene is not this one\'s', (await asked('s1')) === 'Reading what scene 1 changed in the world…' && same(row('s1').acts, ['sc-delete-no']));
+        await list({ deleting: 's1', removal: { id: 's1', loading: false, ok: true, kind: 'ended', log: true, undone: 14, kept: 3, areas: ['the date and the place', 'where people stand', 'the ledger'] } });
+        sd = await side();
+        check('its log read: it says how many of the things it changed are taken back and where, how many stay because they were changed again, and that it cannot be undone', (await asked('s1')) === 'Delete scene 1 and take back what it changed? The chat is removed from SillyTavern. 14 things it changed in the world (the date and the place, where people stand, the ledger) are taken back; 3 stay as they are, because a later scene or you changed them again. This cannot be undone.' && same(row('s1').acts, ['sc-delete-go', 'sc-delete-no']) && sd.fits, await asked('s1'));
+        await shot('68c-scene-delete-ended');
+        await list({ deleting: 's1', removal: { id: 's1', loading: false, log: true, undone: 1, kept: 0, areas: ['the ledger'] } });
+        check('one thing, nothing kept', (await asked('s1')) === 'Delete scene 1 and take back what it changed? The chat is removed from SillyTavern. 1 thing it changed in the world (the ledger) is taken back. This cannot be undone.', await asked('s1'));
+        await list({ deleting: 's1', removal: { id: 's1', loading: false, log: true, undone: 0, kept: 5, areas: ['the tracker'] } });
+        check('everything it changed changed again since: said plainly', (await asked('s1')) === 'Delete scene 1 and take back what it changed? The chat is removed from SillyTavern. Nothing it changed in the world (the tracker) can be taken back: 5 stay as they are, because a later scene or you changed them again. This cannot be undone.', await asked('s1'));
+        await list({ deleting: 's1', removal: { id: 's1', loading: false, log: true, undone: 0, kept: 0, areas: [] } });
+        check('an End that changed nothing in the world: said so', (await asked('s1')) === 'Delete scene 1 and its chat? The chat is removed from SillyTavern. Its End changed nothing in the world, so there is nothing to take back. This cannot be undone.', await asked('s1'));
+        await list({ deleting: 's1', removal: { id: 's1', loading: false, log: false, undone: 0, kept: 0, areas: [] } });
+        sd = await side();
+        check('a scene that ended before a log was kept: the world keeps what happened in it, and it says so before anything goes', (await asked('s1')) === 'Delete scene 1 and its chat? The chat is removed from SillyTavern. This scene ended before a log of what it changed was kept, so the world keeps what happened in it: only its record and its chat go. This cannot be undone.' && same(row('s1').acts, ['sc-delete-go', 'sc-delete-no']), await asked('s1'));
+        // Scene 0 is never deleted; a remembered scene whose chat is gone, with its log, is deleted so that its changes go too.
+        await page.evaluate(([sc]) => window.__side({ tab: 'scenes', scenesTab: true, body: window.__V.atlasSceneListHtml({ scenes: [{ id: 's0', title: 'Before the scenes', status: 'ended', chat: 'Long', recap: 'x' }, ...sc.map(x => (x.id === 's3' ? { ...x, status: 'ended', log: 'des-scene-log-w-s3-1.json' } : x))], plan: { ok: false, reason: 'scene-open' }, why: 'x', front: 's5', deleting: 's3', removal: { id: 's3', loading: false, log: true, undone: 2, kept: 0, areas: ['the ledger'] } }) }), [scenes]);
+        sd = await side();
+        check('scene 0, the chat the scenes began from, has no Delete', same(row('s0').acts, ['sc-open', 'sc-continue!']));
+        check('a remembered scene whose chat is gone but whose log is there is deleted, not just removed, and it says its chat is gone already', same(row('s3').acts, ['sc-delete-go', 'sc-delete-no']) && /^Delete scene 3 and take back what it changed\? Its chat is gone already\. 2 things/.test(await asked('s3')), await asked('s3'));
         // The list as it was, for the checks after this.
         await page.evaluate((sc) => window.__side({ tab: 'scenes', scenesTab: true, body: window.__V.atlasSceneListHtml({ scenes: sc, plan: { ok: false, reason: 'scene-open' }, why: 'Scene 5 (Fog on the quay) is open: end it or set it aside first.', front: 's5' }) }), scenes);
         sd = await side();
@@ -1545,7 +1568,7 @@ console.log('\n§5k the scenes of a world in the Atlas: the list, the ways in, t
     await shot('68-scenes-tab');
     await page.evaluate((sc) => window.__side({ tab: 'scenes', scenesTab: true, between: { open: null }, body: window.__V.atlasSceneListHtml({ scenes: sc.map(s => (s.id === 's5' ? { ...s, status: 'ended', endDate: '14th of Frostfall', recap: 'Fog, and a boat that did not come.' } : s)), plan: { ok: true, number: 6 }, why: '', front: 's5' }) }), scenes);
     sd = await side();
-    check('between scenes: Start scene 6 at the top, the ended scene in front is not opened again, and any ended scene can be gone on from', same(sd.topActs, ['scene-new']) && /^Start scene 6/.test(sd.top) && same(row('s5').acts, ['sc-open!', 'sc-continue']) && same(row('s1').acts, ['sc-open', 'sc-continue']) && same(sd.rows.map(r => r.id), ['s4', 's5', 's3', 's2', 's1']));
+    check('between scenes: Start scene 6 at the top, the ended scene in front is not opened again, and any ended scene can be gone on from', same(sd.topActs, ['scene-new']) && /^Start scene 6/.test(sd.top) && same(row('s5').acts, ['sc-open!', 'sc-continue', 'sc-delete']) && same(row('s1').acts, ['sc-open', 'sc-continue', 'sc-delete']) && same(sd.rows.map(r => r.id), ['s4', 's5', 's3', 's2', 's1']));
     await page.evaluate(() => window.__side({ tab: 'scenes', scenesTab: true, body: window.__V.atlasSceneListHtml({ scenes: [], plan: { ok: true, number: 1 }, why: '' }) }));
     sd = await side();
     check('a world with no scene yet says what a scene is, and offers the first', same(sd.topActs, ['scene-new']) && /No scene has been played in this world yet/.test(sd.text) && sd.rows.length === 0);

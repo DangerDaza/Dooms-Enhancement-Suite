@@ -1316,3 +1316,44 @@ later), `tools/hub-flow-test.mjs` §24 (read from the file on another
 card and nothing opened, the next day, the chat in front and no file
 read, fifteen and eight, a named scene, the file gone),
 `tools/atlas-browser-test.mjs` §5h (the pick's line).
+
+## 45. An ended scene deleted: what it changed is taken back from its log (2026-11-12, D206)
+
+D197 gave Delete to a scene that never ended and none to one that had:
+"the world remembers it". The owner: "We are definitely going to need a
+way to delete ended scenes", then, of the choice between a kept copy of
+the world before each End and nothing, "users are going to fuck up and
+need to restore; I like the idea of peeling back the layers; ideally I
+would like to be able to peel back every layer", and, of the copies:
+"Could we not just make a log of what was added when?" That is what is
+built. A log is smaller than a copy of the world for every End, and it
+does more: a copy can only put the world back from its end, a log can
+take one scene out of its middle.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D206 | Every End writes down what it changed; a scene deleted takes those changes back as far as they still stand | **The log** (`src/utils/sceneLog.js`). An End does not only add: it replaces the date and place, where people stand, the clocks, the tracker. So the log is the difference between the world's entry before the End and after it (the memory with all its stores, the continuity, the phrases held back; not the list of scenes), each entry "this was X, the scene made it Y": X whole, Y as a short mark (its length and a hash). Items of a list that have a name of their own (a ledger line, a person, a thread, a hook, a place on the map) are entries by that name, not by their place in the list. A scene reopened and ended again has both Ends in the one log. **Where it is kept.** Not in the settings: a file of the player's own on SillyTavern's side (`/api/files/upload`, read back from `/user/files/`), named on the scene's record (`log`). It is as big as what the scene changed: under two kilobytes for the scene run in the real SillyTavern. **Deleting a scene the world remembers** (ended, or ended once and reopened; any of them, in any order): each thing its Ends changed is put back to what it was, where it is still as that scene left it. What a later scene, or the player, has changed again is left as it stands: it is no longer that scene's to take back. Then the record, the chat and the log go, as D197. The newest scene deleted puts the world back exactly as the scene before left it; delete the newest again and again and the layers come off one by one. **Asked first.** Delete on the row reads the log and says: how many things it changed would be taken back, where they are (the date and the place, the tracker, where people stand, the open threads, the ledger, the inventory, the world's clocks and who is where, the hooks, the map), and how many stay because they were changed again. **The continuity book.** The player's own edits in it are taken in first, so one of theirs is never put back; then the entries the scene's End made for people who are gone again are taken out, and the rest are written from the continuity as it now stands (`planBook` with `force`: "already said" is asked of the entry's text, not of the mark of what was last written). **No log.** A scene that ended before this, or whose log could not be written or read, is deleted with its chat and the world keeps what happened in it; the question says so. **Not deleted.** Scene 0: it is the player's own long chat and where the world's memory begins. Play as scenes on it again starts the world over from it. A remembered scene whose chat is gone but whose log is there is deleted this way too, not only removed. **The Undo of an End** (D190) takes that End out of the log again. |
+
+What it does not do. A scene taken out of the middle is not unwound as
+if it had never been: what a later scene built on it stays, and the
+question says how many things that is. The marks are 32-bit hashes of a
+value's text, with its length: two different values with one mark would
+be taken for the same, which is not looked for. A change inside a long
+list whose items have no names (the tracker's own text, the world's log
+of what moved) is one entry for the whole list. What the scene's End
+wrote outside the world's entry and the continuity book is not in the
+log (there is nothing else: the scene's own chat goes with it). The log
+is not shown to the player as a history of the scene, though it could
+be. Run in the real SillyTavern: a scene ended (21 changes, 1,785
+bytes), asked about (14 things to take back), deleted, and the world's
+memory, people and threads were as before its End, its log and its chat
+gone; a scene from the middle was not run there.
+
+Tests: `tools/scene-log-test.mjs` (the marks, the log, taken back from
+the end and from the middle, the player's own hand since, lists, a scene
+ended twice, a world's first End, the words); `tools/hub-flow-test.mjs`
+§25 (the real module: the log written and named, three scenes, the
+newest deleted, one from the middle, no log, the Undo of an End, ended
+twice, a log gone); `tools/hub-test.mjs` (which scenes, the words);
+`tools/atlas-browser-test.mjs` §5k (Delete on ended scenes, the
+question in each case, scene 0, a chat gone).

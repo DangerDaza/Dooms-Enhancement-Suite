@@ -18,7 +18,7 @@ import {
     hubMark, readMark, markEnded, sceneHeader, sceneFileName,
     sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, buildOpenersPrompt as openersPromptOf, buildRecapPrompt, parseRecapReply, isStaleScene, markIsOfFile,
     openSceneOf, asideScenes, openScene, setSceneAside, resumeScene, endSceneRecord, reopenScene, sceneByChat, markChatGone, renameSceneChat, removeGoneScene, reconcileScenesWithChats, lastRecaps,
-    canDeleteScene, deleteSceneRecord, describeDeleteResult,
+    canDeleteScene, deleteKind, deleteSceneRecord, describeDeleteResult,
     hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE, backupFileName,
     loreEntries, castLore, standingLore, LORE_PER_PERSON, LORE_STANDING, sceneLength, sceneIsLong, continuationSeed,
 } from '../src/utils/hub.js';
@@ -329,11 +329,14 @@ console.log('\n§8a a scene deleted: only one that never ended (D197)');
     const of = (id) => e.scenes.find(x => x.id === id);
     check('the fixture: two ended, one reopened and aside, one aside, one open', of('s1').status === 'ended' && of('s3').status === 'aside' && of('s3').reopened === true && of('s4').status === 'aside' && !of('s4').reopened && of('s5').status === 'open' && e.seq === 5);
     check('a scene that is open or set aside and never ended can be deleted', canDeleteScene(of('s5')).ok && canDeleteScene(of('s4')).ok);
-    check('an ended scene cannot: the world remembers it', same(canDeleteScene(of('s1')), { ok: false, reason: 'ended' }));
-    check('nor one that was ended and then reopened, though it is open or aside again', same(canDeleteScene(of('s3')), { ok: false, reason: 'remembered' }));
+    check('an ended scene can be deleted too, and one that was ended and then reopened (D206: what it changed is taken back from its log)', canDeleteScene(of('s1')).ok && canDeleteScene(of('s3')).ok);
+    check('which kind of delete it is: one that never ended, one the world remembers; none for scene 0 or a scene whose chat is gone', deleteKind(of('s5')) === 'unended' && deleteKind(of('s4')) === 'unended' && deleteKind(of('s1')) === 'ended' && deleteKind(of('s3')) === 'ended' && deleteKind({ id: ADOPTED_ID, status: 'ended', chat: 'x' }) === '' && deleteKind({ ...of('s1'), gone: true }) === '' && deleteKind(null) === '');
+    check('scene 0 is not deleted: it is the chat the scenes began from', same(canDeleteScene({ id: ADOPTED_ID, status: 'ended' }), { ok: false, reason: 'first' }));
     check('nor a scene that is not there', same(canDeleteScene(null), { ok: false, reason: 'no-scene' }) && deleteSceneRecord(e, 's9').removed === false && deleteSceneRecord(e, 's9').reason === 'no-scene');
-    const kept = deleteSceneRecord(e, 's1');
-    check('a refused delete changes nothing and says why', kept.removed === false && kept.reason === 'ended' && kept.entry.scenes.length === 5 && kept.entry.seq === 5 && deleteSceneRecord(e, 's3').reason === 'remembered');
+    const gone1 = deleteSceneRecord(e, 's1');
+    check('an ended scene\'s record goes like any other, the numbering as it was', gone1.removed && same(gone1.entry.scenes.map(x => x.id), ['s2', 's3', 's4', 's5']) && gone1.entry.seq === 5);
+    const zero = deleteSceneRecord({ ...e, scenes: [{ id: ADOPTED_ID, status: 'ended', chat: 'Long' }, ...e.scenes] }, ADOPTED_ID);
+    check('a refused delete changes nothing and says why', zero.removed === false && zero.reason === 'first' && zero.entry.scenes.length === 6);
     const mid = deleteSceneRecord(e, 's4');
     check('a set-aside scene deleted: its record goes, the others and the numbering stay', mid.removed && mid.scene.id === 's4' && same(mid.entry.scenes.map(x => x.id), ['s1', 's2', 's3', 's5']) && mid.entry.seq === 5 && same(mid.entry.memory, e.memory) && same(mid.entry.continuity, e.continuity));
     const last = deleteSceneRecord(e, 's5');
@@ -346,8 +349,11 @@ console.log('\n§8a a scene deleted: only one that never ended (D197)');
     // What the Atlas says.
     check('deleted: says the chat went too', describeDeleteResult({ ok: true, scene: { id: 's5' }, chat: 'deleted', opened: null }) === 'Scene 5 is deleted, and its chat is deleted.');
     check('deleted while in front: says which chat is open in its place, or that a new one is', describeDeleteResult({ ok: true, scene: { id: 's5' }, chat: 'deleted', opened: { name: 'Scene 2 - Two', fresh: false, card: 'Mara Vane' } }) === 'Scene 5 is deleted, and its chat is deleted. "Scene 2 - Two" is open in its place.' && describeDeleteResult({ ok: true, scene: { id: 's1' }, chat: 'deleted', opened: { name: 'Mara Vane - x', fresh: true, card: 'Mara Vane' } }) === 'Scene 1 is deleted, and its chat is deleted. A new chat is open on Mara Vane.');
+    check('an ended scene deleted: says how much of what it changed was taken back and how much stays', describeDeleteResult({ ok: true, scene: { id: 's3' }, chat: 'deleted', taken: { log: true, undone: 14, kept: 3 } }) === 'Scene 3 is deleted, and its chat is deleted. 14 things it changed in the world are taken back; 3 stay as they are, changed again since.' && describeDeleteResult({ ok: true, scene: { id: 's3' }, chat: 'deleted', taken: { log: true, undone: 1, kept: 0 } }) === 'Scene 3 is deleted, and its chat is deleted. 1 thing it changed in the world is taken back.' && describeDeleteResult({ ok: true, scene: { id: 's3' }, chat: 'deleted', taken: { log: true, undone: 2, kept: 1 } }).endsWith('2 things it changed in the world are taken back; 1 stays as it is, changed again since.'));
+    check('nothing to take back, or nothing that could be: each said as it is', describeDeleteResult({ ok: true, scene: { id: 's3' }, chat: 'deleted', taken: { log: true, undone: 0, kept: 0 } }) === 'Scene 3 is deleted, and its chat is deleted. Its End had changed nothing in the world, so there was nothing to take back.' && describeDeleteResult({ ok: true, scene: { id: 's3' }, chat: 'deleted', taken: { log: true, undone: 0, kept: 4 } }) === 'Scene 3 is deleted, and its chat is deleted. Nothing it changed in the world could be taken back: 4 things stay as they are, changed again since.');
+    check('one that ended before a log was kept: says the world keeps what happened in it', describeDeleteResult({ ok: true, scene: { id: 's1' }, chat: 'deleted', taken: { log: false, undone: 0, kept: 0 } }) === 'Scene 1 is deleted, and its chat is deleted. The world keeps what happened in it: it ended before a log of what it changed was kept.');
     check('a scene whose chat was gone already: says so', describeDeleteResult({ ok: true, scene: { id: 's4' }, chat: 'gone' }) === 'Scene 4 is deleted, and its chat was gone already.');
-    check('refused or failed: each says why, and what was kept', /world remembers it/.test(describeDeleteResult({ ok: false, reason: 'ended' })) && /ended once/.test(describeDeleteResult({ ok: false, reason: 'remembered' })) && /SillyTavern did not delete the chat \(400\)\. The scene is still in the list\./.test(describeDeleteResult({ ok: false, reason: 'file', error: '400' })) && /Nothing was deleted\.$/.test(describeDeleteResult({ ok: false, reason: 'switch', error: 'x' })) && /try again/.test(describeDeleteResult({ ok: false, reason: 'busy' })) && describeDeleteResult(null) === '');
+    check('refused or failed: each says why, and what was kept', /Scene 0 is the chat the scenes began from: it is not deleted/.test(describeDeleteResult({ ok: false, reason: 'first' })) && /SillyTavern did not delete the chat \(400\)\. The scene is still in the list\./.test(describeDeleteResult({ ok: false, reason: 'file', error: '400' })) && /Nothing was deleted\.$/.test(describeDeleteResult({ ok: false, reason: 'switch', error: 'x' })) && /try again/.test(describeDeleteResult({ ok: false, reason: 'busy' })) && describeDeleteResult(null) === '');
 }
 
 console.log('\n§8b a chat taken as where the scenes of a world begin (D131, D172)');

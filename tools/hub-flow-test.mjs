@@ -104,9 +104,27 @@ globalThis.cancelAnimationFrame = () => {};
 globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
 globalThis.CustomEvent = class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } };
 globalThis.dispatchEvent = () => true;
+const userFiles = new Map();    // SillyTavern's user files (D206): name -> text
 globalThis.fetch = async (url, init) => {
     const body = init && init.body ? JSON.parse(init.body) : {};
     calls.push({ url, body });
+    if (url === '/api/files/upload') {
+        // SillyTavern's own route: a name of letters, digits, dashes, underscores and dots, the data as base64.
+        if (globalThis.__DES_FILES_DOWN__ || !/^[a-zA-Z0-9_\-.]+$/.test(String(body.name || '')) || !body.data) return { ok: false, status: 400, json: async () => ({}), text: async () => 'refused' };
+        userFiles.set(body.name, Buffer.from(body.data, 'base64').toString('utf8'));
+        return { ok: true, status: 200, json: async () => ({ path: `user/files/${body.name}` }), text: async () => '' };
+    }
+    if (typeof url === 'string' && url.startsWith('/user/files/')) {
+        const name = decodeURIComponent(url.slice('/user/files/'.length));
+        if (globalThis.__DES_FILES_DOWN__ || !userFiles.has(name)) return { ok: false, status: 404, json: async () => ({}), text: async () => '' };
+        return { ok: true, status: 200, json: async () => JSON.parse(userFiles.get(name)), text: async () => userFiles.get(name) };
+    }
+    if (url === '/api/files/delete') {
+        const name = String(body.path || '').replace(/^user\/files\//, '');
+        if (!userFiles.has(name)) return { ok: false, status: 404, json: async () => ({}), text: async () => '' };
+        userFiles.delete(name);
+        return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+    }
     if (url === '/api/chats/save') {
         files.set(body.file_name, { header: body.chat[0], messages: body.chat.slice(1), avatar: body.avatar_url, chName: body.ch_name });
         return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
@@ -213,7 +231,7 @@ const shelf = new Map();
 const booksOn = new Set();
 const filed = [];
 let campaignOn = false;
-hub.__setBookApi({
+const shelfApi = {
     names: async () => [...shelf.keys()],
     load: async (name) => shelf.get(name) || null,
     save: async (name, data) => { shelf.set(name, data); },
@@ -221,7 +239,8 @@ hub.__setBookApi({
     entry: async (name, data) => { const ids = Object.keys(data.entries).map(Number); const uid = ids.length ? Math.max(...ids) + 1 : 0; data.entries[uid] = { uid, key: [], keysecondary: [], comment: '', content: '', constant: false, disable: false, order: 100, position: 0 }; return data.entries[uid]; },
     active: async (name) => booksOn.has(name),
     file: async (campaignId, name) => { filed.push([campaignId || '', name]); if (campaignId && extensionSettings.lorebook && extensionSettings.lorebook.campaigns[campaignId]) extensionSettings.lorebook.campaigns[campaignId].books.push(name); if (!campaignId || campaignOn) booksOn.add(name); },
-});
+};
+hub.__setBookApi(shelfApi);
 await openPlain();
 
 console.log('\n§1 the store and the card');
@@ -1333,8 +1352,9 @@ console.log('\n§20 a scene deleted: its record and its chat, for one that never
 
     // What is not deleted.
     const callsBefore = calls.length;
-    const no1 = await hub.deleteScene(W, ended.id);
-    check('an ended scene is not deleted: the world remembers it; nothing is sent and its chat stays', no1.ok === false && no1.reason === 'ended' && files.has(ended.chat) && scenesOf(W).some(x => x.id === ended.id) && calls.length === callsBefore);
+    const zero = scenesOf(W).find(x => x.id === 's0');
+    const no1 = zero ? await hub.deleteScene(W, 's0') : { ok: false, reason: 'first' };
+    check('scene 0, the chat the scenes began from, is not deleted; nothing is sent and its chat stays', no1.ok === false && no1.reason === 'first' && (!zero || files.has(zero.chat)) && calls.length === callsBefore && !!ended);
     check('no such scene, no such world: nothing happens', (await hub.deleteScene(W, 's999')).reason === 'no-scene' && (await hub.deleteScene('nowhere', 's1')).reason === 'no-world' && (await hub.deleteScene('', 's1')).reason === 'no-world');
 
     // SillyTavern refuses the delete: the scene stays, and says so.
@@ -1728,6 +1748,123 @@ console.log('\n§24 the openings are shown the last lines of the scene before, a
     files.set(longChat, keptLong);
     hub.__setOpenersTransport(null);
     hub.__setGapTransport(null);
+}
+
+console.log('\n§25 an ended scene deleted: what it changed in the world is taken back from its log (D206)');
+{
+    const W = 'logland';
+    extensionSettings.liveWorld.customPacks[W] = JSON.stringify({ ...example, id: W, name: 'Logland' });
+    ctxTarget.characters.push({ name: 'Logger', avatar: 'Logger.png', chat: 'Logger - plain' });
+    const logger = ctxTarget.characters.findIndex(c => c.avatar === 'Logger.png');
+    ctxTarget.characterId = logger;
+    ctxTarget.name2 = 'Logger';
+    files.set('Logger - plain', { header: { chat_metadata: {} }, messages: [], avatar: 'Logger.png', chName: 'Logger' });
+    await openPlain('Logger - plain');
+    extensionSettings.hub.styleLaw = false;
+    hub.__setBookApi(shelfApi);    // the lorebooks, as at the top (an earlier section put SillyTavern's own back)
+    check('(a world with its own narrator)', hub.bindCard(W, 'Logger.png').ok);
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 1","time":"morning"},"openers":[{"title":"a","text":"The mill wheel turns.","who":[]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}');
+    hub.__setGapTransport(async () => '{"elapsed":"a day","now":{"date":"Day 9","time":"dawn"},"clocks":{},"moved":[],"blurb":"x","heard":[]}');
+    let recapReply = '{"recap":"x"}';
+    hub.__setRecapTransport(async () => recapReply);
+    const entry = () => hub.worldEntry(W);
+    const snap = () => JSON.parse(JSON.stringify({ memory: entry().memory, people: entry().continuity.people.map(p => [p.name, p.now]), threads: entry().continuity.threads.map(t => [t.text, t.status || (t.closed ? 'closed' : 'open'), !!t.closedAt]) }));
+    const logsOf = () => [...userFiles.keys()].filter(n => n.startsWith('des-scene-log-logland-'));
+    const start = async (cast = []) => { const p = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast, gap: { id: 'now' } }); return p.ok ? hub.commitScene(p.token, { choice: 0 }) : p; };
+    /** A scene played and ended: a line for the ledger, the tracker's date, and what its record says of the people and the threads. */
+    const play = async ({ date, fact, people, opened = [], closed = [] }, opts = {}) => {
+        chat.push(user(`We go on, ${date}.`));
+        chat.push({ is_user: false, name: 'Logger', mes: `It is ${date}.`, extra: {} });
+        const box = JSON.stringify({ date: { value: date }, time: { start: 'noon', end: 'noon' }, location: { value: `The road, ${date}` }, weather: { emoji: '☁', forecast: 'grey' } });
+        state.setLastGeneratedData({ ...state.lastGeneratedData, infoBox: box });
+        state.setCommittedTrackerData({ ...state.committedTrackerData, infoBox: box });
+        if (fact) cn.addCanonLine({ kind: 'fact', name: fact, text: `${fact} was established on ${date}.` });
+        recapReply = JSON.stringify({ recap: `What happened on ${date}.`, people, threads: { closed, opened } });
+        return hub.endScene({ skipCanon: true, skipWorld: true, ...opts });
+    };
+    const ledger = () => ((entry().memory.stores.dooms_canon || {}).entries || []).map(x => x.name);
+    const bookOf = () => { const t = entry().continuity.book; const data = t ? shelf.get(t.name) : null; return data ? Object.values(data.entries).map(x => String(x.content)) : []; };
+
+    // Three scenes, each ended.
+    const c1 = await start(['Ana']);
+    const e1 = await play({ date: 'Day 1', fact: 'The mill', people: [{ name: 'Ana', now: 'At the mill, wary.' }], opened: ['Ana has not said who sent her.'] });
+    const A1 = snap();
+    check('an End writes down what it changed in the world: a small file of the player\'s own, named on the scene\'s record', c1.ok && e1.ok && e1.log > 0 && logsOf().length === 1 && entry().scenes.find(x => x.id === 's1').log === logsOf()[0] && /^des-scene-log-logland-s1-\d+\.json$/.test(logsOf()[0]), JSON.stringify([c1.ok, c1.reason, e1.ok, e1.reason, e1.log, logsOf()]));
+    {
+        const file = JSON.parse(userFiles.get(logsOf()[0]));
+        const changes = file.ends[0].changes;
+        check('the log is what changed: the date, Ana, her thread, the ledger\'s line by itself', file.v === 1 && file.scene === 's1' && file.ends.length === 1 && changes.some(c => c.op === 'add' && c.key === 'Ana') && changes.some(c => c.op === 'add' && c.p.includes('dooms_canon')) && changes.some(c => c.p.join('/') === 'memory/facts/date') && !changes.some(c => c.p[0] === 'scenes'), JSON.stringify(changes.map(c => [c.op, c.p.map(x => (typeof x === 'string' ? x : x.key)).join('/')])).slice(0, 600));
+    }
+    await start(['Ana', 'Bo']);
+    const e2 = await play({ date: 'Day 2', fact: 'The inn', people: [{ name: 'Ana', now: 'On the road, easier.' }, { name: 'Bo', now: 'At the inn, owed two coins.' }], opened: ['Bo is owed two coins.'], closed: [1] });
+    const A2 = snap();
+    {
+        const changes2 = JSON.parse(userFiles.get(entry().scenes.find(x => x.id === 's2').log)).ends[0].changes;
+        check('the log of a later scene holds what that scene changed, each with what was there before, and nothing it left alone', changes2.some(c => c.p.join('/') === 'memory/facts/date' && c.b === 'Day 1') && changes2.some(c => c.op === 'add' && c.key === 'Bo') && !JSON.stringify(changes2).includes('The mill') && !changes2.some(c => c.p.includes('clocks')), JSON.stringify(changes2.map(c => [c.op, c.p.map(x => (typeof x === 'string' ? x : x.key)).join('/')])).slice(0, 700));
+    }
+    const c3 = await start(['Bo', 'Cy']);
+    const e3 = await play({ date: 'Day 3', fact: 'The north road', people: [{ name: 'Bo', now: 'Gone north.' }, { name: 'Cy', now: 'Arrived at the inn.' }], opened: ['Cy carries a sealed letter.'] });
+    check('(three scenes ended: three logs; the world stands at the third)', e2.ok && e3.ok && logsOf().length === 3 && entry().memory.facts.date === 'Day 3' && same(ledger().filter(n => /mill|inn|north/i.test(n)), ['The mill', 'The inn', 'The north road']) && same(entry().continuity.people.map(p => p.name).sort(), ['Ana', 'Bo', 'Cy']) && bookOf().some(x => x.startsWith('Cy, as the story stands now')), JSON.stringify([e2.ok, e3.ok, logsOf().length, ledger(), bookOf()]));
+
+    // The question asked first, then the newest scene deleted: the world is as the second scene left it.
+    const plan3 = await hub.deletePlan(W, 's3');
+    check('before it is deleted the plan says what would be taken back, and where', plan3.ok && plan3.kind === 'ended' && plan3.log === true && plan3.undone >= 5 && plan3.kept === 0 && plan3.areas.includes('where people stand') && plan3.areas.includes('the open threads') && plan3.areas.includes('the ledger') && plan3.areas.includes('the date and the place') && same(snap(), JSON.parse(JSON.stringify({ ...snap() }))), JSON.stringify(plan3));
+    const file3 = entry().scenes.find(x => x.id === 's3').chat;
+    const log3 = entry().scenes.find(x => x.id === 's3').log;
+    const d3 = await hub.deleteScene(W, 's3');
+    const B = snap();
+    check('the newest ended scene deleted: its record, its chat and its log go, and its number is free', d3.ok && d3.taken.log === true && d3.taken.kept === 0 && d3.taken.undone === plan3.undone && !entry().scenes.some(x => x.id === 's3') && !files.has(file3) && !userFiles.has(log3) && entry().seq === 2, JSON.stringify([d3.ok, d3.reason, d3.taken]));
+    check('the world\'s memory is as the scene before left it: the date, the ledger, everything', same(B.memory, A2.memory), JSON.stringify([B.memory.facts, ledger()]));
+    check('where people stand and the threads are as the scene before left them: Bo back at the inn, Cy and her letter gone', same(B.people, A2.people) && same(B.threads, A2.threads), JSON.stringify([B.people, B.threads]));
+    check('the continuity book says the same: Cy\'s entry is taken out, Bo\'s is put back', !bookOf().some(x => x.startsWith('Cy,')) && bookOf().some(x => x === 'Bo, as the story stands now: At the inn, owed two coins.') && !bookOf().some(x => /Cy carries a sealed letter/.test(x)) && d3.taken.book === 'ok', JSON.stringify(bookOf()));
+    check('the Atlas says how much was taken back', /^Scene 3 is deleted, and its chat is deleted\. \d+ things it changed in the world are taken back\./.test(hubUtils.describeDeleteResult(d3)), hubUtils.describeDeleteResult(d3));
+
+    // A scene from the middle: what a later scene changed again stays, what still stands as it left it goes.
+    const plan1 = await hub.deletePlan(W, 's1');
+    const d1 = await hub.deleteScene(W, 's1');
+    check('a scene deleted from the middle of the story: what still stands as it left it is taken back (its line in the ledger), and the plan said so beforehand', d1.ok && d1.taken.log === true && !ledger().includes('The mill') && ledger().includes('The inn') && d1.taken.undone >= 1 && d1.taken.undone === plan1.undone && d1.taken.kept === plan1.kept, JSON.stringify([d1.taken, plan1, ledger()]));
+    check('what the scene after it changed again stays as that scene left it: the date, Ana on the road, the thread it settled', d1.taken.kept >= 3 && entry().memory.facts.date === 'Day 2' && entry().memory.scene === 's2' && entry().continuity.people.find(p => p.name === 'Ana').now === 'On the road, easier.' && same(snap().threads, A2.threads), JSON.stringify([d1.taken, snap().people, snap().threads]));
+    check('the scene after it is still there, with its own log', same(entry().scenes.map(x => x.id), ['s2']) && logsOf().length === 1 && /stay as they are, changed again since/.test(hubUtils.describeDeleteResult(d1)));
+
+    // A scene whose log could not be written (or that ended before logs were kept): deleted, and the world keeps it.
+    await start(['Bo']);
+    globalThis.__DES_FILES_DOWN__ = true;
+    const e4 = await play({ date: 'Day 4', fact: 'The ford', people: [{ name: 'Bo', now: 'At the ford.' }] });
+    globalThis.__DES_FILES_DOWN__ = false;
+    const A4 = snap();
+    const plan4 = await hub.deletePlan(W, 's3');
+    const d4 = await hub.deleteScene(W, 's3');
+    check('an End whose log could not be written still ends the scene; it has no log', e4.ok && e4.log === -1 && plan4.ok && plan4.kind === 'ended' && plan4.log === false);
+    check('deleted, its record and chat go and the world keeps what happened in it, and says so', d4.ok && d4.taken.log === false && same(snap(), A4) && !entry().scenes.some(x => x.id === 's3') && /The world keeps what happened in it/.test(hubUtils.describeDeleteResult(d4)), JSON.stringify(d4.taken));
+
+    // The Undo of an End (D190) takes its part of the log away again; a scene ended twice is taken back to before the first.
+    await start(['Bo']);
+    const before5 = snap();
+    await play({ date: 'Day 5', fact: 'The bridge', people: [{ name: 'Bo', now: 'On the bridge.' }] });
+    const logs5 = logsOf().length;
+    const undone = await hub.undoEnd();
+    check('an End that is undone leaves nothing of itself in the scene\'s log', undone.ok && logs5 === 2 && logsOf().length === 1 && !entry().scenes.find(x => x.status === 'open').log, JSON.stringify([undone.ok, undone.reason, logs5, logsOf()]));
+    await play({ date: 'Day 5', fact: 'The bridge', people: [{ name: 'Bo', now: 'On the bridge.' }] });
+    const reopened = await hub.reopenCurrentScene();
+    const again = await play({ date: 'Day 6', fact: 'The far bank', people: [{ name: 'Bo', now: 'On the far bank.' }] }, { replaceMemory: true });
+    const twice = entry().scenes.find(x => x.reopened || x.id === 's3');
+    const ends = twice && twice.log ? JSON.parse(userFiles.get(twice.log)).ends.length : 0;
+    check('a scene reopened and ended again keeps both Ends in the one log', reopened.ok && again.ok && ends === 2 && entry().memory.facts.date === 'Day 6', JSON.stringify([reopened.ok, again.ok, ends]));
+    const dTwice = await hub.deleteScene(W, twice.id);
+    check('deleted, the world is as it was before the scene\'s first End', dTwice.ok && dTwice.taken.log === true && dTwice.taken.kept === 0 && same(snap().memory, before5.memory) && same(snap().people, before5.people) && !ledger().includes('The bridge') && !ledger().includes('The far bank'), JSON.stringify([dTwice.taken, snap().memory.facts, before5.memory.facts, ledger()]));
+
+    // A log that is not there any more: the scene is deleted as one without a log.
+    await start(['Bo']);
+    await play({ date: 'Day 7', fact: 'The hill', people: [{ name: 'Bo', now: 'On the hill.' }] });
+    const lost = entry().scenes.find(x => x.status === 'ended' && x.id !== 's2');
+    userFiles.delete(lost.log);
+    const A7 = snap();
+    const dLost = await hub.deleteScene(W, lost.id);
+    check('a log that cannot be read is no log: the scene goes, the world keeps what happened in it', dLost.ok && dLost.taken.log === false && same(snap(), A7));
+    check('scene 0 and a scene that is not there have no plan', (await hub.deletePlan('harbourside', 's0')).ok === false && (await hub.deletePlan(W, 's99')).ok === false && (await hub.deletePlan('nowhere', 's1')).ok === false);
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+    hub.__setRecapTransport(null);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

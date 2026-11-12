@@ -148,7 +148,7 @@ export function readBook(cont, data) {
  * @returns {{ ops: Array<{ op: 'create'|'update', who: string, uid?: number, fields?: object, content?: string }>, people: number, threads: boolean }}
  *   `who` is a person's name, or '#threads'; a create's `fields` are the entry's own (comment, key, content, constant, order, position)
  */
-export function planBook(cont, data) {
+export function planBook(cont, data, { force = false } = {}) {
     const c = normalizeContinuity(cont);
     const entries = isObj(data) && isObj(data.entries) ? data.entries : {};
     const track = c.book || { name: '', people: {}, threads: null };
@@ -158,7 +158,9 @@ export function planBook(cont, data) {
         const t = track.people[nameKey(p.name)];
         const content = personContent(p);
         if (t && isObj(entries[t.uid])) {
-            if (p.by === 'you' || hashText(content) === t.hash) continue;    // theirs as they wrote it, or already said
+            // Theirs as they wrote it, or already said. Forced (the continuity was put back to an earlier state, D206), "already said"
+            // is asked of the entry itself, not of the mark kept of what was last written there.
+            if (p.by === 'you' || (force ? String(entries[t.uid].content ?? '') === content : hashText(content) === t.hash)) continue;
             ops.push({ op: 'update', who: p.name, uid: t.uid, content });
         } else ops.push({ op: 'create', who: p.name, fields: { comment: personTitle(p.name), key: [p.name], content, constant: false, order: BOOK_ORDER.person, position: 0 } });
         people++;
@@ -167,7 +169,7 @@ export function planBook(cont, data) {
     const text = threadsContent(c.threads);
     const tt = track.threads;
     if (tt && isObj(entries[tt.uid])) {
-        if (tt.by !== 'you' && hashText(text) !== tt.hash) { ops.push({ op: 'update', who: '#threads', uid: tt.uid, content: text }); threads = true; }
+        if (tt.by !== 'you' && (force ? String(entries[tt.uid].content ?? '') !== text : hashText(text) !== tt.hash)) { ops.push({ op: 'update', who: '#threads', uid: tt.uid, content: text }); threads = true; }
     } else if (c.threads.length) { ops.push({ op: 'create', who: '#threads', fields: { comment: THREADS_TITLE, key: [], content: text, constant: true, order: BOOK_ORDER.threads, position: 0 } }); threads = true; }
     return { ops, people, threads };
 }

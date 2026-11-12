@@ -43,6 +43,7 @@ import { normalizeBook } from '../../utils/atlas.js';
 import { narratorTexts, countStyle, applyStyle } from '../../utils/styleLaw.js';
 import { continuityDraft, readContinuity, stepDraft, draftChanges, applyContinuity, changeCounts, standingLines, threadLines, hasContinuity } from '../../utils/continuity.js';
 import { continuityBookName, readBook, planBook, trackWritten, forgetBook, renameBook } from '../../utils/continuityBook.js';
+import { diffEntry, undoChanges, areasInWords } from '../../utils/sceneLog.js';
 
 export const BRIEF_SLOT = 'dooms-scene-brief';
 import { ensureCss } from '../../core/cssLoader.js';
@@ -239,6 +240,21 @@ function defaultBridge() {
             const data = await res.json();
             return Array.isArray(data) ? data.filter(m => m && typeof m === 'object' && typeof m.mes === 'string') : [];
         },
+        // A small file kept among the player's own files on SillyTavern's side (D206: the log of what a scene's End changed).
+        // Its upload route takes the text as base64; the file is read back as any user file is.
+        saveUserFile: async (name, text) => {
+            const bytes = new TextEncoder().encode(String(text));
+            let bin = '';
+            for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+            await post('/api/files/upload', { name, data: btoa(bin) });
+            return true;
+        },
+        readUserFile: async (name) => {
+            const res = await fetch(`/user/files/${encodeURIComponent(name)}`, { method: 'GET', headers: getRequestHeaders(), cache: 'no-cache' });
+            if (!res || !res.ok) throw new Error(`/user/files/${name} answered ${res ? res.status : 'nothing'}`);
+            return res.json();
+        },
+        deleteUserFile: async (name) => { await post('/api/files/delete', { path: `user/files/${name}` }); return true; },
         // A chat file deleted (D197), as SillyTavern's own chat list deletes one: its server route, by the card's avatar.
         deleteChatFile: async ({ avatar, fileName }) => { await post('/api/chats/delete', { chatfile: `${fileName}.jsonl`, avatar_url: avatar }); return true; },
         // The chat a card opens on, kept on the card itself (SillyTavern does this when the chat a card points at is deleted).
@@ -587,11 +603,11 @@ async function syncFromBook(worldId) {
  * first, so nothing the player changed is written over unseen.
  * @returns {Promise<{ state: 'off'|'ok'|'failed', name?: string, made?: boolean, written?: number, error?: string }>}
  */
-async function mirrorBook(worldId) {
+async function mirrorBook(worldId, { force = false } = {}) {
     const first = entryOf(worldId);
     if (!hasContinuity(first.continuity) && !first.continuity.book) return { state: 'off' };
     try {
-        return await bookStep(writeBook(worldId));
+        return await bookStep(writeBook(worldId, { force }));
     } catch (e) {
         const error = String(e && e.message || e);
         log('the continuity book could not be written', error);
@@ -599,9 +615,10 @@ async function mirrorBook(worldId) {
     }
 }
 
-async function writeBook(worldId) {
+async function writeBook(worldId, { force = false } = {}) {
     {
-        await syncFromBook(worldId);
+        // Forced (D206): the continuity was just put back to an earlier state and is what the book is to say; the book is not read into it first.
+        if (!force) await syncFromBook(worldId);
         const entry = entryOf(worldId);
         let cont = entry.continuity;
         const api = books();
@@ -627,7 +644,7 @@ async function writeBook(worldId) {
         const data = await api.load(name);
         if (!data) throw new Error(`the lorebook "${name}" could not be read`);
         if (!data.entries || typeof data.entries !== 'object') data.entries = {};
-        const plan = planBook(cont, data);
+        const plan = planBook(cont, data, { force });
         const written = [];
         const undo = { name, made, created: [], texts: [] };    // what this writing changed in the book: the entries it made, and the texts it replaced
         for (const op of plan.ops) {
@@ -1310,6 +1327,10 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         step('book', out.book);
         undo.book = mirrored.undo || null;
         undo.endedAt = now;
+        // What this End changed in the world, written down (D206): the scene can be deleted later and its changes taken back.
+        const logged = await writeSceneLog(g.cur.worldId, sceneId, undo.entry);
+        undo.log = logged.ok ? logged.file : '';
+        out.log = logged.ok ? logged.changes : -1;
         lastEnd = undo;
         out.undo = true;
         mountStrip();
@@ -1404,6 +1425,7 @@ export async function undoEnd() {
         lastEnd = null;
         prepared = null;
         mountStrip();
+        if (u.log) await dropLastLoggedEnd(u.log);    // the End that is undone did not happen: its part of the scene's log goes (D206)
         log(`the End of scene ${u.scene} is undone`, { book });
         return { ok: true, scene: u.scene, book };
     } catch (e) {
@@ -2271,14 +2293,27 @@ export async function deleteScene(worldId, id) {
     const can = canDeleteScene(scene);
     if (!can.ok) return { ok: false, reason: can.reason, scene: scene ? JSON.parse(JSON.stringify(scene)) : null };
     if (ST.is_send_press === true || ending || isContinuing()) return { ok: false, reason: 'busy', scene };
-    const finish = (chat, opened) => {
+    // A scene the world remembers (ended, or ended once and reopened): what its End changed is taken back with it, as far
+    // as its log says and it still stands (D206). The log is read, and the book's own edits taken in, before anything goes.
+    const remembered = scene.status === 'ended' || scene.reopened;
+    const ends = remembered ? await readSceneLog(scene) : null;
+    if (remembered && ends) { try { await syncFromBook(world); } catch (err) { /* the book as it was last read */ } }
+    const finish = async (chat, opened) => {
         const latest = store().worlds[world];
-        const r = deleteSceneRecord(latest, id);
+        const back = ends ? undoChanges(latest, ends) : null;
+        const r = deleteSceneRecord(back ? back.entry : latest, id);
         if (!r.removed) return { ok: false, reason: r.reason || 'no-scene', scene };
         if (pending && pending.worldId === world) pending = null;    // a Start waiting on the world as it was is let go
+        if (lastEnd && lastEnd.worldId === world && lastEnd.scene === id) lastEnd = null;    // its End is not there to undo any more
+        const trackBefore = latest && latest.continuity ? latest.continuity.book : null;
         putEntry(world, r.entry, { source: 'delete', world });
-        log(`scene ${id} deleted`, { chat, opened: opened ? opened.name : '' });
-        return { ok: true, scene: JSON.parse(JSON.stringify(scene)), chat, opened: opened || null };
+        let taken = null;
+        if (remembered) {
+            taken = back ? { log: true, ...shownCounts(back), book: await bookAfterTakeBack(world, trackBefore) } : { log: false, undone: 0, kept: 0, areas: [] };
+            if (scene.log) { try { await bridge().deleteUserFile(scene.log); } catch (err) { log('the scene\'s log could not be deleted', String(err && err.message || err)); } }
+        }
+        log(`scene ${id} deleted`, { chat, opened: opened ? opened.name : '', taken });
+        return { ok: true, scene: JSON.parse(JSON.stringify(scene)), chat, opened: opened || null, taken };
     };
     if (scene.gone || !scene.chat) return finish('gone', null);
     const card = cardOfScene(world, scene);    // the file is under the card the chat is on (D204)
@@ -2322,9 +2357,128 @@ export async function deleteScene(worldId, id) {
         if (cards[card.index]) cards[card.index].chat = other.name;
         try { await b.setCardChat({ avatar: card.avatar, fileName: other.name }); } catch (err) { log('the card could not be pointed at another chat; SillyTavern may open an empty one of the old name', String(err && err.message || err)); }
     }
-    const out = finish('deleted', opened);
+    const out = await finish('deleted', opened);
     if (out.ok) await b.chatDeleted(file);    // after the record has gone: DES's own listener finds nothing left to mark
     return out;
+}
+
+// ─── The log of what a scene's End changed (D206) ───────────────────────────
+
+/** The log's file name: letters, digits, dashes and dots only (SillyTavern's own rule for a user file). */
+const sceneLogName = (worldId, sceneId, startedAt) => `des-scene-log-${String(worldId || 'world').replace(/[^a-zA-Z0-9-]+/g, '-').slice(0, 60)}-${String(sceneId || 's').replace(/[^a-zA-Z0-9-]+/g, '')}-${Number(startedAt) || Date.now()}.json`;
+
+/**
+ * The difference between the world's entry before an End and as it now
+ * stands, written to the scene's log: a small file of the player's own
+ * on SillyTavern's side, named on the scene's record. A scene ended
+ * again after being reopened adds to the same log. Where the file
+ * cannot be written the scene has no log: it can still be deleted, but
+ * the world then keeps what happened in it.
+ */
+async function writeSceneLog(worldId, sceneId, before) {
+    try {
+        const after = entryOf(worldId);
+        const rec = after.scenes.find(x => x.id === sceneId);
+        if (!rec) return { ok: false };
+        const changes = diffEntry(before, after);
+        const b = bridge();
+        const file = rec.log || sceneLogName(worldId, sceneId, rec.startedAt);
+        let ends = [];
+        if (rec.log) { try { const old = await b.readUserFile(rec.log); if (old && Array.isArray(old.ends)) ends = old.ends; } catch (e) { log('the scene\'s earlier log could not be read; a new one is begun', String(e && e.message || e)); } }
+        ends.push({ at: Date.now(), changes });
+        await b.saveUserFile(file, JSON.stringify({ v: 1, world: String(worldId), scene: sceneId, ends }));
+        if (rec.log !== file) { const now = entryOf(worldId); putEntry(worldId, { ...now, scenes: now.scenes.map(x => (x.id === sceneId ? { ...x, log: file } : x)) }, { source: 'end-log', world: worldId }); }
+        return { ok: true, file, changes: changes.length, ends: ends.length };
+    } catch (e) {
+        log('the log of what the scene changed could not be written: it can be deleted later, but the world will keep what happened in it', String(e && e.message || e));
+        return { ok: false };
+    }
+}
+
+/** An End that was undone (D190) taken out of the scene's log again; a log with nothing left in it goes. */
+async function dropLastLoggedEnd(file) {
+    try {
+        const b = bridge();
+        const old = await b.readUserFile(file);
+        const ends = old && Array.isArray(old.ends) ? old.ends.slice(0, -1) : [];
+        if (ends.length) await b.saveUserFile(file, JSON.stringify({ ...old, ends }));
+        else await b.deleteUserFile(file);
+    } catch (e) { log('the scene\'s log could not be brought up to date after the Undo', String(e && e.message || e)); }
+}
+
+/** A scene's log read: its Ends' changes, oldest first; null where it has none or it cannot be read. */
+async function readSceneLog(scene) {
+    if (!scene || !scene.log) return null;
+    try {
+        const data = await bridge().readUserFile(scene.log);
+        return data && Array.isArray(data.ends) ? data.ends.map(e => (e && Array.isArray(e.changes) ? e.changes : [])) : null;
+    } catch (e) {
+        log(`the log of scene ${scene.id} could not be read`, String(e && e.message || e));
+        return null;
+    }
+}
+
+/** What is said to the player of a taking back: the changes that are theirs to know of, not DES's own bookkeeping. */
+function shownCounts(r) {
+    let undone = 0;
+    let kept = 0;
+    for (const [area, n] of Object.entries(r.areas || {})) { if (area === 'book' || area === 'other') continue; undone += n.undone; kept += n.kept; }
+    return { undone, kept, areas: areasInWords(r.areas) };
+}
+
+/**
+ * What deleting a scene would do, for the question asked before it is
+ * done (D206). For an ended scene with a log: how many of the things it
+ * changed in the world would be taken back and how many stay, changed
+ * again since, and where they are. Nothing is changed.
+ * @returns {Promise<{ ok: boolean, kind: string, reason?: string, log?: boolean, undone?: number, kept?: number, areas?: string[] }>}
+ */
+export async function deletePlan(worldId, id) {
+    const world = String(worldId || '').trim();
+    const e = world ? store().worlds[world] : null;
+    const scene = e ? e.scenes.find(x => x.id === id) || null : null;
+    const can = canDeleteScene(scene);
+    if (!can.ok) return { ok: false, kind: '', reason: can.reason };
+    // One the world remembers (a scene whose chat is gone is asked about too: its log is still there to take its changes back).
+    const kind = scene.status === 'ended' || scene.reopened ? 'ended' : 'unended';
+    if (kind !== 'ended') return { ok: true, kind };
+    const ends = await readSceneLog(scene);
+    if (!ends) return { ok: true, kind, log: false, undone: 0, kept: 0, areas: [] };
+    try { await syncFromBook(world); } catch (err) { /* the book as it was last read */ }
+    return { ok: true, kind, log: true, ...shownCounts(undoChanges(entryOf(world), ends)) };
+}
+
+/**
+ * The continuity book after a scene's changes were taken back (D206):
+ * the entries its End made for people who are gone again are taken out,
+ * and the rest are written from the continuity as it now stands. A book
+ * the scene's End made stays, emptied: the world goes on knowing it is
+ * its own (as the Undo of an End leaves it, D190).
+ */
+async function bookAfterTakeBack(worldId, trackBefore) {
+    if (!trackBefore || !trackBefore.name) return 'off';
+    try {
+        const now = entryOf(worldId);
+        if (!now.continuity.book || !now.continuity.book.name) putEntry(worldId, { ...now, continuity: trackWritten(now.continuity, trackBefore.name, []) }, { source: 'delete-book', world: worldId });
+        const track = entryOf(worldId).continuity.book;
+        const uidsOf = (t) => [...Object.values((t && t.people) || {}).map(x => x && x.uid), t && t.threads ? t.threads.uid : null].filter(Number.isInteger);
+        const still = new Set(uidsOf(track));
+        const gone = uidsOf(trackBefore).filter(uid => !still.has(uid));
+        if (gone.length) {
+            await bookStep((async () => {
+                const api = books();
+                const data = await api.load(trackBefore.name);
+                if (!data || !data.entries) throw new Error('the book could not be read');
+                for (const uid of gone) { if (typeof api.remove === 'function') await api.remove(trackBefore.name, data, uid); else delete data.entries[uid]; }
+                await api.save(trackBefore.name, data);
+            })());
+        }
+        const mirrored = await mirrorBook(worldId, { force: true });
+        return mirrored.state;
+    } catch (e) {
+        log('the continuity book could not be put back after the scene was deleted', String(e && e.message || e));
+        return 'failed';
+    }
 }
 
 // ─── The strip (D121) ───────────────────────────────────────────────────
