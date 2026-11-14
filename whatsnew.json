@@ -1,74 +1,74 @@
 {
     "version": "3.2.0-beta.1",
-    "title": "Inventory and quests (beta)",
+    "title": "库存与任务（测试版）",
     "items": [
         {
-            "title": "📱 3.2: the Workshop from a phone",
-            "body": "On an iPhone the Present Characters panel had no way into the Workshop: a long press on a card showed Apple's image sheet instead of the menu, and the little roster button in the panel's header was too small for a finger, so the tap folded the shelf instead. Now a long press on a card (half a second, finger still) opens the card menu where your finger is, and on any touch screen the roster button is a proper button. With a mouse nothing changed. And if the Workshop ever fails to load, a message says so and how to fix it, instead of a tap that does nothing."
+            "title": "📱 3.2：来自手机的工坊",
+            "body": "在 iPhone 上，原本在场角色面板没有进入工坊的入口：长按卡片时，苹果的图片表被优先弹出，而不是菜单；同时，位于小名册按钮也难以操作。"
         },
         {
-            "title": "🎒 3.2: Inventory (beta)",
-            "body": "Settings → Stats → Inventory: a pack for your character and one pouch the party shares, kept per chat. The AI keeps them up to date from a short tag at the end of each reply: what was picked up, handed over, spent or used up (a cigarette smoked, a ration eaten, an arrow loosed counts). A toast says what changed; swiping a reply puts its changes back. The Present Characters panel gets an Inventory page beside Characters, with an editor for anything the AI got wrong, and a Quests page."
+            "title": "🎒 3.2：库存（测试版）",
+            "body": "设置 → 统计 → 库存：为你的角色保留一包物品，并为团队保留一个共享口袋，按聊天保存。AI 会在每次回复末尾的简短标签处自动更新它们。"
         },
         {
-            "title": "🗺️ 3.2: Cut to a quest",
-            "body": "Right-click a quest on the panel's Quests page (hold it on a phone) and Cut to it: the story jumps to that quest where the scene stands, with the facts of now carried along."
+            "title": "🗺️ 3.2：直接切到任务",
+            "body": "右键点击面板上的任务页面中的任务（手机上按住亦可），并选择“切到这里”：故事会直接跳转到该任务对应的场景，并带上当前事实状态。"
         },
         {
-            "title": "❤️ 3.1.5: vitals off means off",
-            "body": "If you tried Track vitals and switched it off again, the AI was still being shown your characters' Health and the rest from before, and kept updating them, costing tokens every reply with nothing on screen to show for it. The switch now covers what the AI is reminded of as well as what it is asked for: with vitals off, no stats reach the prompt. Nothing in your chats is deleted; switch vitals back on and they start fresh from their starting values."
+            "title": "❤️ 3.1.5：生命值关闭就是关闭",
+            "body": "如果你尝试关闭“跟踪生命值”，之前仍被 AI 读取的角色生命值与其他状态仍会继续更新，并浪费 token。"
         },
         {
-            "title": "🎲 3.1.5: an NPC's roll finds its sheet",
-            "body": "You set a character's attributes in the Workshop, the game master called for a check on them, and the roll ignored the sheet: the call named them as the scene does (\"Mara\", \"the guard\") while the sheet was stored under the card's name (\"Mara Vane\"), and the dice looked only for the exact name. Now a first or last name, a title around the name, \"the guard\" for Guard, or any alias from the Workshop finds the sheet, and the roll box names the character as the card does. When two sheets could fit, the one on the shelf wins; when that is still unclear, the roll stays on the default sheet rather than a wrong one. The same goes for saving throws and the dice tool."
+            "title": "🎲 3.1.5：NPC 的掷骰命中其角色卡",
+            "body": "你在工坊中设置了角色属性，游戏主持人要求进行检定，但掷骰忽略了角色卡：调用时使用的是场景中的名字（如“玛拉”），而不是角色卡上的实际数据。"
         },
         {
-            "title": "🛟 3.1.4: hidden means hidden",
-            "body": "Some of you switched Show the Doom button off and the D stayed. 3.1.3 hid it with a stylesheet rule, which a Custom CSS line pinning the D in place, or a second, older copy of the extension loaded beside this one, could outrank. The button now also carries an inline display: none that nothing in a stylesheet outranks, on every Doom button on the page; the switch, /des reset and a reload all apply it. If the D still shows after this update, make the browser fetch the scripts again: hard-reload on a computer (Ctrl+Shift+R); on an iPhone, Settings → Safari → Advanced → Website Data, remove the site, open it again. A browser (Safari above all), or a CDN in front of a hosted SillyTavern, can keep the old scripts after an update, and DES now tells you when that has happened, with the steps for your device. Then check SillyTavern's Custom CSS for a dooms-settings-fab line and the extensions folder for a second copy."
+            "title": "🛟 3.1.4：隐藏即隐藏",
+            "body": "有些人关闭了“显示厄运按钮”后，D 仍然留着。3.1.3 通过样式规则隐藏了它，而自定义 CSS 里又固定住了 D，或者是旧版第二份副本造成了该问题。"
         },
         {
-            "title": "🛟 3.1.3: a way in, always, and a switch for the Doom button",
-            "body": "Settings → Doom Button has a new switch, Show the Doom button, for everyone who asked to hide the floating D. With it off the settings stay reachable from Extensions → Doom's Enhancement Suite → Open Settings and from /des in the chat box. And nothing can lock you out any more: Hide SillyTavern top bar works only while the Doom button shows with Doom's Settings in its fly-out, switching the extension off brings the bar back, a saved combination that would have left no way in is repaired when the page loads, and /des reset puts the bar, the button and the fly-out back from the chat box."
+            "title": "🛟 3.1.3：总有通道，并加入厄运按钮开关",
+            "body": "设置 → 厄运按钮新增开关“显示厄运按钮”，用于隐藏浮动 D 的用户。关闭后，扩展设置仍可从“扩展 → 厄运”入口打开。"
         },
         {
-            "title": "🎲 3.1.2 and 3.1.3: a roll result you can change",
-            "body": "With Settings → Stats → Let me change the ruling on, the die number is a button: on the roll box at the top of a reply, and, for rolls the dice tool made, right on the \"Tool calls: Dice check\" line. Press it and arrows appear either side; each press moves the die one face (20 wraps round to 1) and the total and the outcome follow at once. Press the number again, or click anywhere else, to close, and when the die moved a prompt asks whether to regenerate the reply so the story follows. The box says what the die really showed, and the result the AI is handed is rewritten with it. The game master's own NPC calls at the end of a reply stay as rolled."
+            "title": "🎲 3.1.2 与 3.1.3：可修改的掷骰结果",
+            "body": "在 设置 → 统计 → 允许���修改裁决 后，骰子数值变成按钮：可在回复顶部的掷骰框中修改，也可在骰子工具生成的掷骰结果上直接修改。"
         },
         {
-            "title": "🩹 3.1.1: Roll a check, readable",
-            "body": "The Roll a check window is solid under every look (the chat used to show through it and fight its text), its Cancel and Discard buttons are plain secondary buttons you can read against the window, and its body scrolls on a short screen so OK is always within reach. The notes below are the beta's."
+            "title": "🩹 3.1.1：掷骰检定可读性提升",
+            "body": "“掷骰检定”窗口在各种界面下都保持稳定（原先聊天内容会透出来并打架），其“取消”和“丢弃”按钮也改成了可清晰阅读的次级按钮。"
         },
         {
-            "title": "🧪 A beta: nothing changes until you switch something on",
-            "body": "Everything on the new Settings → Stats page is off until you turn it on, so this update changes nothing on screen, and nothing in your prompt beyond the one sentence noted under the tracker below. The Stats features are built and covered by tests, but nobody except their author has played them through yet: that is what the Beta badges mean. When something breaks, Settings → Stats → Report a problem opens a GitHub issue with your DES version, your Stats switches and the last lines of the Notification and System logs already filled in, and copies the full logs to your clipboard for the Logs box. A chat export (the chat menu → Manage chat files → Export) is the single most useful thing to attach."
+            "title": "🧪 测试版：在开启前不会产生任何变化",
+            "body": "新设置页面中的所有内容默认都是关闭的，直到你主动开启，所以本次更新不会改变屏幕上的任何内容，也不会修改你的提示词，除非你打开其中一项。"
         },
         {
-            "title": "❤️ Vitals",
-            "body": "Settings → Stats → Track vitals. Health, Energy, Satiety, Stamina, Morale, Sanity and Arousal (Hygiene and Mana are ready but off) as 0–100 bars on every portrait card and on the card's back, moved by the AI with each reply and editable with a click on the back. Your persona gets them too. Each vital has a name, colour, icon, starting value and an AI-updated switch; one with AI off keeps its value whatever the AI returns. About a dozen tokens per vital per character per reply. Separate and External modes, per-swipe data, History Persistence and the Tracker Data dropdown all carry them."
+            "title": "❤️ 生命值",
+            "body": "设置 → 统计 → 跟踪生命值。生命值、精力、饱食度、耐力、士气、理智和性奋（卫生和魔力已准备好但未开启）会作为 0–100 条显示在每张肖像卡上，并在每次回复中更新。"
         },
         {
-            "title": "🎲 Attributes and dice checks",
-            "body": "Settings → Stats → Attributes and dice checks. Every character gets the six D&D attributes (the list is yours to edit) with 5e's skills under each and proficiency ticks, on a Workshop → Attributes tab with Standard array and Roll 4d6 drop lowest to fill a sheet. To make a check, press the d20 by the wand (or Roll a check on your persona's card or in the floating menu), pick an attribute, a skill under it or any skill with any attribute, add a line of context, and OK. When you send, the game master rules the difficulty from your message in one small call, DES rolls the die with real randomness, decides success in code and hands the AI a verdict to narrate. The result sits in a box at the top of the reply, swipes keep it, and once rolled it is final. Scores reach the AI only when a roll rides along, unless you choose Always."
+            "title": "🎲 属性与掷骰检定",
+            "body": "设置 → 统计 → 属性与掷骰检定。每个角色都���获得六项 D&D 属性（列表可自行编辑），每个属性下设有 5e 技能与熟练勾选，可在每次场景中直接调用。"
         },
         {
-            "title": "🧙 The game master calls for checks",
-            "body": "With attributes on, the game master may call for a check when the story has stakes: as a line at the end of its reply with any model, or through a dice tool where your API supports function calling. A call on you becomes the pending check above the message box (× declines it) and rolls when you send against the difficulty already given; a call on an NPC rolls on that NPC's own sheet the moment the reply renders and is handed to the next reply as a verdict. How often is yours to set (Sparingly, or Whenever an attempt could plausibly fail), each way has its own switch, and Notify on dice events shows a toast at every step so you can see what it is doing."
+            "title": "🧙 游戏主持人要求检定",
+            "body": "开启属性后，游戏主持人可能会在故事有风险时要求检定：作为一行附在回复末尾，或通过骰子工具调用，你的 API 支持的模型也可使用。"
         },
         {
-            "title": "🛡️ Saving throws, tiers and freeform magic",
-            "body": "Saving throws: when one character acts on another, the one acted upon rolls to resist, against a DC built from the actor's own bonus, with a Save tick per attribute in the Workshop; every verdict now says whose roll it is and what success means. Tiers: five tiers from Ordinary to Legend fill an NPC's sheet in one press (Fill by tier), Suggest from the story asks the AI for a sheet from what the chat says about them, and a switch that starts off does that by itself for every new face on the shelf. Casting: magic with no spell list. A Casting chip on INT, WIS or CHA in the Workshop names the ability a character's power runs on, so the game master can ask for a casting check or a target's save, and talents on the sheet (Practised or Master) go to the AI with their bonuses."
+            "title": "🛡️ 豁免检定、层级与自由形式魔法",
+            "body": "豁免检定：当一个角色作用于另一个角色时，被作用者会进行抗拒掷骰，目标 DC 根据施法者自身加成构成，每个属性在工坊中有一个“豁免”勾选。"
         },
         {
-            "title": "🗂️ The tracker, in a crowd and after a roll",
-            "body": "The default tracker instructions now ask for every NPC in the scene, including anyone who arrives or speaks in that reply, so a story rule about how many characters feature no longer shrinks the list. If your Tracker Instructions are a custom text, paste that sentence in from the Prompts editor's default. In together mode, a reply that comes without its tracker block now gets one separate request for it, so thoughts and the scene never freeze; a toast says when that happens, Settings → Generation has the switch, Refresh Tracker Data shows in together mode too, and the next generation is reminded to include the block."
+            "title": "🗂️ 追踪器：人群与掷骰之后",
+            "body": "默认追踪器指令现在会要求场景中的每个 NPC，包括在该回复中出现或发言的角色，因此关于“场景中共有多少角色出现”的故事规则不会再无从下手。"
         },
         {
-            "title": "🔊 Voices",
-            "body": "Steadiness (Settings → Voices → Delivery, off by default) sends a temperature with every line so a designed voice drifts less from line to line, and each line of a designed voice now carries a short anchor drawn from its description. Audition ×3 renders a test line three times back to back so you can hear whether a voice holds. Workshop → Voice has a delivery note for that character, used in place of the global one. Never whisper stops whispered delivery for good. The Voices page is grouped into General, Delivery, Connections and My custom voices, and Connections shows only the key for the service you picked."
+            "title": "🔊 语音",
+            "body": "稳度（设置 → 语音 → 交付，默认关闭）会在每一行上附带一个温度值，因此设计���的语音在每一行之间会漂移更少，并且每一行的设计语音也更稳定。"
         }
     ],
     "contact": {
-        "label": "Questions, bugs, or feedback?",
+        "label": "问题、漏洞或反馈？",
         "discordUser": "danger_daza"
     }
 }

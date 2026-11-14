@@ -1,5 +1,5 @@
 {
-    "display_name": "Doom's Enhancement Suite",
+    "display_name": "厄运增强套件",
     "loading_order": 100,
     "requires": [],
     "optional": [],
@@ -9,5 +9,5 @@
     "license": "AGPL-3.0-or-later",
     "version": "3.2.0-beta.1",
     "homePage": "https://github.com/DangerDaza/Dooms-Enhancement-Suite",
-    "description": "An immersive RPG extension with character tracking, Lore Library, portrait bar, scene headers, chat bubbles, and multiple themes."
+    "description": "一个沉浸式的 RPG 扩展，包含角色追踪、传说图书馆、语音高亮、肖像栏、场景标题、聊天气泡、天气效果等。"
 }
