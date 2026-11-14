@@ -2180,6 +2180,12 @@ console.log('\n§27 a narrator card of its own for every scene: made at Start, i
     const nextId = on.ok && on.scene ? on.scene.id : '';
     check('a scene gone straight on from: the one before is ended on its card, and the next is opened on a new card of its own', c6.ok && on.ok && sceneOf(c6.scene.id).status === 'ended' && !!nextId && sceneOf(nextId).ownCard === true && sceneOf(nextId).card !== sceneOf(c6.scene.id).card && cardsNow().includes(sceneOf(nextId).card) && cardsNow().includes(sceneOf(c6.scene.id).card) && ctxTarget.characterId === at(sceneOf(nextId).card), JSON.stringify([c6.ok, on.ok, on.reason, on.stage, nextId, cardsNow()]));
 
+    // A world made in the World Builder and never played: its first scene is started with nothing but the world.
+    const fresh = await hub.prepareScene({ worldId: 'nocard', seed: { kind: 'anywhere', text: 'The first night.' }, place: null, cast: [], gap: { id: 'now' } });
+    const first = fresh.ok ? await hub.commitScene(fresh.token, { choice: 0 }) : fresh;
+    const made1 = hub.worldEntry('nocard');
+    check('a new world with no chat, no narrator and no scene yet starts its first scene: a card is made, the scene is scene 1 on it, and the world is now one the hub knows', first.ok && !!made1 && made1.scenes.length === 1 && made1.scenes[0].id === 's1' && made1.scenes[0].ownCard === true && cardsNow().includes(made1.scenes[0].card) && files.get(first.file).avatar === made1.scenes[0].card && hub.hubWorldIds().includes('nocard') && hub.currentScene().worldId === 'nocard', JSON.stringify([first.ok, first.reason, first.error, made1 && made1.scenes]));
+
     extensionSettings.hub.sceneCards = false;
     hub.__setOpenersTransport(null);
     hub.__setGapTransport(null);
