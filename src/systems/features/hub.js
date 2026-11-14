@@ -49,6 +49,7 @@ export const BRIEF_SLOT = 'dooms-scene-brief';
 import { ensureCss } from '../../core/cssLoader.js';
 import { isLiveWorldOn, loadPack, getWorldState, getActivePack, saveWorld, adoptWorld, presentNamesFromTracker } from './liveWorld.js';
 import { isCanonOn, updateCanon, onCanonChatChanged, canonContextNow, applyCanonReply } from './canon.js';
+import { dialogueConfig, dialogueOf, dialogueText, DIALOGUE } from '../../utils/exampleDialogue.js';
 import { resolvePersonaName } from './diceRolls.js';
 
 export const HUB_CHANGED_EVENT = 'dooms:hub-changed';
@@ -1037,7 +1038,11 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     // day: what a person wore and the state they were in is no word on them weeks later.
     const wasThere = (lf && lf.present ? lf.present : ofMemory ? memoryPresent(g.entry.memory) : []).filter(x => !players.some(p => sameName(p, x.name)));
     const thenPeople = rightAfter || theGap.id === 'later' ? wasThere.filter(x => x.line && names.some(n => sameName(n, x.name))) : [];
-    const prompt = buildOpenersPrompt({ then, thenPeople, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads });
+    // How the people of the scene speak (D212): the example lines on their cards in the Workshop, where that is switched on.
+    const voices = dialogueConfig(extensionSettings).enabled
+        ? names.map(n => ({ name: n, text: dialogueText(dialogueOf(extensionSettings.characterInjection, n), { name: n, player: players[0] || '', max: DIALOGUE.opening }) })).filter(x => x.text)
+        : [];
+    const prompt = buildOpenersPrompt({ then, thenPeople, voices, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads });
     let openers = [];
     let when = null;
     let errors = [];
@@ -1063,7 +1068,7 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
         token, worldId: g.id, pack, card: g.card, memory, seed: seed && typeof seed === 'object' ? seed : { kind: 'anywhere', text: seedText }, place: { id: placeId, label, region }, cast: names, lines, gap: theGap, note: String(note || ''),
         weather, since, recaps, player: players, openers, when, errors, notes, prompt, movedMemory,
         heldWhen: rightAfter && !then.back && (then.date || then.time) ? { date: then.date, time: then.time } : null,
-        lore: { found: notesOf.found, missing: notesOf.missing, standing: !!notesOf.standing, books: notesOf.books },
+        lore: { found: notesOf.found, missing: notesOf.missing, standing: !!notesOf.standing, books: notesOf.books, ...(voices.length ? { voices: voices.map(x => x.name) } : {}) },
         stand, threads, continuity: { stand: stand.map(x => x.name), threads: threads.length },
         tail: { messages: lastLines.messages, scene: lastLines.scene, right: theGap.id === 'now', ...(then.date || then.time || then.weather || thenPeople.length ? { then: { date: then.date, time: then.time, weather: [then.weather, then.temperature].filter(Boolean).join(', '), fromTracker: !!lf, ...(thenPeople.length ? { people: thenPeople.map(x => x.name) } : {}) } } : {}) },
     };

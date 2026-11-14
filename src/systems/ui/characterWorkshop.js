@@ -80,6 +80,7 @@ import { escapeHtml } from '../../utils/html.js';
 import { DIALOGUE_COLOR_LIST } from '../../utils/dialogueColors.js';
 import { invalidateVoices, getEngineIfLoaded } from '../voices/voiceBoot.js';
 import { applyPopupLayout } from './settingsRail.js';
+import { DIALOGUE, cleanDialogue } from '../../utils/exampleDialogue.js';
 
 /**
  * Runs a save function, surfacing failures instead of silently discarding
@@ -530,6 +531,8 @@ function loadVersion(name, isUser, versionId, { fullReset = false, carry = null 
     // Stamp the modal with a mode attribute so CSS can flip NPC-only vs
     // user-only sections without a JS class-toggle on every section.
     $modal.attr('data-mode', isUser ? 'user' : 'npc');
+    // A tab that is not shown for the player's own character (Dialogue) cannot stay the one in front.
+    if (isUser && $modal.find('.workshop-nav button.active.cw-npc-only').length) activatePane('identity');
     $modal.toggleClass('cw-version-readonly-portrait', !draft.isLive && !isUser);
 
     renderTitle();
@@ -1291,6 +1294,7 @@ function buildDraft(name, isUser = false, versionId = null) {
                 description: typeof inj.description === 'string' ? inj.description : '',
                 lorebook: typeof inj.lorebook === 'string' ? inj.lorebook : '',
                 promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
+                dialogue: typeof inj.dialogue === 'string' ? inj.dialogue : '',    // example lines of how they speak (D212)
             },
             knives: Array.isArray(u.knives) ? u.knives.map(k => ({ ...k })) : [],
             attributes: getSheet(extensionSettings, name, true, attributeDefs(extensionSettings, { all: true })),
@@ -1346,6 +1350,7 @@ function buildDraft(name, isUser = false, versionId = null) {
                 description: typeof inj.description === 'string' ? inj.description : '',
                 lorebook: typeof inj.lorebook === 'string' ? inj.lorebook : '',
                 promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
+                dialogue: typeof inj.dialogue === 'string' ? inj.dialogue : '',    // example lines of how they speak (D212)
             },
             knives: Array.isArray(npcKnives) ? npcKnives.map(k => ({ ...k })) : [],
             appearance: typeof extensionSettings?.characterAppearance?.[name] === 'string' ? extensionSettings.characterAppearance[name] : '',
@@ -1368,6 +1373,7 @@ function buildDraft(name, isUser = false, versionId = null) {
             description: typeof inj.description === 'string' ? inj.description : '',
             lorebook: typeof inj.lorebook === 'string' ? inj.lorebook : '',
             promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
+            dialogue: typeof inj.dialogue === 'string' ? inj.dialogue : '',    // example lines of how they speak (D212)
         },
         knives: Array.isArray(p.knives) ? p.knives.map(k => ({ ...k })) : [],
         appearance: typeof p.appearance === 'string' ? p.appearance : '',
@@ -1825,9 +1831,21 @@ function renderAppearance() {
 // filter to render the dropdown list.
 let lorebookOptions = [];
 
+/** The Dialogue tab (docs/long-shot-plan.md D212): the character's example lines, and how much of them a reply is sent. */
+function renderDialogueCount() {
+    const n = cleanDialogue(draft && draft.injection ? draft.injection.dialogue : '').length;
+    const $c = $modal.find('#cw-dialogue-count');
+    if (!$c.length) return;
+    $c.text(!n ? 'Nothing written: nothing is sent for this character.'
+        : n > DIALOGUE.perChar ? `${n.toLocaleString('en-US')} characters. The first ${DIALOGUE.perChar.toLocaleString('en-US')} are sent with a reply, cut at the end of a line.`
+        : `${n.toLocaleString('en-US')} ${n === 1 ? 'character' : 'characters'}, all of it sent while they are in the scene.`);
+}
+
 function renderInjection() {
     $modal.find('#cw-inj-description').val(draft.injection.description || '');
     $modal.find('#cw-inj-prompt').val(draft.injection.promptTemplate || '');
+    $modal.find('#cw-dialogue').val(draft.injection.dialogue || '');
+    renderDialogueCount();
 
     // Refresh the available lorebook list.
     try {
@@ -2579,6 +2597,13 @@ function bindStaticListeners() {
         draft.injection.promptTemplate = String($(this).val() || '');
         draft.dirty.injection = true;
     });
+    // Example dialogue (D212): kept with the injection entry, so it goes wherever that goes (a version, a rename, an export).
+    $modal.on('input.cw change.cw', '#cw-dialogue', function () {
+        if (!draft) return;
+        draft.injection.dialogue = String($(this).val() || '');
+        draft.dirty.injection = true;
+        renderDialogueCount();
+    });
     $modal.on('click.cw', '#cw-inj-prompt-reset', function (e) {
         e.preventDefault();
         if (!draft) return;
@@ -3040,9 +3065,11 @@ function commitDraft() {
         const book = (draft.injection.lorebook || '').trim();
         const tplRaw = (draft.injection.promptTemplate || '').trim();
         const tpl = (tplRaw && tplRaw !== DEFAULT_INJECT_PROMPT.trim()) ? tplRaw : '';
-        if (!desc && !book && !tpl) return null;
+        const dialogue = cleanDialogue(draft.injection.dialogue);
+        if (!desc && !book && !tpl && !dialogue) return null;
         const entry = { description: desc, lorebook: book };
         if (tpl) entry.promptTemplate = tpl;
+        if (dialogue) entry.dialogue = dialogue;    // example lines of how they speak (D212): kept when written, dropped when blank
         return entry;
     };
 
@@ -3824,6 +3851,7 @@ function exportDraft() {
             description: draft.injection?.description || '',
             lorebook: draft.injection?.lorebook || '',
             promptTemplate: draft.injection?.promptTemplate || '',
+            dialogue: draft.isUser ? '' : cleanDialogue(draft.injection?.dialogue),    // example lines of how they speak (D212)
         },
     };
     // Standard voices travel as-is. A designed voice belongs to one Google

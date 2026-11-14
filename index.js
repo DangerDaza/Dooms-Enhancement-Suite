@@ -176,6 +176,8 @@ import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.j
 import { initCanon, onCanonChatChanged, onCanonMessageReceived, onCanonMessageDeleted, onCanonGenerationStarted, updateCanon, clearCanon, exportCanonToLorebook, canonBookName, getCanon, isCanonOn, CANON_CHANGED_EVENT } from './src/systems/features/canon.js';
 import { sceneMenu, continueFresh, reopenCurrentScene, openSceneChat, initHub, onHubChatChanged, onHubChatDeleted, onHubChatRenamed, onHubMessageReceived, onHubMessageDeleted, onHubGenerationStarted, hubWorldIds, cardOf, bindCard, unbindCard, makeNarratorCard, worldEntry, worldOfCard } from './src/systems/features/hub.js';
 import { hubConfig, hubStatusLine } from './src/utils/hub.js';
+import { onDialogueGenerationStarted, clearDialogueSlot } from './src/systems/features/exampleDialogue.js';
+import { dialogueConfig } from './src/utils/exampleDialogue.js';
 import { canonConfig, defaultCanonConfig, describeCanonResult, CANON_KINDS, KIND_LABELS } from './src/utils/canon.js';
 import { initScenePictures, onSceneGenerationStarted, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
 import { defaultScenePicturesConfig, scenePicturesConfig, formatLoraList, parseLoraList, progressLabel as sceneProgressLabel } from './src/utils/scenePictures.js';
@@ -677,6 +679,16 @@ function renderAttributesSettings() {
     $('#rpg-attr-add').prop('disabled', list.length >= MAX_ATTRIBUTES);
 }
 
+/** Settings → Workshop → Example dialogue (docs/long-shot-plan.md D212): the switch, the depth, whose voice the block takes. */
+function renderWorkshopDialogueSettings() {
+    if (!$('#rpg-ws-dialogue-enabled').length) return;
+    const c = dialogueConfig(extensionSettings);
+    $('#rpg-ws-dialogue-enabled').prop('checked', c.enabled);
+    $('#rpg-ws-dialogue-depth').val(c.depth);
+    $('#rpg-ws-dialogue-role').val(c.role);
+    $('.rpg-ws-dialogue-sub').toggleClass('is-off', !c.enabled);
+}
+
 function renderWorkshopRelationships() {
     const $host = $('#rpg-ws-relationship-list');
     if (!$host.length) return;
@@ -687,6 +699,7 @@ function renderWorkshopRelationships() {
     if (!pc) { $host.empty(); return; }
     const emojis = pc.relationships.relationshipEmojis || {};
     $('#rpg-ws-relationships-enabled').prop('checked', pc.relationships.enabled !== false);
+    renderWorkshopDialogueSettings();
     const rows = Object.entries(emojis).map(([name, emoji]) => `
         <div class="rpg-ws-rel-row" data-relationship="${escapeHtml(name)}">
             <input type="text" class="rpg-ws-rel-name" value="${escapeHtml(name)}"
@@ -1739,6 +1752,16 @@ function bindSettingsUI() {
         try { renderWorkshopRelationshipPreview(); } catch (e) { /* non-fatal */ }
         try { renderThoughts(); clearPortraitCache(); updatePortraitBar(); } catch (e) {}
     };
+    // Example dialogue of the characters in play (docs/long-shot-plan.md D212).
+    const _dialogueRules = () => { if (!extensionSettings.exampleDialogue || typeof extensionSettings.exampleDialogue !== 'object') extensionSettings.exampleDialogue = {}; return extensionSettings.exampleDialogue; };
+    $(document).on('change', '#rpg-ws-dialogue-enabled', function () {
+        _dialogueRules().enabled = $(this).prop('checked');
+        if (!_dialogueRules().enabled) clearDialogueSlot();
+        saveSettings();
+        renderWorkshopDialogueSettings();
+    });
+    $(document).on('change', '#rpg-ws-dialogue-depth', function () { _dialogueRules().depth = Number($(this).val()); saveSettings(); renderWorkshopDialogueSettings(); });
+    $(document).on('change', '#rpg-ws-dialogue-role', function () { _dialogueRules().role = String($(this).val() || 'system'); saveSettings(); renderWorkshopDialogueSettings(); });
     $(document).on('change', '#rpg-ws-relationships-enabled', function () {
         const pc = getRelationshipConfig();
         if (!pc) return;
@@ -4852,7 +4875,7 @@ jQuery(async () => {
                 // onSceneGenerationStarted first: a regenerate takes DES's scene
                 // pictures off the end of the chat before anything here looks at
                 // the last message, and before SillyTavern picks what it replaces.
-                [event_types.GENERATION_STARTED]: [onSceneGenerationStarted, onGenerationStarted, onWorldGenerationStarted, onCanonGenerationStarted, onHubGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
+                [event_types.GENERATION_STARTED]: [onSceneGenerationStarted, onGenerationStarted, onWorldGenerationStarted, onCanonGenerationStarted, onDialogueGenerationStarted, onHubGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
                 [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onWorldMessageReceived, onCanonMessageReceived, onHubMessageReceived, onMessageReceivedVoices],
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
                 [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],

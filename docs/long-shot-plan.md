@@ -1567,3 +1567,43 @@ scene told of and the others not, the same day, the next day, the next
 scene's people, an older scene by name from elsewhere and in front);
 `tools/atlas-browser-test.mjs` §5h (the sheet's ticks, marks and line,
 the pick's line).
+
+## 51. Example dialogue on a character's card, sent while they are in play (2026-11-14, D212)
+
+The owner: "We need to add a section to the workshop characters that
+will hold and inject example dialogue for the character when they are
+in play." The Workshop's Injection tab was not the place: what it holds
+is a direction given once, when Inject into Scene is pressed, and
+nothing of a Workshop character was sent with every reply. Asked where
+it should live and whether it should draft itself from the chat: a tab
+of its own, and just the box.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D212 | A character's card has a Dialogue tab; its lines are sent with every reply while the tracker has the character in the scene | **Held.** The Workshop has a Dialogue tab between Injection and Knives: one box, 6,000 characters, with a line under it saying how much is sent. The text is kept with the character's injection entry, as `dialogue` (`characterInjection[name].dialogue`), so it goes wherever that entry goes without being told to: a campaign's version of the character, a rename or a merge of aliases, an export and an import. A card with nothing written keeps no such field. The player's own characters have no Dialogue tab: the narrator does not write for the player. A SillyTavern card imported as a character brings its own example dialogue with it. **In play** (`presentWithDialogue`, `src/systems/features/exampleDialogue.js`). On every generation the tracker's Present Characters are read as the reply is written from them (the committed tracker data, else the last generated): each by name, not one the tracker marks as off the scene, never the player, the tracker's name for someone turned into the Workshop's (aliases), eight at most. A scene's first reply has its people from the scene's seed. A character who is not in the scene costs nothing. **Sent** (`buildDialogueBlock`). One block in a slot of the extension's own (`dooms-example-dialogue`), in the chat at the depth and in the voice set in Settings (four messages from the end, as the system): a line saying what the lines are for (that person's voice: their words, their rhythm, their manner) and that they were never said in this story and are not to be repeated or quoted, then each character's under their name as their card spells it. SillyTavern's own marks are read as its example dialogue reads them: `{{char}}`, `{{user}}`, a line with only `<START>`. One character's is held to 1,500 characters, cut at the end of a line; everyone's together to 6,000, the first ones whole and the rest left out. Not sent with a quiet generation or one written as the player. **The openings** (D119). A scene's openings are given the example dialogue of the people in the scene who have some (800 characters each), told the same of what the lines are for, and the pick says whose it was written with. **Settings**, under Workshop: the switch (on), the depth and the voice. |
+
+What it does not do. Nothing drafts the lines: the player writes or
+pastes them. A character has one set of lines, whatever the scene and
+whoever they are speaking to. The block is sent whole with every reply
+while the character is present, so a crowd of talkative cards costs up
+to 6,000 characters a reply. Whether a model keeps a voice better for
+the lines, and whether one repeats them in spite of being told not to,
+is not measured. Who is present is the tracker's word: with the tracker
+off, or a character it has not listed, nothing is sent. Run in the real
+SillyTavern at a phone's width: the tab, the lines written, saved,
+reopened, and kept when the description was saved after; the block as
+SillyTavern holds it for the next reply with the character present, and
+nothing with her off the scene, absent, or the reply written as the
+player; the depth changed and the switch turned off in Settings; the
+player's own character without the tab, and the tab not left in front.
+No reply was generated there (no model is connected to it): what was
+read is the prompt slot SillyTavern sends.
+
+Tests: `tools/example-dialogue-test.mjs` (the setting, what a card
+keeps, the text as sent, who is in the scene with some, the block and
+its room); `tools/hub-flow-test.mjs` §30 (sent with a reply, who is
+left out, read anew each reply, the committed tracker, a dry run, quiet
+and impersonated generations, the switch, the depth and voice, the
+extension off, no one present, a scene's openings and its first reply,
+switched off for the openings); `tools/atlas-browser-test.mjs` §5h (the
+pick's line).

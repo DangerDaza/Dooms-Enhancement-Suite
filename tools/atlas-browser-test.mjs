@@ -1313,6 +1313,12 @@ console.log('\n§5h starting a scene from a place (D174)');
         tl = await thenLine({ messages: 15, scene: 's3', right: true, then: { date: '', time: '', weather: '', fromTracker: true, people: ['Kiyoha'] } });
         check('one person, and nothing known of the hour: the line is about them alone', tl.text === 'The openings were told how the tracker had Kiyoha then.', JSON.stringify(tl));
     }
+    // Whose example dialogue from the Workshop the openings were given (D212).
+    {
+        const voiceText = async (lore) => { await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { ...pending, lore } }); return page.evaluate(() => { const el = document.querySelector('.dooms-atlas-setup-card .dooms-atlas-voice-line'); return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; }); };
+        check('the pick says whose example dialogue the openings were written with, with or without a lorebook read', (await voiceText({ found: [], missing: [], standing: false, books: [], voices: ['Kiyoha', 'Lysandra'] })) === 'Written with the example dialogue of Kiyoha and Lysandra from the Workshop.' && (await voiceText({ found: ['Kiyoha'], missing: [], standing: false, books: ['FD'], voices: ['Kiyoha'] })) === 'Written with the example dialogue of Kiyoha from the Workshop.');
+        check('with none given it says nothing of it', (await voiceText({ found: [], missing: [], standing: false, books: [] })) === '' && (await voiceText({ found: [], missing: [], standing: false, books: [], voices: [] })) === '');
+    }
     await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { ...pending, lore: { found: [], missing: [], standing: false, books: [] } } });
     check('with no lorebook read it says nothing of them', !/lorebook/.test((await panel()).text));
     await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { when: null, openers: [] }, error: 'The narrator wrote no usable opener; write your own, ask again, or start without one.' });

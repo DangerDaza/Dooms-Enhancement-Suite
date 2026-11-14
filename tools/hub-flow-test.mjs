@@ -2329,5 +2329,94 @@ console.log('\n§29 who the tracker had present when the scene before stopped: t
     hub.__setRecapTransport(null);
 }
 
+console.log('\n§30 example dialogue of the characters in play: sent with a reply while the tracker has them present, given to a scene\'s openings (D212)');
+{
+    const ed = await import(`${DES}/src/systems/features/exampleDialogue.js`);
+    const slots = globalThis.__DES_SLOTS__;
+    const slot = () => slots[ed.DIALOGUE_SLOT] || null;
+    const people = (list) => JSON.stringify({ characters: list });
+    const there = (name, thoughts = 'Watching.') => ({ name, emoji: '🙂', thoughts: { content: thoughts } });
+    const setPresent = (committed, generated = committed) => {
+        state.setCommittedTrackerData({ ...state.committedTrackerData, characterThoughts: committed });
+        state.setLastGeneratedData({ ...state.lastGeneratedData, characterThoughts: generated });
+    };
+    const injWas = extensionSettings.characterInjection;
+    extensionSettings.characterInjection = {
+        Kiyoha: { description: 'A fighter.', lorebook: '', dialogue: '"You\'re late. Again."\n"Sit. Eat. Then you can tell me what went wrong."' },
+        'Old Marit': { description: 'Keeps the Anchor.', lorebook: '', dialogue: '"Mind the nets, {{user}}."' },
+        Lysandra: { description: 'A healer.', lorebook: '' },
+        Jordan: { description: 'The player.', lorebook: '', dialogue: '"I am the player."' },
+    };
+    delete extensionSettings.exampleDialogue;
+
+    setPresent(people([there('Kiyoha'), there('Lysandra'), there('Old Marit', 'Off-scene: at the Anchor'), there('Jordan')]));
+    ed.onDialogueGenerationStarted('normal', {}, false);
+    check('with a reply, the example dialogue of the characters the tracker has present is sent in a block of its own, four messages from the end, as the system', !!slot() && slot().position === 1 && slot().depth === 4 && slot().role === 0 && slot().value.includes('Kiyoha:\n"You\'re late. Again."\n"Sit. Eat. Then you can tell me what went wrong."') && /^\n\[How the people in this scene speak\./.test(slot().value), JSON.stringify(slot()));
+    check('not one the tracker has off the scene, not one with nothing written, never the player', !slot().value.includes('Mind the nets') && !slot().value.includes('Lysandra') && !slot().value.includes('I am the player'));
+    setPresent(people([there('Old Marit'), there('kiyoha')]));
+    ed.onDialogueGenerationStarted('normal', {}, false);
+    check('who is in the scene is read anew with each reply: one who has come in is sent, in the tracker\'s order, the player\'s name put in', slot().value.includes('Old Marit:\n"Mind the nets, Jordan."\n\nKiyoha:\n"You\'re late'), slot().value);
+    setPresent(people([there('Lysandra')]), people([there('Kiyoha')]));
+    ed.onDialogueGenerationStarted('normal', {}, false);
+    check('the scene a reply is written from is the committed one: someone only the last reply brought in is not yet sent', slot().value === '');
+    setPresent('', people([there('Kiyoha')]));
+    ed.onDialogueGenerationStarted('normal', {}, false);
+    check('with nothing committed yet, the last generated tracker says who is there', slot().value.includes('Kiyoha:'));
+
+    setPresent(people([there('Kiyoha')]));
+    ed.onDialogueGenerationStarted('normal', {}, false);
+    const held = slot().value;
+    setPresent(people([there('Old Marit')]));
+    ed.onDialogueGenerationStarted('normal', {}, true);
+    check('a dry run changes nothing', slot().value === held);
+    for (const [type, data] of [['quiet', {}], ['impersonate', {}], ['normal', { quiet_prompt: 'x' }], ['normal', { quietImage: true }]]) {
+        slots[ed.DIALOGUE_SLOT] = { value: 'stale' };
+        ed.onDialogueGenerationStarted(type, data, false);
+        check(`a ${type === 'normal' ? `generation with ${Object.keys(data)[0]}` : `${type} generation`} is sent none`, slot().value === '');
+    }
+    extensionSettings.exampleDialogue = { enabled: false };
+    ed.onDialogueGenerationStarted('normal', {}, false);
+    check('switched off in Settings, nothing is sent', slot().value === '' && same(ed.dialogueInPlay(), []));
+    extensionSettings.exampleDialogue = { enabled: true, depth: 2, role: 'user' };
+    ed.onDialogueGenerationStarted('normal', {}, false);
+    check('the depth and the voice set in Settings are the ones used', slot().value.includes('Old Marit:') && slot().depth === 2 && slot().role === 1);
+    extensionSettings.enabled = false;
+    ed.onDialogueGenerationStarted('normal', {}, false);
+    check('with the extension off nothing is sent', slot().value === '');
+    extensionSettings.enabled = true;
+    delete extensionSettings.exampleDialogue;
+    setPresent(people([]));
+    ed.onDialogueGenerationStarted('normal', {}, false);
+    check('no one in the scene: the block is empty, not a heading with nothing under it', slot().value === '');
+    slots[ed.DIALOGUE_SLOT] = { value: 'stale' };
+    ed.clearDialogueSlot();
+    check('the slot can be emptied', slot().value === '');
+
+    // A scene: its openings are given the example dialogue of its people, and its first reply is sent them.
+    const W = 'castland';
+    let asked = null;
+    hub.__setOpenersTransport(async (prompt) => { asked = prompt; return JSON.stringify({ when: { date: 'Day 5', time: 'night' }, openers: [{ title: 'a', text: 'The lamps gutter.', who: [] }, { title: 'b', text: 'Second.', who: [] }, { title: 'c', text: 'Third.', who: [] }] }); });
+    hub.__setGapTransport(async () => 'no');
+    hub.__setRecapTransport(async () => '{"recap":"They talked.","people":[],"threads":{"closed":[],"opened":[]}}');
+    for (const sc of hub.worldEntry(W).scenes.filter(x => x.status === 'open')) hub.setSceneAside(W, sc.id);
+    const p = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: ['Kiyoha', 'Lysandra'], gap: { id: 'tomorrow' } });
+    check('a scene\'s openings are given the example dialogue of the people in it who have some, under their names, kept line by line', p.ok && asked.user.includes('How they speak (example lines, not to be repeated):\n[Kiyoha]\n"You\'re late. Again."\n"Sit. Eat. Then you can tell me what went wrong."\n') && !asked.user.includes('[Lysandra]') && !asked.user.includes('Mind the nets'), asked.user.split('\n').slice(3, 12).join(' | '));
+    check('and told what the lines are for and that they are not to be repeated', /Where example lines are given for a person, they show that person's voice \(their words, their rhythm, their manner\): write what they say in it\. The lines are examples and were never said in this story: do not repeat or quote them\./.test(asked.system));
+    check('the Start says whose example dialogue the openings were given; the sheet is drawn from the same', same(p.lore.voices, ['Kiyoha']) && same(hub.pendingStart().lore.voices, ['Kiyoha']), JSON.stringify(p.lore));
+    const c = await hub.commitScene(p.token, { choice: 0 });
+    ed.onDialogueGenerationStarted('normal', {}, false);
+    check('the scene\'s first reply is sent it too: the scene starts with its people as the tracker\'s present characters', c.ok && slot().value.includes('Kiyoha:\n"You\'re late. Again."') && same(ed.dialogueInPlay().map(x => x.name), ['Kiyoha']), JSON.stringify([c.ok, c.reason, ed.dialogueInPlay().map(x => x.name)]));
+    await hub.endScene({ skipCanon: true, skipWorld: true });
+    extensionSettings.exampleDialogue = { enabled: false };
+    const off = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: ['Kiyoha'], gap: { id: 'tomorrow' } });
+    check('switched off in Settings, the openings are given none', off.ok && !asked.user.includes('How they speak') && !/example lines are given for a person/.test(asked.system) && off.lore.voices === undefined);
+    hub.cancelStart();
+    delete extensionSettings.exampleDialogue;
+    extensionSettings.characterInjection = injWas;
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+    hub.__setRecapTransport(null);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

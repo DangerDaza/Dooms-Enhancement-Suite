@@ -46,6 +46,7 @@ import { addCharacterAlias } from '../features/characterAliases.js';
 import { deleteSheet } from '../../utils/d20.js';
 import { canonicalStockId } from '../voices/voiceCatalog.js';
 import { applyPopupLayout } from './settingsRail.js';
+import { cleanDialogue } from '../../utils/exampleDialogue.js';
 
 let contextMenuTarget = ''; // character name currently under right-click
 
@@ -894,8 +895,10 @@ function importFromSillyTavernCards() {
         // If the card has a description, seed the Workshop Injection field
         // so users can Inject into Scene right away.
         const desc = String(card.description || '').trim();
-        if (desc) {
-            extensionSettings.characterInjection[name] = { description: desc, lorebook: '' };
+        // A card's own example dialogue seeds the Workshop's Dialogue tab (docs/long-shot-plan.md D212): it is what the card says of how they speak.
+        const dialogue = cleanDialogue(card.mes_example || (card.data && card.data.mes_example) || '');
+        if (desc || dialogue) {
+            extensionSettings.characterInjection[name] = { description: desc, lorebook: '', ...(dialogue ? { dialogue } : {}) };
         }
     }
     saveSettings();
@@ -1084,10 +1087,12 @@ function importCharacterPayload(payload) {
         const desc = typeof inj.description === 'string' ? inj.description.trim() : '';
         const book = typeof inj.lorebook === 'string' ? inj.lorebook.trim() : '';
         const tpl = typeof inj.promptTemplate === 'string' ? inj.promptTemplate.trim() : '';
-        if (desc || book || tpl) {
+        const dialogue = cleanDialogue(inj.dialogue);    // example lines of how they speak (D212)
+        if (desc || book || tpl || dialogue) {
             if (!extensionSettings.characterInjection) extensionSettings.characterInjection = {};
             const entry = { description: desc, lorebook: book };
             if (tpl) entry.promptTemplate = tpl;
+            if (dialogue) entry.dialogue = dialogue;
             extensionSettings.characterInjection[targetName] = entry;
         }
     }

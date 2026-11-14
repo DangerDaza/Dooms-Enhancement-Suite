@@ -243,6 +243,7 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
             ${newCard ? `<p class="dooms-atlas-start-note dooms-atlas-card-line"><i class="fa-solid fa-id-card" aria-hidden="true"></i> Starting makes a new narrator card for this scene${list.length ? `, with ${list.length === 1 ? 'this opening as its greeting' : 'these openings as its greetings'}` : ''}. It is blank otherwise: no other card's text is sent in this scene.</p>` : ''}
             ${tailLine(p.tail)}
             ${loreLine(p.lore)}
+            ${voiceLine(p.lore)}
             ${contLine(p.continuity)}
             ${err}
             <ul class="dooms-atlas-openers">${openers || '<li class="dooms-atlas-none">No opening was written. Write your own below, or ask again.</li>'}</ul>
@@ -477,6 +478,12 @@ function tailLine(t) {
     const of = k.scene ? (k.scene === 's0' ? 'the chat before the scenes' : `scene ${sceneNoOf(k.scene)}`) : 'the scene before';
     if (k.messages > 0) return `<p class="dooms-atlas-start-note dooms-atlas-tail-line"><i class="fa-solid fa-quote-left" aria-hidden="true"></i> Shown the last ${k.messages} ${k.messages === 1 ? 'message' : 'messages'} of ${of} as ${k.messages === 1 ? 'it was' : 'they were'} played${k.right ? ', to carry straight on from' : ', to know how things were left'}.</p>${stopped}`;
     return k.scene ? `<p class="dooms-atlas-start-note dooms-atlas-tail-line"><i class="fa-solid fa-quote-left" aria-hidden="true"></i> The messages of ${of} could not be read, so these are written from its record alone and may not pick up where it stopped.</p>${stopped}` : stopped;
+}
+
+/** Whose example dialogue from the Workshop the openings were given (D212). */
+function voiceLine(lore) {
+    const v = lore && typeof lore === 'object' && Array.isArray(lore.voices) ? lore.voices.map(x => String(x || '').trim()).filter(Boolean) : [];
+    return v.length ? `<p class="dooms-atlas-start-note dooms-atlas-voice-line"><i class="fa-solid fa-comment-dots" aria-hidden="true"></i> Written with the example dialogue of ${e(listOf(v))} from the Workshop.</p>` : '';
 }
 
 function loreLine(lore) {
