@@ -701,6 +701,9 @@ export function scenesRefusalText(plan) {
     if (p.reason === 'changed') return 'The chat changed while this was being prepared. Nothing was changed; start again.';
     if (p.reason === 'running') return 'This is already being done.';
     if (p.reason === 'bound-elsewhere') return `${(p.card && p.card.name) || 'This chat\'s card'} already narrates another world (${p.boundTo || 'one of yours'}), and a card narrates one world. Open this story with a card of its own, or free the card in Settings, under Live World, The Hub.`;
+    // The campaign decides the world (D213): a chat of another world is not played into this campaign's.
+    if (p.reason === 'other-campaign') return `This chat's world, ${(p.world && p.world.name) || 'its own'}, is ${(p.theirs && p.theirs.name) || 'another campaign'}'s world, and ${(p.campaign && p.campaign.name) || 'another campaign'} is the campaign that is on. Switch to ${(p.theirs && p.theirs.name) || 'its campaign'} at the top of the Atlas, then play it as scenes there.`;
+    if (p.reason === 'other-world') return `This chat's world is ${(p.world && p.world.name) || 'its own'}, and ${(p.campaign && p.campaign.name) || 'the campaign'}'s world is ${(p.other && p.other.name) || 'another'}. If ${(p.world && p.world.name) || 'this one'} should be ${(p.campaign && p.campaign.name) || 'the campaign'}'s world, press Change beside the world's name at the top of the Atlas.`;
     if (p.reason === 'backup') return `A copy of this chat could not be saved first (${(Array.isArray(p.errors) ? p.errors.join(' ') : '') || 'SillyTavern refused the file'}), so nothing was changed.`;
     if (p.reason === 'world' || p.reason === 'error') return `It could not be done: ${(Array.isArray(p.errors) ? p.errors.join(' ') : '') || 'the world could not be made'}.`;
     return 'This chat cannot be played as scenes.';
@@ -1204,23 +1207,125 @@ export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query =
 }
 
 /**
+ * The campaign at the head of the sidebar (D213): the Lore Library's
+ * active campaign, switched here as it is there; the world it is attached
+ * to, with the way to change it; and a word when what is shown, or the
+ * chat in front, is another world's.
+ * @param {{ list: Array<{ id: string, name: string, world: object|null }>, now: { id: string, name: string }|null, world: { id: string, name: string }|null, busy?: boolean, notice?: { text: string, actions: Array<{ act: string, id?: string, label: string, title?: string }> }|null }|null} c
+ */
+export function atlasCampaignRowHtml(c) {
+    if (!c) return '';
+    const list = Array.isArray(c.list) ? c.list : [];
+    const now = c.now || null;
+    const off = c.busy ? ' disabled' : '';
+    const options = `${now ? '' : '<option value="" selected disabled>No campaign is on</option>'}${list.map(x => `<option value="${attr(x.id)}"${now && x.id === now.id ? ' selected' : ''}>${e(x.name || x.id)}${x.world ? '' : ' (no world yet)'}</option>`).join('')}`;
+    const select = list.length
+        ? `<label class="dooms-atlas-world-pick" title="The Lore Library's active campaign. The Atlas shows its world, the way your characters follow it. Switching here switches it everywhere: its lorebooks, and its versions of the characters."><span class="dooms-atlas-card-label">Campaign</span>
+                <select class="dooms-atlas-campaign-select" aria-label="The Lore Library's active campaign"${off}>${options}</select></label>`
+        : '';
+    const world = now && c.world
+        ? `<p class="dooms-atlas-campaign-world"><span class="dooms-atlas-card-label">World</span> <span class="dooms-atlas-campaign-world-name">${e(c.world.name)}</span> <button type="button" class="dooms-atlas-link" data-act="world-change" title="Point ${attr(now.name)} at another world of yours, in case of a mix-up. The world it has now keeps its scenes and its memory."${off}>Change</button></p>`
+        : '';
+    const n = c.notice && c.notice.text ? c.notice : null;
+    const notice = n
+        ? `<p class="dooms-atlas-between dooms-atlas-mixup" role="status"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> <span>${e(n.text)}</span>${(Array.isArray(n.actions) ? n.actions : []).map(a => ` <button type="button" class="dooms-atlas-link" data-act="${attr(a.act)}"${a.id ? ` data-id="${attr(a.id)}"` : ''}${a.title ? ` title="${attr(a.title)}"` : ''}${off}>${e(a.label)}</button>`).join('')}</p>`
+        : '';
+    return `${select}${world}${notice}`;
+}
+
+const scenesWord = (n) => (n > 0 ? `${n} scene${n === 1 ? '' : 's'}` : 'no scenes yet');
+
+/**
+ * With no campaign on (D213), in place of the tabs: the Atlas asks for
+ * one. The campaigns to switch to, a new one to make, and what the chat
+ * in front belongs to.
+ * @param {object} o
+ * @param {Array<{ id: string, name: string, world: { id: string, name: string }|null }>} o.campaigns
+ * @param {{ world: { id: string, name: string }, campaign: { id: string, name: string }|null, scene: string }|null} [o.front]  the world the chat in front is of
+ * @param {boolean} [o.chat]   a chat is open: its own map can be shown without a campaign
+ */
+export function atlasCampaignGateHtml({ campaigns = [], front = null, busy = false, error = '', chat = false } = {}) {
+    const list = Array.isArray(campaigns) ? campaigns : [];
+    const off = busy ? ' disabled' : '';
+    let mine = '';
+    if (front && front.world) {
+        const what = `${front.scene ? `scene ${e(front.scene)} of ` : 'in '}<strong>${e(front.world.name)}</strong>`;
+        mine = front.campaign
+            ? `<p class="dooms-atlas-gate-front">The chat in front is ${what}, <strong>${e(front.campaign.name)}</strong>'s world. <button type="button" class="dooms-atlas-btn is-primary" data-act="campaign-switch" data-id="${attr(front.campaign.id)}"${off}>Switch to ${e(front.campaign.name)}</button></p>`
+            : `<p class="dooms-atlas-gate-front">The chat in front is ${what}, which is in no campaign yet. Switch to the campaign it belongs to and choose it as that campaign's world, or: <button type="button" class="dooms-atlas-btn" data-act="campaign-make" data-id="${attr(front.world.id)}" data-name="${attr(front.world.name)}" title="A new campaign named ${attr(front.world.name)}, with this world as its world"${off}>Make a campaign for it</button></p>`;
+    }
+    const rows = list.map(c => `<li class="dooms-atlas-gate-row">
+                <div class="dooms-atlas-gate-what"><strong>${e(c.name || c.id)}</strong><span>${c.world ? `World: ${e(c.world.name)}` : 'No world yet'}</span></div>
+                <button type="button" class="dooms-atlas-btn" data-act="campaign-switch" data-id="${attr(c.id)}"${off}>Switch to it</button>
+            </li>`).join('');
+    return `<section class="dooms-atlas-gate" aria-label="Pick a campaign">
+            <h3>Pick a campaign</h3>
+            <p>The Atlas shows the world of the Lore Library's active campaign, the way your characters follow it. No campaign is on.</p>
+            ${mine}
+            ${list.length ? `<ul class="dooms-atlas-gate-list">${rows}</ul>` : '<p class="dooms-atlas-none">There are no campaigns yet. Make the first one here; the Lore Library keeps its lorebooks and its characters.</p>'}
+            <div class="dooms-atlas-gate-new">
+                <input type="text" class="dooms-atlas-gate-name" maxlength="80" placeholder="A new campaign's name" aria-label="A new campaign's name"${off}>
+                <button type="button" class="dooms-atlas-btn" data-act="campaign-new"${off}><i class="fa-solid fa-plus" aria-hidden="true"></i> <span>Make it</span></button>
+            </div>
+            ${error ? `<p class="dooms-atlas-gate-error" role="alert">${e(error)}</p>` : ''}
+            ${busy ? '<p class="dooms-atlas-gate-busy" role="status"><i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Switching…</p>' : ''}
+            ${chat ? `<p class="dooms-atlas-gate-foot"><button type="button" class="dooms-atlas-link" data-act="front-show" title="The map of the chat in front, as it was before campaigns decided the world"${off}>Show this chat's map without a campaign</button></p>` : ''}
+        </section>`;
+}
+
+/**
+ * A campaign's world chosen (D213), in place of the tabs: asked for when
+ * the campaign has none, and opened from Change when it has one (a
+ * mix-up put right). A new world, the chat in front as where it begins,
+ * or one of the player's worlds: each said with the campaign it is in.
+ * @param {object} o
+ * @param {{ id: string, name: string }} o.campaign
+ * @param {{ id: string, name: string }|null} [o.current]   the world the campaign has, when it is being changed
+ * @param {Array<{ id: string, name: string, campaign: string, campaignName: string, scenes: number }>} o.worlds
+ * @param {boolean} [o.adopt]   the chat in front can be played as scenes: it is where the world begins
+ */
+export function atlasWorldChoiceHtml({ campaign = null, current = null, worlds = [], adopt = false, busy = false, error = '' } = {}) {
+    const c = campaign || { id: '', name: 'This campaign' };
+    const list = Array.isArray(worlds) ? worlds : [];
+    const off = busy ? ' disabled' : '';
+    const rows = list.map(w => {
+        const here = !!current && w.id === current.id;
+        const where = here ? `${e(c.name)}'s world now`
+            : w.campaign && w.campaign !== c.id ? `${e(w.campaignName || 'Another campaign')}'s world now: using it here leaves ${e(w.campaignName || 'that campaign')} without one`
+            : 'in no campaign';
+        return `<li class="dooms-atlas-gate-row${here ? ' is-current' : ''}">
+                <div class="dooms-atlas-gate-what"><strong>${e(w.name || w.id)}</strong><span>${scenesWord(w.scenes)} · ${where}</span></div>
+                ${here ? '<span class="dooms-atlas-gate-tag">In use</span>' : `<button type="button" class="dooms-atlas-btn" data-act="world-use" data-id="${attr(w.id)}"${off}>Use this world</button>`}
+            </li>`;
+    }).join('');
+    return `<section class="dooms-atlas-gate" aria-label="${attr(current ? `Change ${c.name}'s world` : `${c.name} has no world yet`)}">
+            <h3>${current ? `Change ${e(c.name)}'s world` : `${e(c.name)} has no world yet`}</h3>
+            <p>${current
+        ? `${e(c.name)} is attached to <strong>${e(current.name)}</strong>. Pick the world it should have: ${e(current.name)} keeps its scenes and its memory, and is in no campaign afterwards.`
+        : `A campaign has one world: its map, its people, its scenes and what they remember. Give ${e(c.name)} one.`}</p>
+            <div class="dooms-atlas-gate-actions">
+                <button type="button" class="dooms-atlas-btn${current ? '' : ' is-primary'}" data-act="world-make" title="An empty world of your own named ${attr(c.name)}. It begins with its first scene."${off}><i class="fa-solid fa-earth-europe" aria-hidden="true"></i> <span>Make a new world for ${e(c.name)}</span></button>
+                ${adopt && !current ? `<button type="button" class="dooms-atlas-btn" data-act="scenes" title="Play this chat as scenes: its story so far is where ${attr(c.name)}'s world begins"${off}><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> <span>Begin it from this chat</span></button>` : ''}
+            </div>
+            ${list.length ? `<h4 class="dooms-atlas-gate-head">${current ? 'Your worlds' : 'Or use a world you have'}</h4><ul class="dooms-atlas-gate-list">${rows}</ul>` : ''}
+            ${error ? `<p class="dooms-atlas-gate-error" role="alert">${e(error)}</p>` : ''}
+            ${busy ? '<p class="dooms-atlas-gate-busy" role="status"><i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Working…</p>' : ''}
+            ${current ? `<p class="dooms-atlas-gate-foot"><button type="button" class="dooms-atlas-btn" data-act="world-keep"${off}>Keep ${e(current.name)}</button> <button type="button" class="dooms-atlas-link" data-act="world-detach" title="${attr(c.name)} is left with no world; ${attr(current.name)} keeps its scenes and its memory"${off}>Leave ${e(c.name)} without a world</button></p>` : ''}
+        </section>`;
+}
+
+/**
  * The sidebar: the world's name with the date and the place, the tabs,
  * the tab's body (`body` is the tab's HTML: Places from atlasPlacesHtml,
- * the others from Live World's own views), the foot.
+ * the others from Live World's own views), the foot. `campaign` is the
+ * Lore Library's campaign at its head (D213); with `gate` (the HTML of
+ * what the Atlas asks for) there are no tabs: a campaign, or its world,
+ * is chosen first.
  */
-export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', body = '', status = '', result = '', canAdvance = false, advancing = false, editLabel = 'Edit this world', scenes = false, between = null, ending = null, undoEnd = null, scenesTab = false, worlds = [], picked = '', chatWorld = '' } = {}) {
+export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', body = '', status = '', result = '', canAdvance = false, advancing = false, editLabel = 'Edit this world', scenes = false, between = null, ending = null, undoEnd = null, scenesTab = false, campaign = null, gate = '' } = {}) {
     const shown = ATLAS_TABS.filter(t => t.id !== 'scenes' || scenesTab);
     const active = shown.some(t => t.id === tab) ? tab : shown[0].id;
     const when = [facts.date, facts.time].filter(Boolean).join(', ');
-    // The world picker (D194): the chat's own world, then every world that is played as scenes, whatever chat is open.
-    const list = Array.isArray(worlds) ? worlds : [];
-    const picker = list.length
-        ? `<label class="dooms-atlas-world-pick" title="Which world the Atlas shows. A world picked here is shown as it stands between scenes, whatever chat is open, and a scene of it can be started from here."><span class="dooms-atlas-card-label">World</span>
-                <select class="dooms-atlas-world-select" aria-label="Which world the Atlas shows">
-                    <option value=""${picked ? '' : ' selected'}>${chatWorld ? `This chat: ${e(chatWorld)}` : 'This chat'}</option>
-                    ${list.map(w => `<option value="${attr(w.id)}"${w.id === picked ? ' selected' : ''}>${e(w.name || w.id)}${w.card ? '' : ' (no narrator card)'}</option>`).join('')}
-                </select></label>`
-        : '';
     const betweenText = between
         ? (between.picked
             ? (between.fresh ? 'No scene of this world has ended yet: this is where it begins.' : 'This world as it stands between scenes, whatever chat is open.')
@@ -1232,12 +1337,23 @@ export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', 
                 <button type="button" class="dooms-atlas-tool" data-act="fold" title="Show the map" aria-label="Show the map"><i class="fa-solid fa-map" aria-hidden="true"></i></button>
                 <button type="button" class="dooms-atlas-tool is-close" data-act="close" title="Close the Atlas" aria-label="Close the Atlas"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
             </div>`;
+    if (gate) {
+        return `<header class="dooms-atlas-head">
+            ${headTools}
+            <h2 class="dooms-atlas-title">${e(name || 'The Atlas')}</h2>
+            ${atlasCampaignRowHtml(campaign)}
+        </header>
+        <div class="dooms-atlas-body is-gate">${gate}</div>
+        <footer class="dooms-atlas-foot">
+            <p class="dooms-atlas-result" role="status">${e(result)}</p>
+        </footer>`;
+    }
     return `<header class="dooms-atlas-head">
             ${headTools}
             <h2 class="dooms-atlas-title">${e(name || 'The world')}</h2>
             <p class="dooms-atlas-sub">${when ? e(when) : 'No date in the tracker yet'}${facts.weather ? ` · ${e(facts.weather)}` : ''}</p>
             ${facts.location ? `<p class="dooms-atlas-sub is-place"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> ${e(facts.location)}</p>` : ''}
-            ${picker}
+            ${atlasCampaignRowHtml(campaign)}
             ${between ? `<p class="dooms-atlas-between" role="status"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i> <span>${betweenText}${between.open ? ` Scene ${e(between.open.number)}${between.open.title ? ` (${e(between.open.title)})` : ''} is being played, and the map is changed there.` : ''}</span>${between.open ? ` <button type="button" class="dooms-atlas-link" data-act="scene-go" data-id="${attr(between.open.id)}">Go to it</button>` : ''}</p>` : ''}
         </header>
         <nav class="dooms-atlas-tabs" role="tablist" aria-label="The world">${tabs}</nav>

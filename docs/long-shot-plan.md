@@ -1607,3 +1607,68 @@ and impersonated generations, the switch, the depth and voice, the
 extension off, no one present, a scene's openings and its first reply,
 switched off for the openings); `tools/atlas-browser-test.mjs` §5h (the
 pick's line).
+
+## 52. The campaign decides the world (2026-11-15, D213)
+
+The owner: "We need to tie the atlas to the current campaign in the
+lore library like we do characters. The current system is too
+confusing." And: "You should also be able to swap the world your lore
+library campaign is attached to", "in case there is a mix up." What was
+confusing: the Atlas showed whatever world the chat in front happened
+to carry (a blank world named after the card, the world set for new
+chats), with a picker beside it that listed every other world; the D
+menu led back to the open scene of any world; and which world a chat
+would be played into depended on the chat. A campaign already decides
+which version of a character is in play and which lorebooks are on.
+Asked what the Atlas should show, what it should do with no campaign
+on, whether the campaign should be switched from the Atlas, and what
+becomes of worlds that are in no campaign: the campaign's world; ask
+for a campaign; yes; let me attach them.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D213 | The Lore Library's active campaign decides the world: one campaign, one world, shown by the Atlas, started in, led back to | **Held.** **The link** is the world entry's `campaign` (D172 wrote it when a chat was first played as scenes; nothing read it for this). One campaign has one world (`campaignWorldId`, `src/utils/hub.js`): where two worlds name the same campaign, from before that held, the one most played is its world, and setting the campaign's world makes every other let it go. A campaign deleted in the Lore Library leaves its world in no campaign, with its scenes. **The Atlas** (`campaignView`, `follow`, `src/systems/ui/atlas.js`) shows the active campaign's world whatever chat is in front: from its memory, as between scenes; or live, when the chat in front is a scene of it, or the chat it has yet to begin from. The world picker (D194) is gone. At the head of the sidebar is the campaign, in a list of every campaign of the Lore Library: choosing another switches the Lore Library to it, exactly as its own switch does (its lorebooks on, its versions of the characters in play), and the Atlas shows that campaign's world. Under it, the world's name and **Change**. **With no campaign on** the Atlas asks for one in place of its tabs: every campaign with its world and Switch to it, a box to make a new one, what the chat in front belongs to (its campaign one press away, or a campaign made for its world), and a quiet way to see the chat's own map without one. **A campaign with no world** is asked for one the same way: a new world named after it (empty, it begins with its first scene), the chat in front as where it begins (Play as scenes), or any world of the player's own, each listed with its scenes and the campaign it is in; taking another campaign's world says that it leaves that campaign without one. **Change** opens the same list with the world in use marked: another world is used in its place, a new one made, or the campaign left without one. The world a campaign lets go keeps its scenes and its memory and is in no campaign: nothing is deleted by any of this, and a swap is put back by swapping again. A world's continuity book (D189) goes with it: out of the books of the campaign it leaves, into those of the one it joins. **A mix-up is said, not played into.** Under the campaign is a line when another world is at hand: the chat in front is a scene of another world; a world was asked for by name (the World Builder, Settings) and is not the campaign's; an End was opened from the D menu on a scene of another world (the scene in front is the one ended, whatever the campaign). The line names the world and whose it is, and offers what puts it right: switch to its campaign, make it this campaign's world, show it, or go back to the campaign's own. **Play as scenes** follows the campaign (`scenesPlan`): the campaign's world; where it has none, the chat's own world when that is the player's and in no campaign (it becomes the campaign's), else a new one named after the campaign. A chat whose own world is another campaign's, or is not the world this campaign has, is refused in words that say which and what to do. In the Atlas the button is offered only where the chat would be played into the world shown. **The D menu's scene** (`sceneAway`) is the campaign's world's open scene: another campaign's scene is not the way back. **A new chat** opened while a campaign with a world is on is that world, not the world set for new chats (`onWorldChatChanged`). **With the Lore Library switched off** (it is off for a new player) there are no campaigns to follow: the Atlas is the chat's own map as before, a world asked for by name is shown, and the D menu leads to the scene started last. With no campaign on, Play as scenes and the D menu are as before too. Settings, Live World, The Hub says whose world each world is. |
+
+Found on the way and put right: a chat played as scenes into a world
+made for it (a new world, the chat carried onto it) lost its panel at
+the moment it was taken, and the sheet under it was drawn as the map's
+set-up; the panel is keyed to the world as it is before anything is
+drawn again, and says it is done. And the foot's line about the clocks
+spoke of the scene in front while another world was shown.
+
+What it does not do. The Lore Library itself shows nothing of this: a
+campaign's world is seen and changed in the Atlas only. Nothing switches
+the campaign by itself when a chat of another campaign is opened: the
+line says so and the switch is one press, because a switch turns
+lorebooks on and off and swaps characters. A world in no campaign can
+be reached by name (the World Builder, Settings) or by attaching it;
+there is no list to browse such worlds in the Atlas otherwise. With
+the Lore Library off there is no picker at all any more: a world is
+reached from Settings or the World Builder. A continuity book taken out
+of a campaign's books is left as the Lore Library leaves any book taken
+out of a campaign: it is not switched on by itself. A campaign has one
+world; a world is in one campaign. Run in the real SillyTavern at a
+desktop's width and a phone's: no campaign (the Atlas asks), a campaign
+made there, its world made, scene 1 started on a narrator card of its
+own, another campaign switched to from the Atlas and given a world
+there was, the line for the chat in front and its two ways out, the D
+menu's scene under each campaign, the world changed and changed back
+and the campaign left without one, a world asked for by name, an End
+opened on another campaign's scene, a new chat, a campaign begun from
+the chat in front through the panel, and the Lore Library switched off
+and on. The owner's own campaigns and worlds were not there: the worlds
+they have from before are in no campaign until attached (the list under
+"has no world yet", or Change), except those first played as scenes
+while a campaign was on, which carry that campaign already.
+
+Tests: `tools/hub-test.mjs` (the player's worlds, the campaigns and
+the one that is on, a campaign's world, two worlds naming one
+campaign, the list with whose each is, the Lore Library off, the
+status line); `tools/hub-flow-test.mjs` §31 (made, attached, taken,
+swapped and back, left without, the continuity book filed and taken
+out, a new chat's world, Play as scenes under each case, the D menu's
+scene under each campaign and with none, switched to and made through
+the Lore Library's own doings, the Lore Library off, a campaign
+deleted); `tools/atlas-browser-test.mjs` §5k (the head, the line for
+another world, the Atlas asking for a campaign and for a world, Change,
+the refusals).

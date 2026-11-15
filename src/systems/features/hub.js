@@ -38,6 +38,7 @@ import {
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
     readConflicts, mergeConflicts, normalizeConflicts,
+    ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, worldsByCampaign, loreLibraryOn,
 } from '../../utils/hub.js';
 import { normalizeBook } from '../../utils/atlas.js';
 import { narratorTexts, countStyle, applyStyle } from '../../utils/styleLaw.js';
@@ -601,6 +602,14 @@ function defaultBookApi() {
                 cm.addBookToCampaign(campaignId, name);
                 await cm.queueReconcile();
             } else await (await lib()).activateWorld(name);
+        },
+        // A world that leaves a campaign takes its book out of the campaign's books (D213).
+        unfile: async (campaignId, name) => {
+            const lb = extensionSettings.lorebook;
+            if (!campaignId || !lb || !lb.campaigns || !lb.campaigns[campaignId]) return;
+            const cm = await import('../lorebook/campaignManager.js');
+            cm.removeBookFromCampaign(campaignId, name);
+            await cm.queueReconcile();
         },
     };
 }
@@ -1837,10 +1846,7 @@ export function isAdopting() {
 
 /** The Lore Library campaign that is switched on, or null (plain data: the lorebook cluster is not loaded for it). */
 function activeCampaign() {
-    const lb = extensionSettings.lorebook;
-    const id = lb && typeof lb.activeCampaignId === 'string' ? lb.activeCampaignId : '';
-    const c = id && lb.campaigns && typeof lb.campaigns === 'object' ? lb.campaigns[id] : null;
-    return c && typeof c === 'object' ? { id, name: String(c.name || '').trim() } : null;
+    return activeCampaignOf(extensionSettings);
 }
 
 /** The character the chat in front is with: its index, avatar and name; null in a group or with none. */
@@ -1853,13 +1859,30 @@ function chatCard() {
     return c && c.avatar ? { index: Number(i), avatar: String(c.avatar), name: String(c.name || '') } : null;
 }
 
+/** A world id no world of the player's has yet, made from a name. */
+function freeWorldId(name) {
+    const packs = liveWorldConfig(extensionSettings).customPacks || {};
+    const worlds = store().worlds;
+    const base = normalizePack({ id: name, name }).pack.id || 'world';
+    const taken = (id) => id === BLANK_PACK_ID || Object.prototype.hasOwnProperty.call(packs, id) || Object.prototype.hasOwnProperty.call(worlds, id);
+    let id = base;
+    for (let n = 2; taken(id) && n < 500; n++) id = `${base}-${n}`;
+    return id;
+}
+
 /**
  * What playing the chat in front as scenes would do (D172), nothing
- * changed: the world it would be (the chat's own when it has one of the
- * player's; else the one the active campaign already has; else a new one
- * named after the campaign, or after the chat's world when no campaign is
- * on), the card that narrates it, and whether a memory would be replaced.
- * @returns {{ ok: boolean, reason: string, world?: { id: string, name: string, made: boolean }, campaign?: { id: string, name: string }|null, card?: { avatar: string, name: string }, replaces?: boolean, scenes?: number, boundTo?: string }}
+ * changed: the world it would be, the card that narrates it, and whether
+ * a memory would be replaced.
+ *
+ * With a campaign on, the campaign decides the world (D213): the world it
+ * is attached to; one it has none, the chat's own world when that is one
+ * of the player's and in no campaign (it becomes the campaign's), else a
+ * new one named after the campaign. A chat whose own world is another
+ * campaign's, or is not the one this campaign has, is refused: the mix-up
+ * is said, not played into. With no campaign on: the chat's own world
+ * when it has one of the player's, else a new one named after the chat's.
+ * @returns {{ ok: boolean, reason: string, world?: { id: string, name: string, made: boolean }, campaign?: { id: string, name: string }|null, card?: { avatar: string, name: string }, replaces?: boolean, scenes?: number, boundTo?: string, other?: { id: string, name: string }, theirs?: { id: string, name: string } }}
  */
 export function scenesPlan() {
     if (!isHubOn()) return { ok: false, reason: 'off' };
@@ -1871,26 +1894,25 @@ export function scenesPlan() {
     const card = chatCard();
     if (!card) return { ok: false, reason: 'no-card' };
     const campaign = activeCampaign();
-    const packs = liveWorldConfig(extensionSettings).customPacks || {};
-    const mine = (id) => !!id && id !== BLANK_PACK_ID && Object.prototype.hasOwnProperty.call(packs, id);
+    const own = ownWorlds(extensionSettings);
+    const mine = (id) => !!id && own[id] !== undefined;
     const worlds = store().worlds;
     const pack = getActivePack();
+    const named = (id) => ({ id, name: own[id] || id, made: false });
+    const had = campaign ? campaignWorldId(extensionSettings, campaign.id) : '';
     let world;
-    if (mine(state.pack)) world = { id: state.pack, name: (pack && pack.name) || state.pack, made: false };
-    else {
-        const had = campaign ? Object.keys(worlds).find(id => worlds[id].campaign === campaign.id && mine(id)) : '';
-        if (had) {
-            let name = had;
-            try { const raw = typeof packs[had] === 'string' ? JSON.parse(packs[had]) : packs[had]; if (raw && raw.name) name = String(raw.name); } catch (e) { /* its id stands */ }
-            world = { id: had, name, made: false };
-        } else {
-            const name = (campaign && campaign.name) || state.name || (pack && pack.name) || 'The world';
-            const base = normalizePack({ id: name, name }).pack.id || 'world';
-            const taken = (id) => id === BLANK_PACK_ID || Object.prototype.hasOwnProperty.call(packs, id) || Object.prototype.hasOwnProperty.call(worlds, id);
-            let id = base;
-            for (let n = 2; taken(id) && n < 500; n++) id = `${base}-${n}`;
-            world = { id, name, made: true };
+    if (mine(state.pack)) {
+        world = { id: state.pack, name: (pack && pack.name) || own[state.pack] || state.pack, made: false };
+        if (campaign) {
+            // The chat's own world against the campaign that is on (D213).
+            const theirs = campaignOfWorld(state.pack);
+            if (theirs && theirs.id !== campaign.id) return { ok: false, reason: 'other-campaign', world, campaign, theirs };
+            if (had && had !== state.pack) return { ok: false, reason: 'other-world', world, campaign, other: { id: had, name: own[had] || had } };
         }
+    } else if (had) world = named(had);
+    else {
+        const name = (campaign && campaign.name) || state.name || (pack && pack.name) || 'The world';
+        world = { id: freeWorldId(name), name, made: true };
     }
     const entry = worlds[world.id] || null;
     // One card, one world (D114): a world that has its narrator keeps it; else the chat's card is the narrator, unless it narrates another world.
@@ -1899,6 +1921,168 @@ export function scenesPlan() {
     if (other && other !== world.id) return { ok: false, reason: 'bound-elsewhere', boundTo: other, world, campaign, card: { avatar: card.avatar, name: card.name } };
     const narrator = bound ? { avatar: bound.avatar, name: bound.name } : { avatar: card.avatar, name: card.name };
     return { ok: true, reason: '', world, campaign, card: narrator, replaces: !!(entry && entry.memory && entry.memory.takenAt), scenes: entry ? entry.scenes.filter(x => x.id !== ADOPTED_ID).length : 0 };
+}
+
+// ─── The campaign's world (D213) ────────────────────────────────────────
+//
+// The Lore Library's active campaign decides the world the Atlas shows and
+// the world a scene is started in, as it decides which version of a
+// character is in play. One campaign, one world; the link is the world
+// entry's `campaign`. The pure parts are in src/utils/hub.js.
+
+let campaignApi = null;    // test hook: how a campaign is switched to and made
+
+/** Test hook: the Lore Library's own doings ({ switchTo, create }), or null for its own. */
+export function __setCampaignApi(api) {
+    campaignApi = api && typeof api === 'object' ? api : null;
+}
+
+function defaultCampaignApi() {
+    const lib = () => import('../lorebook/campaignManager.js');
+    return {
+        switchTo: async (id) => (await lib()).setActiveCampaign(id || null),
+        create: async (name) => (await lib()).createCampaign(name),
+    };
+}
+const campaignsApi = () => campaignApi || defaultCampaignApi();
+
+/** The Lore Library campaign that is switched on: { id, name }; null when none is. */
+export function campaignNow() {
+    return activeCampaignOf(extensionSettings);
+}
+
+/** Whether campaigns decide the world (D213): scenes on, and the Lore Library on. With the Lore Library off a world is the chat's own, as before. */
+export function campaignsDecide() {
+    return isHubOn() && loreLibraryOn(extensionSettings);
+}
+
+/**
+ * The Lore Library's campaigns in its order, each with the world it is
+ * attached to.
+ * @returns {{ id: string, name: string, active: boolean, world: { id: string, name: string }|null }[]}
+ */
+export function campaignList() {
+    store();
+    const own = ownWorlds(extensionSettings);
+    const now = campaignNow();
+    return campaignsOf(extensionSettings).map(c => {
+        const w = campaignWorldId(extensionSettings, c.id);
+        return { id: c.id, name: c.name, active: !!now && now.id === c.id, world: w ? { id: w, name: own[w] || w } : null };
+    });
+}
+
+/** The world a campaign is attached to; '' when it has none. */
+export function worldOfCampaign(campaignId) {
+    store();
+    return campaignWorldId(extensionSettings, campaignId);
+}
+
+/** The campaign a world is attached to: { id, name }; null when it is in none. */
+export function campaignOfWorld(worldId) {
+    store();
+    const hit = worldsByCampaign(extensionSettings).find(w => w.id === String(worldId || ''));
+    return hit && hit.campaign ? { id: hit.campaign, name: hit.campaignName } : null;
+}
+
+/** Every world of the player's with the campaign it is attached to, by name: the list a campaign's world is chosen from. */
+export function worldsWithCampaigns() {
+    store();
+    return worldsByCampaign(extensionSettings);
+}
+
+/**
+ * A campaign's world set (D213): `worldId` becomes the world of
+ * `campaignId`. The world the campaign had is in no campaign afterwards,
+ * with its scenes and its memory as they were; a world taken from another
+ * campaign leaves that one without a world. With no `worldId` the
+ * campaign's world is let go. A world's continuity book goes with it: out
+ * of the books of the campaign it leaves, into those of the one it joins.
+ * @returns {Promise<{ ok: boolean, reason: string, worldId?: string, was?: string, from?: string }>}
+ *   `was`: the world the campaign had, when it was another; `from`: the campaign the world was taken from
+ */
+export async function attachWorld(campaignId, worldId) {
+    const cid = String(campaignId || '').trim();
+    const wid = String(worldId || '').trim();
+    const all = campaignsOf(extensionSettings);
+    if (!all.some(c => c.id === cid)) return { ok: false, reason: 'no-campaign' };
+    const own = ownWorlds(extensionSettings);
+    if (wid && own[wid] === undefined) return { ok: false, reason: 'no-world' };
+    if (ending || adopting || continuing) return { ok: false, reason: 'busy' };
+    const s = store();
+    const was = campaignWorldId(extensionSettings, cid);
+    const had = wid && s.worlds[wid] ? String(s.worlds[wid].campaign || '') : '';
+    const from = had && had !== cid && all.some(c => c.id === had) ? had : '';
+    const bookOf = (id) => { const e = s.worlds[id]; return e && e.continuity && e.continuity.book ? e.continuity.book.name : ''; };
+    // One campaign, one world: every other world that names the campaign lets it go.
+    const let_go = Object.keys(s.worlds).filter(id => id !== wid && s.worlds[id] && s.worlds[id].campaign === cid);
+    for (const id of let_go) s.worlds[id] = { ...s.worlds[id], campaign: '' };
+    if (wid) s.worlds[wid] = { ...entryOf(wid), campaign: cid };
+    saveStore({ source: 'campaign', world: wid || was });
+    // The continuity books follow their worlds (D189): best effort, a book that cannot be filed is still the world's.
+    try {
+        const api = books();
+        for (const id of let_go) { const b = bookOf(id); if (b && typeof api.unfile === 'function') await bookStep(api.unfile(cid, b)); }
+        const b = wid ? bookOf(wid) : '';
+        if (b && had !== cid) await bookStep(api.file(cid, b));
+    } catch (e) { log('a continuity book could not be filed with its campaign', String(e && e.message || e)); }
+    log(`${cid} is attached to ${wid || 'no world'}`, { was, from });
+    return { ok: true, reason: '', worldId: wid, was: was && was !== wid ? was : '', from };
+}
+
+/**
+ * A new world made for a campaign and attached to it (D213): an empty
+ * world of the player's own, named after the campaign, that begins with
+ * its first scene.
+ * @returns {Promise<{ ok: boolean, reason: string, worldId?: string, name?: string, was?: string, errors?: string[] }>}
+ */
+export async function makeCampaignWorld(campaignId) {
+    const camp = campaignsOf(extensionSettings).find(c => c.id === String(campaignId || ''));
+    if (!camp) return { ok: false, reason: 'no-campaign' };
+    if (ending || adopting || continuing) return { ok: false, reason: 'busy' };
+    const name = camp.name || 'The world';
+    const id = freeWorldId(name);
+    const saved = await saveWorld({ id, name, version: 1, description: '', places: [], clocks: [], cast: [], blurb: '' });
+    if (!saved || !saved.ok) return { ok: false, reason: 'world', errors: (saved && saved.errors) || [] };
+    const r = await attachWorld(camp.id, id);
+    return r.ok ? { ok: true, reason: '', worldId: id, name, was: r.was || '' } : r;
+}
+
+/**
+ * The Lore Library switched to a campaign (D213), as its own switch does
+ * it: the campaign's books on, its versions of the characters in play.
+ * @returns {Promise<{ ok: boolean, reason: string, changed?: boolean, error?: string }>}
+ */
+export async function switchCampaign(campaignId) {
+    const id = String(campaignId || '').trim();
+    if (id && !campaignsOf(extensionSettings).some(c => c.id === id)) return { ok: false, reason: 'no-campaign' };
+    try {
+        const changed = await campaignsApi().switchTo(id);
+        notify({ source: 'campaign' });
+        return { ok: true, reason: '', changed: !!changed };
+    } catch (e) {
+        return { ok: false, reason: 'error', error: String(e && e.message || e) };
+    }
+}
+
+/**
+ * A campaign made in the Lore Library and switched to (D213); with
+ * `worldId`, that world is its world.
+ * @returns {Promise<{ ok: boolean, reason: string, id?: string, name?: string, error?: string }>}
+ */
+export async function makeCampaign(name, { worldId = '' } = {}) {
+    const clean = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (!clean) return { ok: false, reason: 'no-name' };
+    if (campaignsOf(extensionSettings).some(c => sameName(c.name, clean))) return { ok: false, reason: 'taken' };
+    try {
+        const id = await campaignsApi().create(clean);
+        if (!id || !campaignsOf(extensionSettings).some(c => c.id === id)) return { ok: false, reason: 'error', error: 'The campaign was not made.' };
+        if (worldId) { const a = await attachWorld(id, worldId); if (!a.ok) log('the new campaign could not be given its world', a.reason); }
+        const sw = await switchCampaign(id);
+        if (!sw.ok) return { ok: false, reason: 'error', error: sw.error || 'The campaign was made and could not be switched to.', id, name: clean };
+        return { ok: true, reason: '', id, name: clean };
+    } catch (e) {
+        return { ok: false, reason: 'error', error: String(e && e.message || e) };
+    }
 }
 
 /**
@@ -2820,17 +3004,23 @@ export function sceneMenu() {
 
 /**
  * The scene being played whose chat is not the one in front (D203): the
- * world's open scene, where its chat and its narrator card are there. Of
- * several worlds, the one started last. Null when the chat in front is a
- * scene, or nothing is being played.
+ * world's open scene, where its chat and its narrator card are there.
+ * With a campaign on, its world's (D213); with none, of several worlds
+ * the one started last. Null when the chat in front is a scene, or
+ * nothing is being played.
  * @returns {{ worldId: string, scene: object }|null}
  */
 export function sceneAway() {
     try {
         if (!isHubOn() || currentScene()) return null;
         const worlds = store().worlds || {};
+        // With a campaign on, the scene being played is its world's (D213): another campaign's scene is not this one's way back.
+        const campaign = campaignNow();
+        const only = campaign ? campaignWorldId(extensionSettings, campaign.id) : '';
+        if (campaign && !only) return null;
         let best = null;
         for (const id of Object.keys(worlds)) {
+            if (only && id !== only) continue;
             const s = (worlds[id].scenes || []).find(x => x.status === 'open' && !x.gone && x.chat);
             if (!s || !cardOfScene(id, s)) continue;
             if (!best || (Number(s.startedAt) || 0) > (Number(best.scene.startedAt) || 0)) best = { worldId: id, scene: JSON.parse(JSON.stringify(s)) };
@@ -2884,7 +3074,7 @@ export async function hubStatusLines() {
     for (const id of hubWorldIds()) {
         const res = await loadPack(id);
         const card = cardOf(id);
-        out.push({ id, name: res.ok ? res.pack.name : id, card: card ? card.avatar : '', cardName: card ? card.name : '', line: hubStatusLine({ worldName: res.ok ? res.pack.name : id, entry: store().worlds[id] || null, cardName: card ? card.name : '', sceneCards: cfg().sceneCards }) });
+        out.push({ id, name: res.ok ? res.pack.name : id, card: card ? card.avatar : '', cardName: card ? card.name : '', line: hubStatusLine({ worldName: res.ok ? res.pack.name : id, entry: store().worlds[id] || null, cardName: card ? card.name : '', sceneCards: cfg().sceneCards, campaign: campaignsOf(extensionSettings).length ? (campaignOfWorld(id) || { name: '' }).name : undefined }) });
     }
     return out;
 }

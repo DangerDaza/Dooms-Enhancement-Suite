@@ -720,9 +720,11 @@ console.log('\n§11 where a scene can be started from (D174)');
     check('from the chat the scenes began from, too', fromLong.ok && fromLong.worldId === W && fromLong.number === 4, JSON.stringify(fromLong));
     ctxTarget.characterId = 0;
     ctxTarget.name2 = 'Mara Vane';
+    extensionSettings.lorebook.activeCampaignId = null;    // with a campaign on, a new chat is the campaign's world (D213, §31)
     await openPlain('Mara Vane - plain two');
     const plain = hub.sceneStartPlan();
     check('a chat whose world is not played as scenes has none to start (it has Play as scenes)', plain.ok === false && plain.reason === 'not-scenes', JSON.stringify(plain));
+    extensionSettings.lorebook.activeCampaignId = 'camp1';
     extensionSettings.liveWorld.enabled = false;
     check('nor with Live World off', hub.sceneStartPlan().reason === 'off');
     extensionSettings.liveWorld.enabled = true;
@@ -2419,6 +2421,168 @@ console.log('\n§30 example dialogue of the characters in play: sent with a repl
     hub.cancelStart();
     delete extensionSettings.exampleDialogue;
     extensionSettings.characterInjection = injWas;
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+    hub.__setRecapTransport(null);
+}
+
+console.log('\n§31 the campaign decides the world: one campaign, one world, attached, swapped, made; the scene the D menu leads to; a new chat\'s world (D213)');
+{
+    const lbWas = extensionSettings.lorebook;
+    const packWas = extensionSettings.liveWorld.pack;
+    const cardsWas = extensionSettings.hub.sceneCards;
+    extensionSettings.lorebook = { enabled: true, campaigns: { cA: { id: 'cA', name: 'Alpha', books: [] }, cB: { id: 'cB', name: 'Beta', books: [] }, cC: { id: 'cC', name: 'Gamma', books: [] } }, campaignOrder: ['cA', 'cB', 'cC'], activeCampaignId: null };
+    extensionSettings.hub.sceneCards = true;
+    extensionSettings.hub.styleLaw = false;
+    const lb = extensionSettings.lorebook;
+    const unfiled = [];
+    shelfApi.unfile = async (campaignId, name) => { unfiled.push([campaignId, name]); const c = lb.campaigns[campaignId]; if (c) c.books = c.books.filter(b => b !== name); };
+    hub.__setBookApi(shelfApi);
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 1","time":"morning"},"openers":[{"title":"The gate","text":"The gate stands open.","who":[]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}');
+    hub.__setGapTransport(async () => '{"elapsed":"a day","now":{"date":"Day 2","time":"dawn"},"clocks":{},"moved":[],"blurb":"x","heard":[]}');
+    hub.__setRecapTransport(async () => '{"recap":"x"}');
+    const at = (avatar) => ctxTarget.characters.findIndex(c => c.avatar === avatar);
+    // A card that narrates no world: the chats of this section are on it.
+    ctxTarget.characters.push({ name: 'Wanderer', avatar: 'Wanderer.png', chat: 'Wanderer - plain' });
+    const onTeller = async (name) => { ctxTarget.characterId = at('Wanderer.png'); ctxTarget.name2 = 'Wanderer'; files.set(name, { header: { chat_metadata: {} }, messages: [], avatar: 'Wanderer.png', chName: 'Wanderer' }); await openPlain(name); };
+    const packsNow = () => Object.keys(extensionSettings.liveWorld.customPacks);
+    const camp = (id) => hub.campaignList().find(c => c.id === id);
+    const worldOf = (id) => hub.worldsWithCampaigns().find(w => w.id === id);
+    const start = async (W) => { const p = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'now' } }); return p.ok ? hub.commitScene(p.token, { choice: 0 }) : p; };
+
+    // What there is.
+    check('no campaign is on: none is named, and every campaign is listed with no world', hub.campaignNow() === null && same(hub.campaignList(), [{ id: 'cA', name: 'Alpha', active: false, world: null }, { id: 'cB', name: 'Beta', active: false, world: null }, { id: 'cC', name: 'Gamma', active: false, world: null }]), JSON.stringify(hub.campaignList()));
+    lb.activeCampaignId = 'cA';
+    check('the campaign that is on is named and marked in the list', same(hub.campaignNow(), { id: 'cA', name: 'Alpha' }) && camp('cA').active === true && camp('cB').active === false && hub.worldOfCampaign('cA') === '');
+
+    // A world made for a campaign.
+    const before = packsNow().length;
+    const made = await hub.makeCampaignWorld('cA');
+    check('a world made for a campaign: an empty world of the player\'s own named after it, and attached', made.ok && made.worldId === 'alpha' && made.name === 'Alpha' && packsNow().length === before + 1 && JSON.parse(extensionSettings.liveWorld.customPacks.alpha).name === 'Alpha' && hub.worldOfCampaign('cA') === 'alpha' && same(camp('cA').world, { id: 'alpha', name: 'Alpha' }) && same(hub.campaignOfWorld('alpha'), { id: 'cA', name: 'Alpha' }), JSON.stringify(made));
+    check('a scene of it can be started at once, on a narrator card of its own', hub.startPlanFor('alpha').ok && hub.startPlanFor('alpha').number === 1 && hub.startPlanFor('alpha').newCard === true);
+    const again = await hub.makeCampaignWorld('cA');
+    check('made again, the new one takes a free name; the world the campaign had is in no campaign, and is still there', again.ok && again.worldId === 'alpha-2' && again.was === 'alpha' && hub.worldOfCampaign('cA') === 'alpha-2' && hub.campaignOfWorld('alpha') === null && packsNow().includes('alpha') && worldOf('alpha').campaign === '', JSON.stringify(again));
+    check('a campaign that is not there, a world that is not the player\'s: refused, nothing changed', (await hub.makeCampaignWorld('nobody')).reason === 'no-campaign' && (await hub.attachWorld('nobody', 'alpha')).reason === 'no-campaign' && (await hub.attachWorld('cA', 'nowhere')).reason === 'no-world' && (await hub.attachWorld('cA', 'blank')).reason === 'no-world' && hub.worldOfCampaign('cA') === 'alpha-2');
+
+    // Attached, taken, swapped.
+    const took = await hub.attachWorld('cB', 'alpha-2');
+    check('a world attached to another campaign is taken from the one it was in, which is left without a world', took.ok && took.from === 'cA' && took.was === '' && hub.worldOfCampaign('cB') === 'alpha-2' && hub.worldOfCampaign('cA') === '' && camp('cA').world === null, JSON.stringify(took));
+    const back = await hub.attachWorld('cA', 'alpha');
+    check('a world in no campaign attached: nothing is taken from anyone', back.ok && back.from === '' && back.was === '' && hub.worldOfCampaign('cA') === 'alpha' && hub.worldOfCampaign('cB') === 'alpha-2');
+    const swapped = await hub.attachWorld('cA', 'alpha-2');
+    check('a mix-up put right: the campaign is pointed at the other world; the one it had is in no campaign, the campaign the other was in has none', swapped.ok && swapped.was === 'alpha' && swapped.from === 'cB' && hub.worldOfCampaign('cA') === 'alpha-2' && hub.worldOfCampaign('cB') === '' && hub.campaignOfWorld('alpha') === null, JSON.stringify(swapped));
+    check('and the other way round', (await hub.attachWorld('cB', 'alpha')).ok && (await hub.attachWorld('cA', 'alpha')).from === 'cB' && (await hub.attachWorld('cB', 'alpha-2')).ok && hub.worldOfCampaign('cA') === 'alpha' && hub.worldOfCampaign('cB') === 'alpha-2');
+    const same1 = await hub.attachWorld('cA', 'alpha');
+    check('attached to the world it has: nothing moves', same1.ok && same1.was === '' && same1.from === '' && hub.worldOfCampaign('cA') === 'alpha');
+    // From before one campaign had one world: a second world that names the campaign lets it go when the campaign's world is set.
+    extensionSettings.hub.worlds.cardland = { ...extensionSettings.hub.worlds.cardland, campaign: 'cA' };
+    await hub.attachWorld('cA', 'alpha');
+    check('one campaign, one world: another world that named the campaign lets it go', extensionSettings.hub.worlds.cardland.campaign === '' && hub.worldOfCampaign('cA') === 'alpha');
+
+    // The continuity book goes with its world.
+    extensionSettings.hub.worlds.alpha = { ...extensionSettings.hub.worlds.alpha, continuity: { people: [], threads: [], seq: 0, book: { name: 'Alpha - Scenes Continuity', people: {}, threads: null } } };
+    lb.campaigns.cA.books = ['Alpha lore', 'Alpha - Scenes Continuity'];
+    filed.length = 0;
+    const gone = await hub.attachWorld('cA', '');
+    check('a campaign left without a world: its world keeps everything, and its continuity book is taken out of the campaign\'s books', gone.ok && gone.was === 'alpha' && hub.worldOfCampaign('cA') === '' && hub.worldEntry('alpha').continuity.book.name === 'Alpha - Scenes Continuity' && same(unfiled, [['cA', 'Alpha - Scenes Continuity']]) && same(lb.campaigns.cA.books, ['Alpha lore']), JSON.stringify([gone, unfiled, lb.campaigns.cA.books]));
+    const rejoined = await hub.attachWorld('cC', 'alpha');
+    check('attached to a campaign, its continuity book is filed with that campaign\'s books', rejoined.ok && same(filed, [['cC', 'Alpha - Scenes Continuity']]) && lb.campaigns.cC.books.includes('Alpha - Scenes Continuity'), JSON.stringify(filed));
+    await hub.attachWorld('cA', 'alpha');
+    check('(back with Alpha: Gamma has no world again)', hub.worldOfCampaign('cA') === 'alpha' && hub.worldOfCampaign('cC') === '' && filed[filed.length - 1][0] === 'cA');
+
+    // A new chat's world.
+    await onTeller('Wanderer - of alpha');
+    check('with a campaign on that has a world, a new chat is that world', lw.getWorldState().pack === 'alpha', JSON.stringify(lw.getWorldState().pack));
+    lb.activeCampaignId = 'cC';
+    await onTeller('Wanderer - of gamma');
+    check('with a campaign on that has none, a new chat is the world set for new chats', lw.getWorldState().pack === (extensionSettings.liveWorld.pack || 'blank'), JSON.stringify(lw.getWorldState().pack));
+    lb.activeCampaignId = 'cB';
+    await openFile('Wanderer - of alpha');
+    check('a chat that has its world keeps it, whatever campaign is on', lw.getWorldState().pack === 'alpha');
+
+    // Play as scenes: the campaign decides the world.
+    const theirs = hub.scenesPlan();
+    check('a chat of another campaign\'s world is not played into this one: it says whose world it is', theirs.ok === false && theirs.reason === 'other-campaign' && same(theirs.theirs, { id: 'cA', name: 'Alpha' }) && theirs.world.id === 'alpha' && theirs.campaign.id === 'cB', JSON.stringify(theirs));
+    lb.activeCampaignId = 'cA';
+    const own = hub.scenesPlan();
+    check('with its own campaign on it is: the campaign\'s world, nothing made', own.ok && own.world.id === 'alpha' && own.world.made === false && own.campaign.id === 'cA' && own.replaces === false, JSON.stringify(own));
+    await hub.attachWorld('cA', 'alpha-2');
+    const wrong = hub.scenesPlan();
+    check('a chat whose world is in no campaign, while the campaign has another: refused, and the campaign\'s world is named', wrong.ok === false && wrong.reason === 'other-world' && wrong.world.id === 'alpha' && same(wrong.other, { id: 'alpha-2', name: 'Alpha' }), JSON.stringify(wrong));
+    lb.activeCampaignId = 'cC';
+    const joins = hub.scenesPlan();
+    check('while the campaign has no world: the chat\'s own world becomes the campaign\'s', joins.ok && joins.world.id === 'alpha' && joins.world.made === false && joins.campaign.id === 'cC', JSON.stringify(joins));
+    const taken = await hub.commitAdopt({ recap: 'The story so far.' });
+    check('played as scenes, the world is attached to the campaign that was on', taken.ok && taken.worldId === 'alpha' && hub.worldOfCampaign('cC') === 'alpha' && same(hub.campaignOfWorld('alpha'), { id: 'cC', name: 'Gamma' }), JSON.stringify([taken.ok, taken.reason, hub.worldOfCampaign('cC')]));
+    await hub.attachWorld('cC', '');
+    // (The card of the chat just taken narrates that world now: one card, one world. Another card's chat.)
+    ctxTarget.characters.push({ name: 'Drifter', avatar: 'Drifter.png', chat: 'Drifter - plain' });
+    ctxTarget.characterId = at('Drifter.png');
+    ctxTarget.name2 = 'Drifter';
+    files.set('Drifter - a blank one', { header: { chat_metadata: {} }, messages: [], avatar: 'Drifter.png', chName: 'Drifter' });
+    await openPlain('Drifter - a blank one');
+    const fresh = hub.scenesPlan();
+    check('a chat with no world of the player\'s, in a campaign with none: a new world named after the campaign, under a free name', fresh.ok && fresh.world.made === true && fresh.world.name === 'Gamma' && fresh.world.id === 'gamma' && fresh.campaign.id === 'cC', JSON.stringify(fresh));
+    await hub.attachWorld('cA', 'alpha');
+    await hub.attachWorld('cB', 'alpha-2');
+    lb.activeCampaignId = 'cA';
+    await onTeller('Wanderer - of alpha again');
+    const into = hub.scenesPlan();
+    check('a new chat in a campaign whose world has a memory is that world\'s, and playing it as scenes would replace what the world remembers: asked first', into.ok && into.world.id === 'alpha' && into.replaces === true && (await hub.commitAdopt({ recap: 'x' })).reason === 'has-memory', JSON.stringify(into));
+
+    // The scene the D menu leads back to.
+    const sa = await start('alpha');
+    const fileA = sa.file;
+    await onTeller('Wanderer - away');
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 1","time":"morning"},"openers":[{"title":"The quay","text":"The quay is wet.","who":[]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}');    // (the sandbox keeps chats by name alone)
+    const sb = await start('alpha-2');
+    await onTeller('Wanderer - away two');
+    check('(a scene is being played in each of two worlds, and neither is in front)', sa.ok && sb.ok && hub.currentScene() === null, JSON.stringify([sa.ok, sa.reason, sb.ok, sb.reason]));
+    lb.activeCampaignId = 'cA';
+    check('with a campaign on, the scene to go back to is its world\'s', hub.sceneAway().worldId === 'alpha' && hub.sceneMenu().worldId === 'alpha');
+    lb.activeCampaignId = 'cB';
+    check('with the other campaign on, the other world\'s', hub.sceneAway().worldId === 'alpha-2' && hub.sceneMenu().worldId === 'alpha-2');
+    lb.activeCampaignId = 'cC';
+    check('a campaign with no world has no scene to go back to: another campaign\'s scene is not its own', hub.sceneAway() === null && hub.sceneMenu() === null);
+    lb.activeCampaignId = null;
+    check('with no campaign on, the scene started last, as before', hub.sceneAway().worldId === 'alpha-2');
+    await openFile(fileA);
+    lb.activeCampaignId = 'cB';
+    check('the scene in front is the menu\'s, whatever campaign is on', hub.currentScene().worldId === 'alpha' && hub.sceneMenu().away !== true && hub.sceneAway() === null, JSON.stringify([fileA, hub.currentScene() && hub.currentScene().worldId, hub.sceneMenu(), hub.sceneAway()]));
+
+    // The Lore Library switched to and added to from the Atlas.
+    const switched = [];
+    hub.__setCampaignApi({
+        switchTo: async (id) => { switched.push(id); const changed = lb.activeCampaignId !== (id || null); lb.activeCampaignId = id || null; return changed; },
+        create: async (name) => { const id = `c_${name.toLowerCase()}`; lb.campaigns[id] = { id, name, books: [] }; lb.campaignOrder.push(id); return id; },
+    });
+    const sw = await hub.switchCampaign('cA');
+    check('a campaign switched to, as the Lore Library switches', sw.ok && sw.changed === true && same(switched, ['cA']) && hub.campaignNow().id === 'cA');
+    check('one that is not there is not', (await hub.switchCampaign('nobody')).reason === 'no-campaign' && hub.campaignNow().id === 'cA');
+    extensionSettings.liveWorld.customPacks.loose = JSON.stringify({ ...example, id: 'loose', name: 'Looseland' });
+    const mk = await hub.makeCampaign('  Delta  ', { worldId: 'loose' });
+    check('a campaign made with a world: made in the Lore Library, the world attached, and switched to', mk.ok && mk.id === 'c_delta' && mk.name === 'Delta' && hub.campaignNow().id === 'c_delta' && hub.worldOfCampaign('c_delta') === 'loose' && same(hub.campaignOfWorld('loose'), { id: 'c_delta', name: 'Delta' }), JSON.stringify(mk));
+    check('one with no name, or the name of one there is, is not made', (await hub.makeCampaign('   ')).reason === 'no-name' && (await hub.makeCampaign('alpha')).reason === 'taken' && Object.keys(lb.campaigns).length === 4);
+    const lines = await hub.hubStatusLines();
+    check('the status lines say whose world each is', lines.find(l => l.id === 'alpha').line.startsWith('Alpha (Alpha\'s world): ') && lines.find(l => l.id === 'loose').line.startsWith('Looseland (Delta\'s world): ') && lines.find(l => l.id === 'cardland').line.startsWith('Cardland (in no campaign): '), JSON.stringify(lines.map(l => l.line.slice(0, 40))));
+    // The Lore Library switched off: no campaign decides anything.
+    lb.enabled = false;
+    check('with the Lore Library off no campaign decides the world: none is on, and the scene to go back to is the one started last, as before', hub.campaignsDecide() === false && hub.campaignNow() === null && (await (async () => { await openPlain('Wanderer - library off'); return hub.sceneAway(); })()).worldId === 'alpha-2' && lw.getWorldState().pack === (extensionSettings.liveWorld.pack || 'blank'), JSON.stringify([hub.campaignsDecide(), hub.campaignNow(), lw.getWorldState().pack]));
+    lb.enabled = true;
+    check('switched on again, they do', hub.campaignsDecide() === true && hub.campaignNow().id === 'c_delta');
+    // A campaign deleted in the Lore Library: its world is in no campaign.
+    delete lb.campaigns.c_delta;
+    lb.campaignOrder = lb.campaignOrder.filter(x => x !== 'c_delta');
+    lb.activeCampaignId = 'cA';
+    check('a campaign deleted in the Lore Library leaves its world in no campaign, with its scenes', hub.campaignOfWorld('loose') === null && worldOf('loose').campaign === '' && packsNow().includes('loose'));
+
+    // Tidy.
+    hub.__setCampaignApi(null);
+    for (const w of ['alpha', 'alpha-2']) for (const sc of (hub.worldEntry(w) || { scenes: [] }).scenes.filter(x => x.status === 'open')) hub.setSceneAside(w, sc.id);
+    delete shelfApi.unfile;
+    extensionSettings.lorebook = lbWas;
+    extensionSettings.liveWorld.pack = packWas;
+    extensionSettings.hub.sceneCards = cardsWas;
     hub.__setOpenersTransport(null);
     hub.__setGapTransport(null);
     hub.__setRecapTransport(null);

@@ -21,6 +21,7 @@ import {
     canDeleteScene, deleteKind, deleteSceneRecord, describeDeleteResult,
     hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE, backupFileName,
     loreEntries, castLore, standingLore, LORE_PER_PERSON, LORE_STANDING, sceneLength, sceneIsLong, continuationSeed,
+    ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, activeCampaignWorldId, worldsByCampaign, loreLibraryOn,
 } from '../src/utils/hub.js';
 import { normalizePack, seedWorldState, countMessage, applyAdvance, reconcileWithChat, seenInScene } from '../src/utils/liveWorld.js';
 import { visitPlace, reconcileVisited } from '../src/utils/worldMap.js';
@@ -615,6 +616,44 @@ console.log('\nwho the tracker had present, and how (D211)');
     check('the same day later: still so unless the time would have changed it', /in the state they were in, unless the time that has passed would have changed it\./.test(buildOpenersPrompt({ ...base, gapWords: 'later that day', thenPeople: [got[0]] }).system));
     const none = buildOpenersPrompt({ ...base, gapWords: '' });
     check('with no one to tell of, the request has no word of it', !none.user.includes('How the tracker had them') && !/how the tracker had a person/.test(none.system) && same(buildOpenersPrompt({ ...base, gapWords: '', thenPeople: [got[1]] }), none));
+}
+
+console.log('\na campaign\'s world (D213)');
+{
+    const pack = (name) => JSON.stringify({ id: name.toLowerCase().replace(/\s+/g, '-'), name, version: 1, places: [], clocks: [], cast: [] });
+    const scene = (id) => ({ id, status: 'ended', chat: `${id}.jsonl`, place: { label: '' } });
+    const settings = {
+        liveWorld: { enabled: true, customPacks: { 'the-eld': pack('The Eld'), redward: pack('Redward'), nightcity: { id: 'nightcity', name: 'Night City' }, spare: 'not json', blank: pack('Blank') } },
+        lorebook: { activeCampaignId: 'c_eld', campaigns: { c_eld: { name: 'Eld', books: [] }, c_nc: { name: 'Nightcity', books: [] }, c_new: { name: '  A   new  one ', books: [] }, broken: 'x' }, campaignOrder: ['c_nc', 'c_eld', 'gone'] },
+        hub: { worlds: {
+            'the-eld': { campaign: 'c_eld', scenes: [scene('s0'), scene('s1'), scene('s2')], memory: { takenAt: 50 } },
+            redward: { campaign: '', scenes: [scene('s0'), scene('s1')], memory: { takenAt: 20 } },
+            nightcity: { campaign: 'c_nc', scenes: [], memory: null },
+            ghost: { campaign: 'c_new', scenes: [scene('s1')], memory: { takenAt: 99 } },
+        } },
+    };
+    check('the player\'s own worlds by name; one that cannot be read stands under its id; the blank world is no one\'s', same(ownWorlds(settings), { 'the-eld': 'The Eld', redward: 'Redward', nightcity: 'Night City', spare: 'spare' }) && same(ownWorlds({}), {}) && same(ownWorlds(null), {}));
+    check('the campaigns in the Lore Library\'s order, then any it does not list; a broken one is not one', same(campaignsOf(settings), [{ id: 'c_nc', name: 'Nightcity' }, { id: 'c_eld', name: 'Eld' }, { id: 'c_new', name: 'A new one' }]) && same(campaignsOf({}), []) && same(campaignsOf(null), []));
+    check('the campaign that is on; none when the id names no campaign', same(activeCampaignOf(settings), { id: 'c_eld', name: 'Eld' }) && activeCampaignOf({ ...settings, lorebook: { ...settings.lorebook, activeCampaignId: 'gone' } }) === null && activeCampaignOf({ ...settings, lorebook: { ...settings.lorebook, activeCampaignId: null } }) === null && activeCampaignOf({}) === null);
+    check('the Lore Library is on unless it is switched off; switched off, no campaign is on and none decides a world', loreLibraryOn(settings) && loreLibraryOn({}) && loreLibraryOn(null) && loreLibraryOn({ lorebook: { enabled: true } }) && !loreLibraryOn({ lorebook: { enabled: false } }) && activeCampaignOf({ ...settings, lorebook: { ...settings.lorebook, enabled: false } }) === null && activeCampaignWorldId({ ...settings, lorebook: { ...settings.lorebook, enabled: false } }) === '');
+    check('a campaign\'s world is the world whose entry names it', campaignWorldId(settings, 'c_eld') === 'the-eld' && campaignWorldId(settings, 'c_nc') === 'nightcity');
+    check('a campaign with none has none; a world that is no longer the player\'s is no campaign\'s world', campaignWorldId(settings, 'c_new') === '' && campaignWorldId(settings, '') === '' && campaignWorldId(settings, 'nobody') === '' && campaignWorldId({}, 'c_eld') === '');
+    check('the world of the campaign that is on', activeCampaignWorldId(settings) === 'the-eld' && activeCampaignWorldId({ ...settings, lorebook: { ...settings.lorebook, activeCampaignId: 'c_new' } }) === '' && activeCampaignWorldId({ ...settings, lorebook: { ...settings.lorebook, activeCampaignId: null } }) === '' && activeCampaignWorldId({}) === '');
+    // From before one campaign had one world: two worlds naming the same campaign.
+    const two = { ...settings, hub: { worlds: { ...settings.hub.worlds, redward: { ...settings.hub.worlds.redward, campaign: 'c_eld' } } } };
+    check('two worlds that name one campaign: the one most played is its world', campaignWorldId(two, 'c_eld') === 'the-eld');
+    const tie = { ...two, hub: { worlds: { ...two.hub.worlds, redward: { ...two.hub.worlds.redward, scenes: [scene('s0'), scene('s1'), scene('s2')], memory: { takenAt: 80 } } } } };
+    check('played as much: the one remembered last', campaignWorldId(tie, 'c_eld') === 'redward');
+    const list = worldsByCampaign(settings);
+    check('every world of the player\'s with its campaign, by name; the chat it began from is no scene of it', same(list, [
+        { id: 'nightcity', name: 'Night City', campaign: 'c_nc', campaignName: 'Nightcity', scenes: 0 },
+        { id: 'redward', name: 'Redward', campaign: '', campaignName: '', scenes: 1 },
+        { id: 'spare', name: 'spare', campaign: '', campaignName: '', scenes: 0 },
+        { id: 'the-eld', name: 'The Eld', campaign: 'c_eld', campaignName: 'Eld', scenes: 2 },
+    ]), JSON.stringify(list));
+    check('of two worlds that name one campaign only the one it uses is said to be its world', same(worldsByCampaign(two).filter(w => w.campaign === 'c_eld').map(w => w.id), ['the-eld']));
+    check('a world whose campaign is gone is in no campaign', worldsByCampaign({ ...settings, lorebook: { ...settings.lorebook, campaigns: { c_eld: settings.lorebook.campaigns.c_eld } } }).find(w => w.id === 'nightcity').campaign === '');
+    check('the status line says whose world it is where it is told; untold, the line is as it was', hubStatusLine({ worldName: 'The Eld', entry: null, sceneCards: true, campaign: 'Eld' }).startsWith('The Eld (Eld\'s world): ') && hubStatusLine({ worldName: 'Redward', entry: null, sceneCards: true, campaign: '' }).startsWith('Redward (in no campaign): ') && hubStatusLine({ worldName: 'The Eld', entry: null, sceneCards: true }).startsWith('The Eld: '));
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

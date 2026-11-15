@@ -261,6 +261,8 @@ async function doSetActiveCampaign(campaignId, { silent = false } = {}) {
 
     saveSettings();
     await repaintAfterCampaignSwitch();
+    // The campaign decides the world the Atlas shows and the scene the D menu leads back to (D213): whoever shows those hears of it.
+    try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('dooms:campaign-changed', { detail: { from: prev, to: next } })); } catch (e) { /* no window */ }
 
     if (!silent) {
         try {

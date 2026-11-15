@@ -26,10 +26,10 @@ import { startTravelCut, getPendingQuestCut, getCompletedQuests, QUESTS_DONE_CHA
 import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
-import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml } from './atlasViews.js';
+import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml, atlasCampaignGateHtml, atlasWorldChoiceHtml } from './atlasViews.js';
 import { isCanonOn } from '../features/canon.js';
 import { isVoicesEnabled, getEngine, getEngineIfLoaded, unlockVoicesAudio } from '../voices/voiceBoot.js';
-import { lastScenePresent, sceneAway, deletePlan, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, hubWorldIds, cardOf, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
+import { lastScenePresent, sceneAway, deletePlan, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, campaignNow, campaignsDecide, campaignList, worldOfCampaign, worldsWithCampaigns, attachWorld, makeCampaignWorld, switchCampaign, makeCampaign, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
 import { describeStartResult, describeEndResult, describeDeleteResult, gapOf, hubConfig } from '../../utils/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
@@ -83,6 +83,7 @@ function keep(key, value) {
 }
 
 const root = () => `#${ATLAS_ID}`;
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
 function portraitOf(name) {
     try { return resolvePortrait(name) || ''; } catch (e) { return ''; }
@@ -92,12 +93,20 @@ function portraitOf(name) {
 // the world has moved on from an ended scene, so its chat no longer says how things stand. Read anew on every draw.
 let source = { kind: 'chat' };
 const between = () => source.kind === 'world';
-// A world picked in the Atlas (D194): shown from its memory, as between scenes, whatever chat is in front. '' for the
-// chat's own world. Let go when the Atlas closes, so it opens on the chat again.
+// A world shown from its memory (D194), as between scenes, whatever chat is in front; '' for the chat's own world. Which
+// world that is, is the campaign's to say (D213): see campaignView. Let go when the Atlas closes.
 let picked = '';
 let pickedPack = null;    // its pack, loaded when it is picked
-let worlds = [];          // the worlds that can be picked: [{ id, name, card }]
-let worldsToken = 0;
+// The campaign's world (D213). The Lore Library's active campaign decides the world the Atlas shows, as it decides which
+// version of a character is in play. `view` is that decision, read anew on every draw.
+let view = { hub: false, on: false, gate: '', pick: '', campaign: null, world: '' };    // hub: scenes are on; on: campaigns decide the world
+let pinned = '';          // a world asked for by name (the World Builder, Settings, "Show it"): shown in place of the campaign's until the Atlas closes
+let showFront = false;    // the chat in front shown whatever the campaign says: an End from the D menu, "Show this chat's map"
+let changing = false;     // the campaign's world is being chosen again (Change)
+let campaignBusy = false; // a campaign is being switched to or made, a world attached
+let campaignError = '';   // what that could not do, said on the panel that asked
+let opening = '';         // the world being loaded to be shown
+let followWait = null;    // that load, for whoever must wait for it
 let deleting = '';        // the scene whose Delete was pressed and waits for "Delete scene N" or "Keep it" (D197)
 let deletingNow = '';     // the scene being deleted
 let removal = null;       // what deleting the scene asked about would take back (D206): { id, loading } until its log is read, then the plan
@@ -132,7 +141,7 @@ function saveTheBook(next) {
 function statusLine(state, cfg) {
     const full = statusText(state, cfg);
     let cur = null;
-    try { cur = currentScene(); } catch (e) { cur = null; }
+    try { cur = picked ? null : currentScene(); } catch (e) { cur = null; }    // a world shown from its memory is between scenes, whatever scene the chat in front is (D213)
     if (!cur && !between()) return full;
     const last = full.split(' · ')[0];
     if (cur && !cur.ended) return `${last} · held while scene ${sceneNumber(cur.mark.scene)} is played: the clocks tick when it ends.`;
@@ -154,8 +163,74 @@ function chatOpen() {
     try { const ctx = window.SillyTavern && window.SillyTavern.getContext ? window.SillyTavern.getContext() : null; return !!(ctx && (ctx.characterId !== undefined && ctx.characterId !== null || ctx.groupId)); } catch (e) { return false; }
 }
 
+/** Whether one of the player's own worlds stands untouched: no scene of it, and no memory taken. */
+function untouched(worldId) {
+    let e = null;
+    try { e = worldEntry(worldId); } catch (err) { e = null; }
+    return !e || (!(e.memory && e.memory.takenAt > 0) && !(e.scenes && e.scenes.length));
+}
+
+/**
+ * What the campaign that is on makes the Atlas show (D213), nothing
+ * changed. `gate`: 'campaign' when none is on, 'world' when the one that
+ * is has no world, '' when there is a world to show. `pick`: the world to
+ * show from its memory; '' when the chat in front is the world itself (a
+ * scene of it, or the chat it has yet to begin from). With scenes off the
+ * Atlas is the chat's own map, as ever; so it is with the Lore Library
+ * off (`on` false), where only a world asked for by name is shown.
+ */
+function campaignView() {
+    let hub = false;
+    let on = false;
+    try { hub = isHubOn(); on = hub && campaignsDecide(); } catch (e) { hub = false; on = false; }
+    if (!hub) return { hub: false, on: false, gate: '', pick: '', campaign: null, world: '' };
+    let campaign = null;
+    let world = '';
+    let cur = null;
+    if (on) { try { campaign = campaignNow(); world = campaign ? worldOfCampaign(campaign.id) : ''; } catch (e) { campaign = null; world = ''; } }
+    try { cur = currentScene(); } catch (e) { cur = null; }
+    const liveIn = (w) => {
+        if (cur) return cur.worldId === w;
+        let st = null;
+        try { st = getWorldState(); } catch (e) { st = null; }
+        return !!st && st.pack === w && untouched(w);
+    };
+    if (showFront) return { hub, on, gate: '', pick: '', campaign, world };
+    if (pinned) return { hub, on, gate: '', pick: liveIn(pinned) ? '' : pinned, campaign, world };
+    if (!on) return { hub, on, gate: '', pick: '', campaign: null, world: '' };
+    if (!campaign) return { hub, on, gate: 'campaign', pick: '', campaign: null, world: '' };
+    if (!world) return { hub, on, gate: 'world', pick: '', campaign, world: '' };
+    return { hub, on, gate: '', pick: liveIn(world) ? '' : world, campaign, world };
+}
+
+/** The world the campaign asks for, shown: let go at once when the chat in front is the world, loaded when it is another. Called before every draw. */
+function follow() {
+    view = campaignView();
+    if (!view.hub) return;
+    if (view.gate) { picked = ''; pickedPack = null; opening = ''; return; }
+    if (view.pick === picked) { if (opening && opening !== picked) opening = ''; return; }
+    // Playing the chat in front as scenes is about that chat: the world shown stays under its panel until the panel is closed.
+    if (setup && setup.scenes) return;
+    if (!view.pick) { picked = ''; pickedPack = null; opening = ''; return; }
+    if (opening === view.pick) return;    // being loaded
+    if (endRunning() || (setup && (setup.step === 'busy' || setup.step === 'opening'))) return;    // something is being written: the world shown stays until it is done
+    const want = view.pick;
+    opening = want;
+    followWait = pickWorld(want).catch(() => {}).then(() => { if (opening === want) opening = ''; });
+}
+
 /** The world in front and what the map draws of it; null while there is nothing to draw. */
 function read() {
+    view = campaignView();
+    // Nothing is drawn while the Atlas asks for a campaign or for its world, or while the campaign's world is being loaded.
+    // (A world not loaded because something is being written is not waited for: what is shown stays until that is done.)
+    if (view.hub && (view.gate || (view.pick && view.pick !== picked && opening === view.pick))) {
+        source = { kind: 'chat' };
+        startPlan = { ok: false, reason: view.gate ? 'gate' : 'opening' };
+        model = null;
+        const word = view.gate === 'campaign' ? 'Pick a campaign: its world is drawn here.' : view.gate === 'world' ? `${esc(view.campaign.name)} has no world yet: give it one, and it is drawn here.` : 'Opening the world…';
+        return { state: null, pack: null, cfg: liveWorldConfig(extensionSettings), empty: `<p>${word}</p>`, gate: view.gate };
+    }
     if (picked) {
         // A picked world (D194): its memory, whatever chat is in front. One that is gone (deleted, the hub switched off) is let go;
         // so is one whose scene is now the chat in front (Go to it, a scene resumed): that chat is the world.
@@ -412,23 +487,120 @@ function tabBody({ state, pack, cfg }) {
     return atlasPlacesHtml({ markers: model ? model.markers : [], tray: model ? model.tray : [], deleted: model ? model.deleted : [], query, hidden, armed: armed && armed.kind === 'place' ? armed.id : '', scale: model ? model.measure.scale : 'town', tidy, all: model ? model.all : [], layer, layerLabel: model ? model.layerLabel : '', ground: model ? model.ground : 'country', world: model ? model.world : null, toName: model && model.world ? landsToName(model).length : 0 });
 }
 
+/** A world of the player's own by its id: its name, the campaign it is attached to, how many scenes it has. */
+function worldRow(id) {
+    let list = [];
+    try { list = worldsWithCampaigns(); } catch (e) { list = []; }
+    return list.find(w => w.id === id) || { id, name: id, campaign: '', campaignName: '', scenes: 0 };
+}
+
+/** The world the chat in front is of, when it is one of the player's own: a scene's world, else the chat's own. Null when it has none. */
+function frontWorld() {
+    let cur = null;
+    try { cur = currentScene(); } catch (e) { cur = null; }
+    let id = cur ? cur.worldId : '';
+    if (!id) { try { const st = getWorldState(); id = st && st.pack && st.pack !== BLANK_PACK_ID ? String(st.pack) : ''; } catch (e) { id = ''; } }
+    let list = [];
+    try { list = worldsWithCampaigns(); } catch (e) { list = []; }
+    const w = id ? list.find(x => x.id === id) : null;
+    return w ? { world: { id: w.id, name: w.name }, campaign: w.campaign ? { id: w.campaign, name: w.campaignName } : null, scene: cur ? sceneNumber(cur.mark.scene) : '' } : null;
+}
+
+/**
+ * The word under the campaign when another world is at hand (D213): the
+ * world shown is not the campaign's (one asked for by name, the chat in
+ * front at an End), or the chat in front is a scene of another world.
+ * With what puts it right: the campaign that world belongs to, the world
+ * made this campaign's, or back to the campaign's own.
+ */
+function mixup() {
+    if (!view.on || view.gate) return null;
+    const now = view.campaign;
+    const mine = now && view.world ? worldRow(view.world) : null;
+    const front = frontWorld();
+    let cur = null;
+    try { cur = currentScene(); } catch (e) { cur = null; }
+    const shown = !!pinned || showFront;    // what is shown is the other world itself
+    const other = pinned ? worldRow(pinned) : (showFront || cur) && front ? worldRow(front.world.id) : null;
+    const back = now ? (mine ? { act: 'pin-drop', label: `Show ${mine.name}` } : { act: 'pin-drop', label: `Give ${now.name} a world` }) : { act: 'pin-drop', label: 'Pick a campaign' };
+    if (!other || (now && other.id === view.world)) {
+        // The chat in front shown with no world of the player's in it: only worth a word when no campaign is on.
+        return showFront && !now ? { text: 'Showing the chat in front. No campaign is on.', actions: [back] } : null;
+    }
+    const whose = other.campaign ? `${other.campaignName}'s world` : 'in no campaign';
+    const scene = !pinned && cur && front && front.scene ? `scene ${front.scene} of ` : '';
+    const lead = pinned ? `Showing ${other.name}` : showFront ? `Showing the chat in front: ${scene || 'it is in '}${other.name}` : `The chat in front is ${scene}${other.name}`;
+    const against = now ? (mine ? `not ${now.name}'s world (${mine.name})` : `and ${now.name} has no world yet`) : 'and no campaign is on';
+    const actions = [];
+    if (other.campaign && (!now || other.campaign !== now.id)) actions.push({ act: 'campaign-switch', id: other.campaign, label: `Switch to ${other.campaignName}`, title: `${other.campaignName} becomes the active campaign: its lorebooks on, its versions of the characters in play` });
+    if (!other.campaign && now) actions.push({ act: 'world-use', id: other.id, label: `Make it ${now.name}'s world`, title: mine ? `${mine.name} keeps its scenes and its memory, and is in no campaign afterwards` : '' });
+    if (shown) actions.push(back);
+    else actions.push({ act: 'pin-show', id: other.id, label: 'Show it' });
+    return { text: `${lead}, ${whose}, ${against}.`, actions };
+}
+
+/** The campaign at the head of the sidebar (D213); null with scenes off, where the Atlas is the chat's own map. */
+function campaignHead() {
+    if (!view.on) return null;
+    let list = [];
+    try { list = campaignList(); } catch (e) { list = []; }
+    const mine = view.campaign && view.world ? worldRow(view.world) : null;
+    return { list, now: view.campaign, world: mine ? { id: mine.id, name: mine.name } : null, busy: campaignBusy, notice: mixup() };
+}
+
+/** What the Atlas asks for in place of the tabs (D213): a campaign, the campaign's world, or that world chosen again. '' when it asks for nothing. */
+function gateHtml() {
+    if (!view.on) return '';
+    if (view.gate === 'campaign') {
+        let list = [];
+        try { list = campaignList(); } catch (e) { list = []; }
+        return atlasCampaignGateHtml({ campaigns: list, front: frontWorld(), busy: campaignBusy, error: campaignError, chat: chatOpen() });
+    }
+    if (view.gate !== 'world' && !(changing && view.campaign)) return '';
+    let list = [];
+    try { list = worldsWithCampaigns(); } catch (e) { list = []; }
+    const current = view.world ? worldRow(view.world) : null;
+    let adopt = false;
+    try { const plan = scenesPlan(); adopt = !!plan.ok && !!plan.world && plan.world.made; } catch (e) { adopt = false; }
+    return atlasWorldChoiceHtml({ campaign: view.campaign, current: current ? { id: current.id, name: current.name } : null, worlds: list, adopt, busy: campaignBusy, error: campaignError });
+}
+
+/**
+ * Whether Play as scenes is offered (D172): the chat in front is no scene
+ * and can be where the world shown begins. Shown as itself, any such chat
+ * can (what stands in the way is said on the panel). With the campaign's
+ * world shown from its memory (D213), only a chat that would be played
+ * into that world: one of that world, or any while nothing has been
+ * played in it; not a chat of another world, which would only be refused.
+ */
+function adoptHere() {
+    try {
+        if (!isHubOn() || isScene() || !chatOpen()) return false;
+        if (!picked) return true;
+        if (picked !== view.world) return false;
+        const plan = scenesPlan();
+        if (!plan.ok || !plan.world || plan.world.id !== picked) return false;
+        const st = getWorldState();
+        return untouched(picked) || (!!st && st.pack === picked);
+    } catch (e) { return false; }
+}
+
 function renderSide(ctx) {
     const $side = $(`${root()} .dooms-atlas-side`);
     if (!$side.length) return;
     const { state, pack, cfg, empty } = ctx;
     const scroll = $(`${root()} .dooms-atlas-body`).scrollTop() || 0;
+    const typed = $(`${root()} .dooms-atlas-gate-name`).val();    // a name being typed is kept across a draw
     const blank = !!pack && pack.id === BLANK_PACK_ID;
     const hub = hubWorld();
     if (tab === 'scenes' && !hub) tab = ATLAS_TABS[0].id;    // the world in front has no scenes to list
-    let chatWorld = '';
-    try { const st = getWorldState(); const ap = getActivePack(); chatWorld = (st && st.name) || (ap && ap.name) || ''; } catch (e) { chatWorld = ''; }
-    let inFront = '';
-    try { const cur = currentScene(); inFront = cur ? cur.worldId : ''; } catch (e) { inFront = ''; }
+    if (changing && (!view.on || !view.campaign || view.gate)) changing = false;    // nothing to change: the campaign went, or it has no world to change from
+    const gate = gateHtml();
     $side.html(atlasSideHtml({
         scenesTab: !!hub,
-        worlds: isHubOn() ? worlds.filter(w => w.id !== inFront) : [],    // the world of the scene in front is "this chat"
-        picked, chatWorld,
-        name: (state && state.name) || (pack && pack.name) || 'The Atlas',
+        campaign: campaignHead(),
+        gate,
+        name: gate && !changing ? 'The Atlas' : (state && state.name) || (pack && pack.name) || 'The Atlas',
         facts: sceneFacts(),
         tab,
         body: empty ? '' : tabBody(ctx),
@@ -437,12 +609,13 @@ function renderSide(ctx) {
         canAdvance: !empty && !between(),
         advancing: isAdvancing(),
         editLabel: blank ? 'Make this a world' : 'Edit this world',
-        scenes: !empty && !picked && isHubOn() && !isScene(),    // a chat that is no scene can be taken as where a world's scenes begin (D172)
+        scenes: !empty && adoptHere(),
         ending: picked ? null : (() => { try { const cur = currentScene(); return cur && !cur.ended ? { number: sceneNumber(cur.mark.scene) } : null; } catch (e) { return null; } })(),
         between: between() ? { open: source.open ? { id: source.open.id, number: sceneNumber(source.open.id), title: source.open.title || '' } : null, picked: !!picked, fresh: !!picked && !(source.memory.takenAt > 0) } : null,
         // The last End can be put back, all of it, until the next scene starts (D190).
         undoEnd: picked ? null : (() => { try { const c = canUndoEnd(); if (!c.ok) return null; const cur = currentScene(); const found = cur && cur.scene && Array.isArray(cur.scene.conflicts) ? cur.scene.conflicts.length : 0; return { number: sceneNumber(c.scene), conflicts: found }; } catch (e) { return null; } })(),
     }));
+    if (typed) $(`${root()} .dooms-atlas-gate-name`).val(typed);
     // Between scenes (D173) there is no chat for the AI to read or to act in: what needs one waits for a scene.
     if (between()) $(`${root()} .dooms-atlas-side`).find('[data-act="setup"], [data-act="fill"], [data-act="tidy"], [data-act="names"]').prop('disabled', true).attr('title', 'Between scenes: this needs a scene being played');
     $(`${root()} .dooms-atlas-body`).scrollTop(scroll);
@@ -505,8 +678,9 @@ async function mount(ctx) {
 /** Everything drawn again from the world in front: the sidebar, the map (mounted, or its model replaced), the empty word. */
 function render() {
     if (!isOpen) return;
+    follow();    // the campaign's world, before anything is read (D213)
     const ctx = read();
-    if (setup && setup.world !== worldKey()) { setup = null; renderSetup(); }
+    if (setup && !setup.taking && setup.world !== worldKey()) { setup = null; renderSetup(); }
     if (undoBook && undoBook.world !== worldKey()) undoBook = null;
     if (tidyChat !== null && tidyChat !== worldKey()) { tidy = { busy: false, items: [], error: '', asked: false }; tidyChat = null; }    // another chat's proposals are not this one's
     renderSide(ctx);
@@ -1144,13 +1318,19 @@ async function takeScenes() {
     if (!setup || !setup.scenes) return;
     const wasBusy = setup.step === 'busy';
     if (wasBusy) { setup = { ...setup, progress: { ...(setup.progress || {}), taking: true } }; renderSetup(); }
+    // The chat is carried over to its world while it is taken (a new world is made, the chat moved onto it): the panel
+    // is this chat's, and stays through that.
+    setup = { ...setup, taking: true };
     const r = await commitAdopt({ recap: setup.recap, replace: setup.replace, continuity: setup.change });
     if (!setup || !setup.scenes) return;
+    setup = { ...setup, taking: false };
     if (!r.ok) { setup = { ...setup, step: 'review', progress: null, error: r.reason === 'has-memory' ? 'Tick the box to replace what it remembers.' : scenesRefusalText(r) }; renderSetup(); return; }
     result = `${r.worldName} is played as scenes now.`;
-    render();    // the chat is on the world now: the name, the map and the lists are read again
+    // The chat is on the world now (a new one, when one was made for it): the panel is keyed to the world as it is before
+    // anything is drawn again, or the draw would take it for another world's and drop it.
     setup = { ...setup, step: 'done', result: r, error: '', progress: null, world: worldKey() };
-    renderSetup();
+    render();    // the name, the map and the lists are read again
+    if (setup && setup.scenes) { setup = { ...setup, world: worldKey() }; renderSetup(); }
 }
 
 /** Play as scenes pressed: the ledger reads the whole chat first when that was ticked, then the chat is taken. */
@@ -1295,30 +1475,139 @@ function openFace(anchor, name) {
     return openFacePopover(anchor, name, { onBoard: showPlaceOf, onStart: startPlan.ok ? startWithPerson : null, startLabel: startPlan.ok ? `Start scene ${startPlan.number} with them` : '', state: theState(), pack: thePack() });
 }
 
-/** The worlds that can be picked (D194): every world of the player's own, by its name, with the card that narrates it. Read when the Atlas opens and when a card is bound. */
-async function refreshWorlds() {
-    const token = ++worldsToken;
-    let ids = [];
-    try { ids = isHubOn() ? hubWorldIds() : []; } catch (e) { ids = []; }
-    const out = [];
-    for (const id of ids) {
-        let name = id;
-        try { const r = await loadPack(id); if (r && r.ok && r.pack && r.pack.name) name = r.pack.name; } catch (e) { /* its id stands */ }
-        let card = null;
-        try { card = cardOf(id); } catch (e) { card = null; }
-        out.push({ id, name, card: card ? card.name : '' });
+// ─── The campaign and its world (D213) ──────────────────────────────────────
+
+/** Whether something is being written that a change of campaign or of its world would cut across; said when it is. */
+function midWrite() {
+    if (!(endRunning() || (setup && (setup.step === 'busy' || setup.step === 'opening')))) return false;
+    result = 'Something is being written: wait for it to finish first.';
+    render();
+    return true;
+}
+
+/** What was open over the map belongs to the world that was shown: let go before another is. */
+function clearOverMap() {
+    if (setup) { if (setup.start) cancelStart(); setup = null; renderSetup(); }
+    if (roading) setRoading(false);
+    if (board) board.closeCard();
+    closeFacePopover();
+    arm(null);
+    deleting = '';
+}
+
+/** The Lore Library switched to a campaign, as its own switch does it; the Atlas then shows that campaign's world. */
+async function switchTo(id) {
+    if (!id || campaignBusy) { render(); return; }
+    if (midWrite()) return;
+    campaignBusy = true;
+    campaignError = '';
+    render();
+    let r;
+    try { r = await switchCampaign(id); } catch (e) { r = { ok: false, reason: 'error', error: String(e && e.message || e) }; }
+    campaignBusy = false;
+    if (!isOpen) return;
+    if (!r.ok) { campaignError = `The campaign could not be switched to${r.error ? ` (${r.error})` : ''}.`; result = campaignError; render(); return; }
+    clearOverMap();
+    pinned = '';
+    showFront = false;
+    changing = false;
+    layer = '';
+    const c = view.on ? campaignNow() : null;
+    result = c ? `${c.name} is the active campaign.` : '';
+    render();
+    if (followWait) await followWait;
+}
+
+/** A campaign made in the Lore Library and switched to; with `worldId`, that world is its world. */
+async function newCampaign(name, { worldId = '' } = {}) {
+    if (campaignBusy) return;
+    if (midWrite()) return;
+    campaignBusy = true;
+    campaignError = '';
+    render();
+    let r;
+    try { r = await makeCampaign(name, { worldId }); } catch (e) { r = { ok: false, reason: 'error', error: String(e && e.message || e) }; }
+    campaignBusy = false;
+    if (!isOpen) return;
+    if (!r.ok) {
+        campaignError = r.reason === 'no-name' ? 'Give the campaign a name first.'
+            : r.reason === 'taken' ? 'There is a campaign of that name already: switch to it in the list above.'
+            : `The campaign could not be made${r.error ? ` (${r.error})` : ''}.`;
+        render();
+        return;
     }
-    if (token !== worldsToken) return;
-    const changed = JSON.stringify(out) !== JSON.stringify(worlds);
-    worlds = out;
-    if (changed && isOpen) render();
+    $(`${root()} .dooms-atlas-gate-name`).val('');
+    pinned = '';
+    showFront = false;
+    changing = false;
+    result = `${r.name} is made, and is the active campaign.`;
+    render();
+    if (followWait) await followWait;
+}
+
+/** The campaign's world set to one of the player's worlds; '' leaves the campaign without one. The world it had keeps its scenes and its memory. */
+async function useWorld(worldId) {
+    const c = view.campaign;
+    if (!c || campaignBusy) return;
+    if (midWrite()) return;
+    const had = view.world ? worldRow(view.world) : null;
+    const next = worldId ? worldRow(worldId) : null;
+    campaignBusy = true;
+    campaignError = '';
+    render();
+    let r;
+    try { r = await attachWorld(c.id, worldId); } catch (e) { r = { ok: false, reason: 'error' }; }
+    campaignBusy = false;
+    if (!isOpen) return;
+    if (!r.ok) {
+        campaignError = r.reason === 'busy' ? 'A scene is being ended or read: wait for it to finish first.'
+            : r.reason === 'no-world' ? 'That world is gone.'
+            : 'The world could not be changed.';
+        render();
+        return;
+    }
+    clearOverMap();
+    pinned = '';
+    showFront = false;
+    changing = false;
+    layer = '';
+    const left = r.was && had ? ` ${had.name} keeps its scenes and its memory, and is in no campaign now.` : '';
+    const took = r.from && next && next.campaignName ? ` ${next.campaignName} has no world now.` : '';
+    result = next ? `${next.name} is ${c.name}'s world.${left}${took}` : `${c.name} has no world now.${left}`;
+    render();
+    if (followWait) await followWait;
+}
+
+/** A new world made for the campaign that is on, and attached to it. */
+async function makeWorldForCampaign() {
+    const c = view.campaign;
+    if (!c || campaignBusy) return;
+    if (midWrite()) return;
+    const had = view.world ? worldRow(view.world) : null;
+    campaignBusy = true;
+    campaignError = '';
+    render();
+    let r;
+    try { r = await makeCampaignWorld(c.id); } catch (e) { r = { ok: false, reason: 'error', errors: [String(e && e.message || e)] }; }
+    campaignBusy = false;
+    if (!isOpen) return;
+    if (!r.ok) { campaignError = `The world could not be made${Array.isArray(r.errors) && r.errors.length ? ` (${r.errors.join(' ')})` : ''}.`; render(); return; }
+    clearOverMap();
+    pinned = '';
+    showFront = false;
+    changing = false;
+    layer = '';
+    result = `${r.name} is made, and is ${c.name}'s world.${r.was && had ? ` ${had.name} keeps its scenes and its memory, and is in no campaign now.` : ''} Its first scene starts from the Scenes tab.`;
+    render();
+    if (followWait) await followWait;
 }
 
 let pickToken = 0;
 /**
- * Another world shown (D194): '' for the chat's own. A picked world is
- * drawn from its memory, as between scenes, whatever chat is in front; a
- * scene of it is started from here. What was open over the map is let go.
+ * A world shown from its memory (D194), as between scenes, whatever chat
+ * is in front; '' for the chat's own. A scene of it is started from here.
+ * What was open over the map is let go. Which world is the campaign's to
+ * say (D213): `follow` calls this.
  */
 async function pickWorld(id) {
     const next = String(id || '');
@@ -1438,6 +1727,18 @@ function build() {
                 return;    // opened, the chat change draws the Atlas again from the scene
             }
             if (act === 'scenes') { openScenes(); return; }
+            // The campaign and its world (D213).
+            if (act === 'campaign-switch') { await switchTo(this.getAttribute('data-id') || ''); return; }
+            if (act === 'campaign-new') { await newCampaign(String($(`${root()} .dooms-atlas-gate-name`).val() || '')); return; }
+            if (act === 'campaign-make') { await newCampaign(this.getAttribute('data-name') || '', { worldId: this.getAttribute('data-id') || '' }); return; }
+            if (act === 'front-show') { showFront = true; pinned = ''; campaignError = ''; render(); return; }
+            if (act === 'pin-show') { pinned = this.getAttribute('data-id') || ''; showFront = false; render(); return; }
+            if (act === 'pin-drop') { pinned = ''; showFront = false; changing = false; render(); return; }
+            if (act === 'world-change') { changing = true; campaignError = ''; if (folded && isPhone()) setFolded(false); render(); return; }
+            if (act === 'world-keep') { changing = false; campaignError = ''; render(); return; }
+            if (act === 'world-use') { await useWorld(this.getAttribute('data-id') || ''); return; }
+            if (act === 'world-detach') { await useWorld(''); return; }
+            if (act === 'world-make') { await makeWorldForCampaign(); return; }
             if (act === 'scenes-prepare') { await prepareScenes(); return; }
             // Written again: a chat that is asked how much to read goes back to that question (a whole read is many requests).
             if (act === 'scenes-again') { if (setup && setup.scenes && scenesChoice()) { dropAdoptRead(); setup = { ...setup, step: 'ask', error: '', progress: null, ledger: null }; renderSetup(); } else await prepareScenes(); return; }
@@ -1782,7 +2083,11 @@ function build() {
     });
     // Voices says when a reading starts or ends: the Listen buttons follow.
     document.addEventListener('dooms:voices-state', () => { if (isOpen && setup && setup.start && setup.step === 'pick') syncListening(); });
-    $(document).on('change', `${root()} .dooms-atlas-world-select`, function () { pickWorld(String($(this).val() || '')); });
+    $(document).on('change', `${root()} .dooms-atlas-campaign-select`, function () { switchTo(String($(this).val() || '')); });
+    $(document).on('keydown', `${root()} .dooms-atlas-gate-name`, function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); newCampaign(String($(this).val() || '')); } });
+    $(document).on('input', `${root()} .dooms-atlas-gate-name`, function () { if (campaignError) { campaignError = ''; $(`${root()} .dooms-atlas-gate-error`).remove(); } });
+    // The Lore Library switched campaign (its own switch, or the Atlas's): the world shown follows (D213).
+    window.addEventListener('dooms:campaign-changed', () => { if (isOpen && !campaignBusy) render(); });
     $(document).on('keydown', (ev) => {
         if (!isOpen || isFacePopoverOpen() || !takesEscape('atlas', ev)) return;
         if (setup) { if (setup.step === 'busy' || setup.step === 'opening' || endRunning()) return; if (setup.start) cancelStart(); setup = null; renderSetup(); render(); return; }    // the set-up's panel closes first (not while it reads)
@@ -1798,7 +2103,6 @@ function build() {
     window.addEventListener(HUB_CHANGED_EVENT, (ev) => {
         if (!isOpen) return;
         const src = ev && ev.detail ? ev.detail.source : '';
-        if (src === 'bind' || src === 'unbind') refreshWorlds().catch(() => {});
         if (src !== 'map') render();
     });
     window.addEventListener('resize', () => { if (!isOpen) return; fitToScreen(); if (board) board.size(); });
@@ -1807,9 +2111,11 @@ function build() {
 /**
  * Opens the Atlas (building it the first time) and keeps it current while
  * open. `place` opens it on that place's card; `name` on the place that
- * character stands at.
+ * character stands at. The world shown is the active campaign's (D213);
+ * `worldId` asks for another by name (the World Builder, Settings), and
+ * `front` for the chat in front whatever the campaign (an End).
  */
-export async function openAtlas({ place = '', name = '', worldId = '', tab: openTab = '', start = false } = {}) {
+export async function openAtlas({ place = '', name = '', worldId = '', tab: openTab = '', start = false, front = false } = {}) {
     try { await ensureCss('atlas'); } catch (e) { /* the sheet failed to load: the window still opens */ }
     build();
     isOpen = true;
@@ -1817,29 +2123,41 @@ export async function openAtlas({ place = '', name = '', worldId = '', tab: open
     result = '';
     picked = '';
     pickedPack = null;
+    pinned = '';
+    showFront = false;
+    changing = false;
+    campaignBusy = false;
+    campaignError = '';
+    opening = '';
+    followWait = null;
     if (openTab && ATLAS_TABS.some(t => t.id === openTab)) tab = openTab;    // not remembered: the tab asked for this once
     try { recordCurrentScene(); } catch (e) { /* the map stays as it is */ }    // the place the chat stands in, if no reply recorded it
+    // A world asked for by name is shown whatever the campaign, with a word when it is not the campaign's (D213); so is the
+    // chat in front when it is a scene and the Atlas was opened to end it.
+    try {
+        if (isHubOn()) {
+            const decide = campaignsDecide();
+            const c = decide ? campaignNow() : null;
+            const mine = c ? worldOfCampaign(c.id) : '';
+            const all = worldsWithCampaigns();
+            if (worldId && worldId !== mine && all.some(w => w.id === worldId)) pinned = worldId;
+            else if (front && !worldId) { const cur = currentScene(); showFront = !!cur && cur.worldId !== mine; }
+            // With the Lore Library off no campaign says which world: with no chat in front (SillyTavern's home screen, D203)
+            // the Atlas opens on the world whose scene is being played, or on the only world there is.
+            else if (!decide && !worldId && !getWorldState()) { const away = sceneAway(); pinned = away ? away.worldId : all.length === 1 ? all[0].id : ''; }
+        }
+    } catch (e) { pinned = ''; showFront = false; }
     $(root()).addClass('is-open').css('display', 'flex');    // shown before the render, so the map's frame has its size when Leaflet fits it
     fitToScreen();
     render();
-    refreshWorlds().catch(() => {});
-    // A world asked for by name (the World Builder, Settings): shown whatever chat is in front, unless that chat is a scene of it.
-    if (worldId) {
-        let inFront = '';
-        try { const cur = currentScene(); inFront = cur ? cur.worldId : ''; } catch (e) { inFront = ''; }
-        if (worldId !== inFront) await pickWorld(worldId);
-    }
-    // No chat in front at all (SillyTavern's home screen, D203): the Atlas has no world of its own to show, so it opens
-    // on the world whose scene is being played, or on the only world there is. The picker still chooses another.
-    else if (!theState()) {
-        let target = '';
-        try { const away = sceneAway(); const ids = isHubOn() ? hubWorldIds() : []; target = away ? away.worldId : ids.length === 1 ? ids[0] : ''; } catch (e) { target = ''; }
-        if (target) await pickWorld(target);
-    }
+    if (followWait) await followWait;    // the campaign's world, loaded
+    if (!isOpen) return;
+    // What the Atlas asks for is in the sidebar: on a phone it is brought into sight.
+    if (view.gate && folded && isPhone()) setFolded(false);
     // The records against the card's chats (D128): a chat deleted outside is marked gone, one the list lost is brought back.
     { const w = hubWorld(); if (w && !picked) refreshScenes(w).catch(() => {}); }
     // Opened to start a scene (Settings → Start a scene): the sheet at once, or the reason there can be none.
-    if (start && isOpen) { if (startPlan.ok) openSceneStart({}); else { result = whyNoStart(); render(); } }
+    if (start && isOpen && !view.gate) { if (startPlan.ok) openSceneStart({}); else { result = whyNoStart(); render(); } }
     if (place || name) {
         const wait = (n) => { if (!isOpen) return; if (board) { if (name) showPlaceOf(name); else showMarker(place); } else if (n > 0) setTimeout(() => wait(n - 1), 60); };
         wait(40);
@@ -1848,7 +2166,7 @@ export async function openAtlas({ place = '', name = '', worldId = '', tab: open
 
 /** The Atlas opened on the End sheet of the scene in front (the strip above the chat, the D menu's End scene). */
 export async function openAtlasEnd() {
-    await openAtlas();
+    await openAtlas({ front: true });    // the scene in front is the one ended, whatever the campaign's world (D213)
     await openEndScene();
 }
 
@@ -1864,8 +2182,15 @@ export function closeAtlas() {
     stopListening();
     setup = null;
     undoBook = null;
-    picked = '';         // the Atlas opens on the chat in front again
+    picked = '';         // the Atlas opens on the campaign's world again
     pickedPack = null;
+    pinned = '';
+    showFront = false;
+    changing = false;
+    campaignBusy = false;
+    campaignError = '';
+    opening = '';
+    followWait = null;
     deleting = '';
     pickToken++;
     $(`${root()} .dooms-atlas-setup`).prop('hidden', true).empty();

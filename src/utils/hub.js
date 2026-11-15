@@ -13,7 +13,7 @@
  * chat bridge, the requests and the commands live in
  * src/systems/features/hub.js; the window is the Atlas (src/systems/ui/atlas.js).
  */
-import { normalizeWorldState, jsonObjectsIn, sameName } from './liveWorld.js';
+import { normalizeWorldState, jsonObjectsIn, sameName, liveWorldConfig, BLANK_PACK_ID } from './liveWorld.js';
 import { normalizeCanon, buildCanonBlock, canonAsk } from './canon.js';
 import { normalizeHooks, takeHook as takeHookPure, recordTaken, questFromHook } from './questHooks.js';
 import { sceneFactsFrom, cleanWhen } from './questCut.js';
@@ -1413,8 +1413,10 @@ export function lastRecaps(entry, count = 2) {
 // ─── The lines ──────────────────────────────────────────────────────────
 
 /** One line for the hub's foot and the Settings status (D128). */
-export function hubStatusLine({ worldName = '', entry = null, cardName = '', sceneCards = false } = {}) {
-    const name = clean(worldName, 80) || 'This world';
+export function hubStatusLine({ worldName = '', entry = null, cardName = '', sceneCards = false, campaign } = {}) {
+    // With the campaign it is attached to (D213), where the caller says which: '' is a world in no campaign.
+    const whose = campaign === undefined ? '' : clean(campaign, 80) ? ` (${clean(campaign, 80)}'s world)` : ' (in no campaign)';
+    const name = `${clean(worldName, 80) || 'This world'}${whose}`;
     // With a card made for every scene (D209) a world needs none of its own to be played.
     if (!sceneCards && (!entry || !entry.card)) return `${name}: no narrator card yet; pick one to play it from the hub.`;
     if (!entry) return `${name}: every scene gets a narrator card of its own; no scene played yet.`;
@@ -1451,6 +1453,90 @@ export function describeStartResult(r) {
         cancelled: 'Nothing was started.',
     };
     return why[r.reason] || `Nothing was started: ${r.error || r.reason || 'unknown'}.`;
+}
+
+// ─── A campaign's world (D213) ──────────────────────────────────────────
+//
+// The Lore Library's active campaign decides the world, as it decides which
+// version of a character is in play: one campaign, one world. The link is
+// kept on the world's entry in the hub (`campaign`), so a world carries its
+// campaign with its scenes and its memory.
+
+/** The player's own worlds, id → name, as the World Builder keeps them (the blank world and the template are no one's). */
+export function ownWorlds(settings) {
+    const packs = liveWorldConfig(settings || {}).customPacks || {};
+    const out = {};
+    for (const id of Object.keys(packs)) {
+        if (!id || id === BLANK_PACK_ID) continue;
+        let name = id;
+        try { const raw = typeof packs[id] === 'string' ? JSON.parse(packs[id]) : packs[id]; if (raw && raw.name) name = String(raw.name); } catch (e) { /* its id stands */ }
+        out[id] = name;
+    }
+    return out;
+}
+
+const hubWorldsOf = (settings) => (settings && isObj(settings.hub) && isObj(settings.hub.worlds) ? settings.hub.worlds : {});
+
+/**
+ * The world a campaign is attached to; '' when it has none. One campaign,
+ * one world: where several worlds name the same campaign (from before
+ * that held), the one most played is its world.
+ */
+export function campaignWorldId(settings, campaignId) {
+    const id = String(campaignId || '').trim();
+    if (!id) return '';
+    const own = ownWorlds(settings);
+    const worlds = hubWorldsOf(settings);
+    const hits = Object.keys(worlds).filter(w => own[w] !== undefined && isObj(worlds[w]) && worlds[w].campaign === id);
+    if (hits.length < 2) return hits[0] || '';
+    const weight = (w) => [Array.isArray(worlds[w].scenes) ? worlds[w].scenes.length : 0, (isObj(worlds[w].memory) && Number(worlds[w].memory.takenAt)) || 0];
+    return hits.sort((a, b) => { const x = weight(a); const y = weight(b); return (y[0] - x[0]) || (y[1] - x[1]) || a.localeCompare(b); })[0];
+}
+
+/** Whether the Lore Library is switched on (it is unless switched off): with it off there are no campaigns to follow, and a world is the chat's own, as before. */
+export function loreLibraryOn(settings) {
+    const lb = settings && isObj(settings.lorebook) ? settings.lorebook : null;
+    return !lb || lb.enabled !== false;
+}
+
+/** The Lore Library's campaigns in its order: [{ id, name }]. */
+export function campaignsOf(settings) {
+    const lb = settings && isObj(settings.lorebook) ? settings.lorebook : null;
+    const all = lb && isObj(lb.campaigns) ? lb.campaigns : {};
+    const order = (lb && Array.isArray(lb.campaignOrder) ? lb.campaignOrder : []).filter(id => isObj(all[id]));
+    return [...order, ...Object.keys(all).filter(id => isObj(all[id]) && !order.includes(id))].map(id => ({ id, name: clean(all[id].name, 80) || id }));
+}
+
+/** The campaign that is switched on: { id, name }; null when none is. */
+export function activeCampaignOf(settings) {
+    const lb = settings && isObj(settings.lorebook) ? settings.lorebook : null;
+    const id = lb && lb.enabled !== false && typeof lb.activeCampaignId === 'string' ? lb.activeCampaignId : '';
+    return id ? campaignsOf(settings).find(c => c.id === id) || null : null;
+}
+
+/** The world of the campaign that is switched on; '' with no campaign, or one that has no world yet. */
+export function activeCampaignWorldId(settings) {
+    const c = activeCampaignOf(settings);
+    return c ? campaignWorldId(settings, c.id) : '';
+}
+
+/**
+ * Every world of the player's with the campaign it is attached to, for the
+ * list a campaign's world is chosen from: by name. A world several entries
+ * make the same campaign's counts as that campaign's only where it is the
+ * one the campaign uses.
+ * @returns {{ id: string, name: string, campaign: string, campaignName: string, scenes: number }[]}
+ */
+export function worldsByCampaign(settings) {
+    const own = ownWorlds(settings);
+    const worlds = hubWorldsOf(settings);
+    const names = Object.fromEntries(campaignsOf(settings).map(c => [c.id, c.name]));
+    return Object.keys(own).map(id => {
+        const e = isObj(worlds[id]) ? worlds[id] : null;
+        const named = e && typeof e.campaign === 'string' && names[e.campaign] !== undefined ? e.campaign : '';
+        const campaign = named && campaignWorldId(settings, named) === id ? named : '';
+        return { id, name: own[id], campaign, campaignName: campaign ? names[campaign] : '', scenes: e && Array.isArray(e.scenes) ? e.scenes.filter(x => isObj(x) && x.id !== ADOPTED_ID).length : 0 };
+    }).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 
 // ─── A scene's own narrator card (D209) ─────────────────────────────────

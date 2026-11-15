@@ -39,7 +39,7 @@ import { renderImage, sourceProblem } from './imageGen.js';
 import { imageGenConfig } from '../../utils/imageGen.js';
 import { parseCaptionReply } from '../../utils/scenePictures.js';
 import { visitPlace, reconcileVisited, placesRow, buildPlacePrompt } from '../../utils/worldMap.js';
-import { readMark, markIsOfFile } from '../../utils/hub.js';
+import { readMark, markIsOfFile, activeCampaignWorldId } from '../../utils/hub.js';
 import { worldToRaw, worldSummary, worldFromState, buildWorldDraftPrompt, parseWorldDraft, rebindStateToPack, DRAFT_LIMITS } from '../../utils/worldBuilder.js';
 import {
     WORLD_SLOT,
@@ -576,7 +576,8 @@ export async function onWorldChatChanged() {
     const meta = chat_metadata;
     const raw = meta && typeof meta === 'object' ? meta[META_KEY] : null;
     const stored = raw && typeof raw === 'object' && raw.seeded === true ? normalizeWorldState(raw) : null;
-    const packId = stored && stored.pack ? stored.pack : cfg().pack;
+    // A chat with no world yet is the active campaign's world when that has one (D213), else the world set for new chats.
+    const packId = stored && stored.pack ? stored.pack : (activeCampaignWorldId(extensionSettings) || cfg().pack);
     const res = await loadPack(packId);
     if (token !== loadToken || chat_metadata !== meta) return;    // another chat opened meanwhile (or was swapped in, its CHAT_CHANGED to come)
     loadedMeta = meta;

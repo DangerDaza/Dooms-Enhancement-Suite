@@ -65,10 +65,37 @@
 /* Between scenes (D173): the Atlas shows the world's memory, and says so under the world's name. */
 .dooms-atlas-between { margin: 8px 0 0; padding: 7px 9px; font-size: 0.78em; line-height: 1.4; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); overflow-wrap: anywhere; }
 .dooms-atlas-between > i { color: var(--atlas-accent2); margin-right: 3px; }
-/* The world picker (D194): which world the Atlas shows. */
+/* The campaign (D213): the Lore Library's active campaign decides the world the Atlas shows. Its row, the world it is attached to, and a word when another world is in front. */
 .dooms-atlas-world-pick { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; }
-.dooms-atlas-world-pick .dooms-atlas-card-label { flex: 0 0 auto; margin: 0; }
-.dooms-atlas-world-select { flex: 1 1 auto; min-width: 0; appearance: auto; font: inherit; font-size: 0.82em; padding: 4px 6px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
+.dooms-atlas-world-pick .dooms-atlas-card-label { flex: 0 0 4.6em; margin: 0; }
+.dooms-atlas-campaign-select { flex: 1 1 auto; min-width: 0; appearance: auto; font: inherit; font-size: 0.82em; padding: 4px 6px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
+.dooms-atlas-campaign-world { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 0; font-size: 0.82em; color: var(--atlas-text); }
+.dooms-atlas-campaign-world .dooms-atlas-card-label { flex: 0 0 4.6em; margin: 0; font-size: 0.9em; }
+.dooms-atlas-campaign-world-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.dooms-atlas-campaign-world .dooms-atlas-link { flex: 0 0 auto; font-size: 0.95em; }
+.dooms-atlas-mixup { border-color: var(--atlas-accent2); }
+.dooms-atlas-mixup .dooms-atlas-link { font-size: 1em; margin-left: 6px; text-decoration: underline; }
+/* What the Atlas asks for in place of the tabs (D213): a campaign, or the campaign's world. */
+.dooms-atlas-gate { display: flex; flex-direction: column; gap: 10px; }
+.dooms-atlas-gate h3 { margin: 0; font-size: 1.05em; font-family: var(--atlas-display); color: var(--atlas-text); overflow-wrap: anywhere; }
+.dooms-atlas-gate > p { margin: 0; font-size: 0.84em; line-height: 1.45; color: var(--atlas-text); overflow-wrap: anywhere; }
+.dooms-atlas-gate-head { margin: 4px 0 0; font-size: 0.72em; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--atlas-muted); }
+.dooms-atlas-gate-front { padding: 8px 10px; border: 1px solid var(--atlas-accent2); border-radius: var(--atlas-radius); background: var(--atlas-panel2); }
+.dooms-atlas-gate-front .dooms-atlas-btn { margin-top: 6px; }
+.dooms-atlas-gate-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dooms-atlas-gate-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dooms-atlas-gate-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--atlas-line); border-radius: var(--atlas-radius); background: var(--atlas-panel2); }
+.dooms-atlas-gate-row.is-current { border-color: var(--atlas-accent); }
+.dooms-atlas-gate-what { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dooms-atlas-gate-what strong { font-size: 0.9em; color: var(--atlas-text); overflow-wrap: anywhere; }
+.dooms-atlas-gate-what span { font-size: 0.74em; line-height: 1.35; color: var(--atlas-muted); overflow-wrap: anywhere; }
+.dooms-atlas-gate-row .dooms-atlas-btn { flex: 0 0 auto; }
+.dooms-atlas-gate-tag { flex: 0 0 auto; font-size: 0.7em; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--atlas-accent2); }
+.dooms-atlas-gate-new { display: flex; gap: 8px; }
+.dooms-atlas-gate-name { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 0.84em; padding: 6px 8px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
+.dooms-atlas-gate > p.dooms-atlas-gate-error { color: #e0524d; }
+.dooms-atlas-gate > p.dooms-atlas-gate-busy { color: var(--atlas-muted); }
+.dooms-atlas-gate-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .dooms-atlas-tabs { flex: 0 0 auto; display: flex; border-bottom: 1px solid var(--atlas-line); }
 .dooms-atlas-tab { flex: 1 1 0; min-width: 0; appearance: none; font: inherit; font-size: 0.68em; cursor: pointer; background: none; border: 0; border-bottom: 2px solid transparent; padding: 9px 2px 7px; color: var(--atlas-muted); display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .dooms-atlas-tab i { font-size: 1.45em; }
