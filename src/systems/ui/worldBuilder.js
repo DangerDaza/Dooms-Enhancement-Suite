@@ -8,6 +8,7 @@
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { ensureCss } from '../../core/cssLoader.js';
+import { ensureChatState } from '../../core/chatGuard.js';
 import { escapeHtml } from '../../utils/html.js';
 import { normalizePack, liveWorldConfig, BLANK_PACK_ID } from '../../utils/liveWorld.js';
 import { hasMap, mapSize, withMap, withNode, boardModel, pictureKey } from '../../utils/worldPicture.js';
@@ -529,6 +530,8 @@ function focusLast(selector) {
  * chat's world as it stands, to be saved as a world of its own (D96).
  */
 export async function openWorldBuilder({ id = '', fromChat = false } = {}) {
+    // "This chat" is the chat in front: where the extension is still holding another chat's world, it is loaded first (D215).
+    try { await ensureChatState(); } catch (e) { /* the window opens on what there is */ }
     try { await ensureCss('modals'); } catch (e) { /* the sheet failed to load: the window still opens */ }
     build();
     isOpen = true;

@@ -37,6 +37,7 @@ import { SlashCommand } from '../../../slash-commands/SlashCommand.js';
 import { topBarHidden, canHideFlyoutItem, repairFabSettings, rescuedFabSettings, knockMode, fabBoxHidden, SETTINGS_ITEM } from './src/utils/fabGuard.js';
 import { mountFabMenu, mountKnock } from './src/systems/ui/fabMenu.js';
 import { registerAllEvents } from './src/core/events.js';
+import { setChatLoaders, chatLoaded, guardChatState } from './src/core/chatGuard.js';
 import { registerSettingsUIInitializer, ensureSettingsUI } from './src/core/lazyUI.js';
 import { ensureCss, removeCss } from './src/core/cssLoader.js';
 import { onIdle } from './src/core/scheduler.js';
@@ -4866,20 +4867,26 @@ jQuery(async () => {
 
             // Single tracked registration point. Array order preserves the
             // original relative registration order within each event type.
+            // The chat-change handlers, in the order SillyTavern calls them. Kept as a list so that they can be run again
+            // when the extension's data turns out to be another chat's (src/core/chatGuard.js, D215).
+            const chatLoaders = [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, onWorldChatChanged, onCanonChatChanged, onHubChatChanged, onSceneChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged];
+            setChatLoaders(chatLoaders);
             registerAllEvents({
                 // onDiceMessageSent rolls and attaches; refreshDiceInjection then
                 // sets the verdict slot while SillyTavern is still awaiting this
                 // event, before it builds the prompt (GENERATION_STARTED already
                 // fired, before the sent message existed).
-                [event_types.MESSAGE_SENT]: [onDiceMessageSent, onQuestCutMessageSent, refreshDiceInjection, onMessageSent, onWorldMessageSent, onMessageSentVoices, onSceneMessageSent],
+                // guardChatState first in both: a message is rolled for, and a reply written from, the chat in front's data (D215).
+                [event_types.MESSAGE_SENT]: [guardChatState, onDiceMessageSent, onQuestCutMessageSent, refreshDiceInjection, onMessageSent, onWorldMessageSent, onMessageSentVoices, onSceneMessageSent],
                 // onSceneGenerationStarted first: a regenerate takes DES's scene
                 // pictures off the end of the chat before anything here looks at
                 // the last message, and before SillyTavern picks what it replaces.
-                [event_types.GENERATION_STARTED]: [onSceneGenerationStarted, onGenerationStarted, onWorldGenerationStarted, onCanonGenerationStarted, onDialogueGenerationStarted, onHubGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
+                [event_types.GENERATION_STARTED]: [guardChatState, onSceneGenerationStarted, onGenerationStarted, onWorldGenerationStarted, onCanonGenerationStarted, onDialogueGenerationStarted, onHubGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
                 [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onWorldMessageReceived, onCanonMessageReceived, onHubMessageReceived, onMessageReceivedVoices],
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
                 [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, onWorldChatChanged, onCanonChatChanged, onHubChatChanged, onSceneChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
+                // chatLoaded last: the handlers before it have run for the chat in front (src/core/chatGuard.js, D215).
+                [event_types.CHAT_CHANGED]: [...chatLoaders, chatLoaded],
                 [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices, onGlintUserMessageRendered],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
@@ -4924,6 +4931,7 @@ jQuery(async () => {
             onCharacterChanged();
         }
         if (getContext().chatId) {    // a chat with no greeting has no messages yet but still has a world
+            chatLoaded();    // what is loaded here is for the chat that was open as the extension started (D215)
             onWorldChatChanged().catch(err => console.warn('[Dooms Tracker] Live World: the first chat did not load', err));
             try { onSceneChatChanged(); } catch (err) { console.warn('[Dooms Tracker] Scene pictures: the first chat did not load', err); }
             try { onHubChatChanged(); } catch (err) { console.warn('[Dooms Tracker] Hub: the first chat did not load', err); }

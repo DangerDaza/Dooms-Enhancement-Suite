@@ -1229,7 +1229,7 @@ export function atlasCampaignRowHtml(c) {
     const n = c.notice && c.notice.text ? c.notice : null;
     const acts = n && Array.isArray(n.actions) ? n.actions : [];
     const notice = n
-        ? `<div class="dooms-atlas-between dooms-atlas-mixup" role="status"><p><i class="fa-solid fa-circle-info" aria-hidden="true"></i> <span>${e(n.text)}</span></p>${acts.length ? `<p class="dooms-atlas-mixup-acts">${acts.map(a => `<button type="button" class="${a.act === 'scenes' ? 'dooms-atlas-btn is-primary' : 'dooms-atlas-btn'}" data-act="${attr(a.act)}"${a.id ? ` data-id="${attr(a.id)}"` : ''}${a.title ? ` title="${attr(a.title)}"` : ''}${off}>${e(a.label)}</button>`).join('')}</p>` : ''}</div>`
+        ? `<div class="dooms-atlas-between dooms-atlas-mixup" role="status"><p><i class="fa-solid fa-circle-info" aria-hidden="true"></i> <span>${e(n.text)}</span></p>${acts.length ? `<p class="dooms-atlas-mixup-acts">${acts.map(a => `<button type="button" class="${a.primary || a.act === 'scenes' ? 'dooms-atlas-btn is-primary' : 'dooms-atlas-btn'}" data-act="${attr(a.act)}"${a.id ? ` data-id="${attr(a.id)}"` : ''}${a.title ? ` title="${attr(a.title)}"` : ''}${off}>${e(a.label)}</button>`).join('')}</p>` : ''}</div>`
         : '';
     return `${select}${world}${notice}`;
 }

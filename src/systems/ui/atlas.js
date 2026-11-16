@@ -9,6 +9,7 @@
  */
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
 import { ensureCss } from '../../core/cssLoader.js';
+import { ensureChatState } from '../../core/chatGuard.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects, normalizeWorldState } from '../../utils/liveWorld.js';
@@ -20,7 +21,7 @@ import { getBook, setBook, proposeTidy, draftSetup, stopSetup, setupReach, draft
 import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup, applyFill, fillOptions } from '../../utils/atlasSetup.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { describeHooksResult } from '../../utils/questHooks.js';
-import { recordCurrentScene, getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, isLiveWorldOn, loadPack, getPlacesRow, drawPlace, isDrawingPlace, describeDrawResult, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
+import { recordCurrentScene, getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, isLiveWorldOn, loadPack, getPlacesRow, drawPlace, isDrawingPlace, describeDrawResult, WORLD_CHANGED_EVENT, moveChatToWorld, movedFrom, putChatWorldBack } from '../features/liveWorld.js';
 import { sourceProblem } from '../features/imageGen.js';
 import { startTravelCut, getPendingQuestCut, getCompletedQuests, QUESTS_DONE_CHANGED_EVENT } from '../features/questCut.js';
 import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
@@ -107,6 +108,7 @@ let campaignBusy = false; // a campaign is being switched to or made, a world at
 let campaignError = '';   // what that could not do, said on the panel that asked
 let opening = '';         // the world being loaded to be shown
 let followWait = null;    // that load, for whoever must wait for it
+let justMoved = false;    // the chat in front was moved to the campaign's world in this sitting: Put it back is offered (D215)
 let deleting = '';        // the scene whose Delete was pressed and waits for "Delete scene N" or "Keep it" (D197)
 let deletingNow = '';     // the scene being deleted
 let removal = null;       // what deleting the scene asked about would take back (D206): { id, loading } until its log is read, then the plan
@@ -539,6 +541,14 @@ function mixup() {
         return out;
     };
     const whose = (other) => (other.campaign ? `${other.campaignName}'s world` : 'in no campaign');
+    // A chat that carries a world it should not have (it was begun while that one was the world for new chats) is moved
+    // to the campaign's (D215). Not a scene: a scene is its world's.
+    const move = (other) => (mine && !(front && front.scene) ? [{ act: 'chat-move', label: `Move this chat to ${mine.name}`, primary: !other, title: other ? `This chat's world becomes ${mine.name}. What it carries of ${other.name} (its clocks, where its people were, its news) is left behind. It can be put back.` : `This chat's world becomes ${mine.name}: the places it has been to are kept.` }] : []);
+    // Just moved: the way back, while the Atlas is open.
+    if (justMoved && !view.stranger) {
+        const m = movedFrom();
+        if (m) return { text: `This chat was moved here from ${m.name}.`, actions: [{ act: 'chat-move-undo', label: `Put it back in ${m.name}` }] };
+    }
     const against = now ? (mine ? `not ${now.name}'s world (${mine.name})` : `and ${now.name} has no world yet`) : 'and no campaign is on';
 
     // The chat in front is what is shown.
@@ -548,12 +558,10 @@ function mixup() {
         if (!view.stranger) return { text: `This is the chat in front as it stands, not ${mine.name} as its scenes left it.`, actions: [toWorld] };
         if (front) {
             const other = worldRow(front.world.id);
-            return { text: `This is the chat in front: ${front.scene ? `scene ${front.scene} of ` : 'it is in '}${other.name}, ${whose(other)}, ${against}.`, actions: [...fixes(other), toWorld] };
+            return { text: `This is the chat in front: ${front.scene ? `scene ${front.scene} of ` : 'it is in '}${other.name}, ${whose(other)}, ${against}.`, actions: [...move(other), ...fixes(other), toWorld] };
         }
-        // A chat with no world of the player's own: it can be where the campaign's world begins.
-        const empty = untouched(view.world);
-        const begin = empty ? [{ act: 'scenes', label: `Make this chat ${mine.name}'s beginning`, title: `Play as scenes: this chat as it stands becomes what ${mine.name} remembers, and the next scene starts from it` }] : [];
-        return { text: empty ? `This is the chat in front. Nothing has been played in ${mine.name} yet, and this chat is not part of it.` : `This is the chat in front. It is not part of ${mine.name}.`, actions: [...begin, toWorld] };
+        // A chat with no world of the player's own.
+        return { text: `This is the chat in front. It is not part of ${mine.name} yet.`, actions: [...move(null), toWorld] };
     }
     // A world asked for by name is what is shown.
     if (pinned) {
@@ -566,9 +574,9 @@ function mixup() {
     const show = { act: 'front-show', label: 'Show this chat', title: 'The chat in front as it stands: its own map, people and news' };
     if (front) {
         const other = worldRow(front.world.id);
-        return { text: `The chat in front is ${front.scene ? `scene ${front.scene} of ` : 'in '}${other.name}, ${whose(other)}, not this world.`, actions: [...fixes(other), show] };
+        return { text: `The chat in front is ${front.scene ? `scene ${front.scene} of ` : 'in '}${other.name}, ${whose(other)}, not this world.`, actions: [...move(other), ...fixes(other), show] };
     }
-    return { text: `The chat in front is not part of ${mine.name}.`, actions: [show] };
+    return { text: `The chat in front is not part of ${mine.name}.`, actions: [...move(null), show] };
 }
 
 /** The campaign at the head of the sidebar (D213); null with scenes off, where the Atlas is the chat's own map. */
@@ -1611,6 +1619,48 @@ async function useWorld(worldId) {
     if (followWait) await followWait;
 }
 
+/** The chat in front moved to the campaign's world (D215): a chat that carries a world it should not have. */
+async function moveChat() {
+    if (!view.campaign || !view.world || campaignBusy) return;
+    if (midWrite()) return;
+    const to = worldRow(view.world);
+    campaignBusy = true;
+    render();
+    let r;
+    try { r = await moveChatToWorld(view.world); } catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
+    campaignBusy = false;
+    if (!isOpen) return;
+    if (!r.ok) { result = `The chat could not be moved: ${r.error || 'its world could not be loaded'}`; render(); return; }
+    clearOverMap();
+    pinned = '';
+    showFront = null;
+    changing = false;
+    layer = '';
+    justMoved = true;
+    result = `This chat is in ${to.name} now.${r.fresh ? ` What it carried of ${r.fromName} was left behind.` : ''}`;
+    render();
+    if (followWait) await followWait;
+}
+
+/** The chat's world put back as it was before it was moved. */
+async function putChatBack() {
+    if (campaignBusy) return;
+    if (midWrite()) return;
+    campaignBusy = true;
+    render();
+    let r;
+    try { r = await putChatWorldBack(); } catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
+    campaignBusy = false;
+    if (!isOpen) return;
+    justMoved = false;
+    clearOverMap();
+    showFront = null;
+    layer = '';
+    result = r.ok ? `This chat is back in ${r.name}.` : `It could not be put back: ${r.error || 'its world could not be loaded'}`;
+    render();
+    if (followWait) await followWait;
+}
+
 /** A new world made for the campaign that is on, and attached to it. */
 async function makeWorldForCampaign() {
     const c = view.campaign;
@@ -1767,6 +1817,8 @@ function build() {
             if (act === 'front-show') { showFront = true; pinned = ''; campaignError = ''; clearOverMap(); layer = ''; render(); return; }
             // Back to the campaign's own: a world asked for by name is let go; from the chat in front, the world is asked for.
             if (act === 'pin-drop') { if (pinned) pinned = ''; else showFront = false; changing = false; clearOverMap(); layer = ''; render(); if (followWait) await followWait; return; }
+            if (act === 'chat-move') { await moveChat(); return; }
+            if (act === 'chat-move-undo') { await putChatBack(); return; }
             if (act === 'world-change') { changing = true; campaignError = ''; if (folded && isPhone()) setFolded(false); render(); return; }
             if (act === 'world-keep') { changing = false; campaignError = ''; render(); return; }
             if (act === 'world-use') { await useWorld(this.getAttribute('data-id') || ''); return; }
@@ -2150,10 +2202,14 @@ function build() {
  */
 export async function openAtlas({ place = '', name = '', worldId = '', tab: openTab = '', start = false, front = false } = {}) {
     try { await ensureCss('atlas'); } catch (e) { /* the sheet failed to load: the window still opens */ }
+    // What the Atlas reads is the chat in front's: where the extension is still holding another chat's, it is loaded first (D215).
+    let stale = false;
+    try { stale = (await ensureChatState()).reloaded; } catch (e) { stale = false; }
     build();
     isOpen = true;
     pushWindow('atlas');
-    result = '';
+    result = stale ? 'The extension was still holding the chat you had open before. It has been loaded again for this chat.' : '';
+    justMoved = false;
     picked = '';
     pickedPack = null;
     pinned = '';
@@ -2224,6 +2280,7 @@ export function closeAtlas() {
     campaignError = '';
     opening = '';
     followWait = null;
+    justMoved = false;
     deleting = '';
     pickToken++;
     $(`${root()} .dooms-atlas-setup`).prop('hidden', true).empty();

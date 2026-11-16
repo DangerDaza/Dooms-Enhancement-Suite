@@ -2603,5 +2603,85 @@ console.log('\n§31 the campaign decides the world: one campaign, one world, att
     hub.__setRecapTransport(null);
 }
 
+console.log('\n§32 a chat that carries the wrong world is moved to the campaign\'s; the extension\'s data is kept the chat in front\'s (D215)');
+{
+    const guard = await import(`${DES}/src/core/chatGuard.js`);
+    const packWas = extensionSettings.liveWorld.pack;
+    const at = (avatar) => ctxTarget.characters.findIndex(c => c.avatar === avatar);
+    extensionSettings.liveWorld.customPacks.oldland = JSON.stringify({ ...example, id: 'oldland', name: 'Oldland' });
+    extensionSettings.liveWorld.customPacks.newland = JSON.stringify({ id: 'newland', name: 'Newland', version: 1, description: 'Another world.', places: [{ id: 'kabuki', label: 'Kabuki', kind: 'district' }], clocks: [], cast: [], blurb: 'Neon and rain.' });
+    ctxTarget.characterId = at('Wanderer.png');
+    ctxTarget.name2 = 'Wanderer';
+    const here = (where) => { const box = JSON.stringify({ date: { value: 'Saturday' }, time: { start: 'noon', end: 'noon' }, location: { value: where }, weather: { emoji: '☁', forecast: 'grey' } }); state.setLastGeneratedData({ ...state.lastGeneratedData, infoBox: box }); state.setCommittedTrackerData({ ...state.committedTrackerData, infoBox: box }); };
+
+    // A chat begun while another world was the world for new chats.
+    extensionSettings.liveWorld.pack = 'oldland';
+    files.set('Wanderer - begun in the wrong world', { header: { chat_metadata: {} }, messages: [], avatar: 'Wanderer.png', chName: 'Wanderer' });
+    await openPlain('Wanderer - begun in the wrong world');
+    chat.push(user('I step off the train.'));
+    chat.push(ai('Kabuki is loud tonight.'));
+    here('Kabuki');
+    lw.recordCurrentScene();
+    const before = lw.getWorldState();
+    check('(the chat carries the world it was begun in: its clocks, its people\'s places)', before.pack === 'oldland' && Object.keys(before.clocks).length > 0 && Object.keys(before.where).length > 0 && lw.movedFrom() === null);
+    const moved = await lw.moveChatToWorld('newland');
+    const after = lw.getWorldState();
+    check('moved to another world of the player\'s: the chat is that world, seeded anew from it, and nothing of the other is carried', moved.ok && moved.fresh === true && moved.from === 'oldland' && moved.fromName === 'Oldland' && after.pack === 'newland' && Object.keys(after.clocks).length === 0 && Object.keys(after.where).length === 0 && after.sinceLast === 0 && meta.dooms_world.pack === 'newland' && lw.getActivePack().name === 'Newland', JSON.stringify([moved, after.pack, after.clocks, after.where]));
+    check('where the chat stands now is recorded in the world it was moved to, from its last reply', after.visited.length === 1 && /kabuki/i.test(JSON.stringify(after.visited[0])), JSON.stringify(after.visited));
+    check('the world it had is kept beside it once, and named', same(lw.movedFrom() && { pack: lw.movedFrom().pack, name: lw.movedFrom().name }, { pack: 'oldland', name: 'Oldland' }));
+    check('a world it is in already, a world that is not there: refused, nothing changed', (await lw.moveChatToWorld('newland')).ok === false && (await lw.moveChatToWorld('nowhere-at-all')).ok === false && (await lw.moveChatToWorld('')).ok === false && lw.getWorldState().pack === 'newland');
+    const back = await lw.putChatWorldBack();
+    const again = lw.getWorldState();
+    check('Put it back: the chat is the world it was in, as it was', back.ok && back.name === 'Oldland' && again.pack === 'oldland' && same(again.clocks, before.clocks) && same(again.where, before.where) && same(again.visited, before.visited) && lw.movedFrom() === null && (await lw.putChatWorldBack()).ok === false, JSON.stringify([back, again.pack]));
+
+    // From the blank world: what play has built is kept.
+    extensionSettings.liveWorld.pack = 'blank';
+    files.set('Wanderer - in no world', { header: { chat_metadata: {} }, messages: [], avatar: 'Wanderer.png', chName: 'Wanderer' });
+    await openPlain('Wanderer - in no world');
+    chat.push(user('I walk.'));
+    chat.push(ai('The market at Kabuki.'));
+    here('Kabuki');
+    lw.recordCurrentScene();
+    const grown = lw.getWorldState();
+    const carried = await lw.moveChatToWorld('newland');
+    const kept = lw.getWorldState();
+    check('from the blank world the chat is carried over: the places it has been to are kept, and the world\'s own places take them in', grown.pack === 'blank' && grown.visited.length === 1 && carried.ok && carried.fresh === false && kept.pack === 'newland' && kept.visited.length === 1 && kept.visited[0].id === 'kabuki' && same(kept.visited[0].visits, grown.visited[0].visits), JSON.stringify([carried, kept.visited]));
+    extensionSettings.liveWorld.enabled = false;
+    check('with Live World off there is no world to move', (await lw.moveChatToWorld('oldland')).ok === false);
+    extensionSettings.liveWorld.enabled = true;
+    await loaders();
+
+    // The extension's data is the chat in front's.
+    const ran = [];
+    guard.setChatLoaders([() => { ran.push('first'); }, async () => { await wait(8); ran.push('second'); }, () => { throw new Error('one of them fails'); }, () => { ran.push('last'); }]);
+    guard.chatLoaded();
+    check('the chat its handlers last ran for is the chat in front: nothing to do', guard.chatStateIsStale() === false && guard.guardChatState() === undefined && (await guard.ensureChatState({ wait: 0 })).reloaded === false && ran.length === 0);
+    const wasChat = ctxTarget.chatId;
+    ctxTarget.chatId = 'Wanderer - opened and never announced';
+    check('another chat in front, and SillyTavern never reached the handlers: the data is another chat\'s', guard.chatStateIsStale() === true);
+    const warn = console.warn;
+    console.warn = () => {};
+    const [one, two] = await Promise.all([guard.ensureChatState({ wait: 0 }), guard.ensureChatState({ wait: 0 })]);
+    console.warn = warn;
+    check('the handlers are run then, in their order, each waited for, one that fails not stopping the rest; asked twice at once, they run once', one.reloaded === true && two === one && same(ran, ['first', 'second', 'last']) && guard.chatStateIsStale() === false && /opened and never announced/.test(one.now), JSON.stringify([one, ran]));
+    ran.length = 0;
+    ctxTarget.chatId = 'Wanderer - about to be announced';
+    setTimeout(() => guard.chatLoaded(), 30);    // SillyTavern announcing the chat itself, a moment after it swapped it in
+    const waited = await guard.ensureChatState({ wait: 400 });
+    check('SillyTavern is given a moment to announce the chat itself: when it does, nothing is run twice', waited.reloaded === false && ran.length === 0 && guard.chatStateIsStale() === false);
+    const cardWas = ctxTarget.characterId;
+    ctxTarget.characterId = at('Teller.png');
+    check('a chat of the same name under another card is another chat', guard.chatStateIsStale() === true);
+    ctxTarget.characterId = undefined;
+    check('for the moment SillyTavern is reading its cards again the card is not known: the chat\'s name alone decides', guard.chatStateIsStale() === false);
+    ctxTarget.characterId = cardWas;
+    ctxTarget.chatId = undefined;
+    check('with no chat open there is nothing to load', guard.chatStateIsStale() === false && (await guard.ensureChatState({ wait: 0 })).reloaded === false);
+    ctxTarget.chatId = wasChat;
+    guard.setChatLoaders([]);
+    check('(with no handlers given, as in every other part of this file, the guard does nothing)', guard.chatStateIsStale() === false);
+    extensionSettings.liveWorld.pack = packWas;
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

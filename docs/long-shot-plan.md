@@ -1718,3 +1718,64 @@ world left with no narrator of its own); `tools/atlas-browser-test.mjs`
 §5k (the line with its main button, the way to the chat's map from the
 screen that asks for a world). What the Atlas shows is the controller's
 (`src/systems/ui/atlas.js`), run in the real SillyTavern as above.
+
+## 54. A chat that carries the wrong world is moved to the campaign's (2026-11-16, D215)
+
+The owner, with D214 in hand: the Atlas over their Night City chat said
+"This is the chat in front: it is in The Eld, First Descent's world,
+not Nightcity's world (Night City)", with The Eld's date and place at
+its head and The Eld's scenes in its list. "It thinks the chat that I
+am in is my old chat? It doesn't recognize what chat I am currently
+in." Then the World Builder over the same chat: The Eld marked "this
+chat", Night City marked "new chats". "It thinks my night city chat is
+the eld?" And: "the ai in my chat keeps getting context for the eld."
+
+It does, and the Atlas was right to say so: the chat's world is The
+Eld. A chat keeps the world it starts in, and this one started while
+The Eld was the world for new chats. Run in the real SillyTavern: a
+chat begun that way shows that line word for word, and Live World
+sends "[WORLD OF THE ELD: clocks ... Last seen ...]" with every reply
+in it. What D213 and D214 offered for it was the wrong way round for a
+chat like this (switch to The Eld's campaign, or look at Night City
+empty): nothing moved the chat.
+
+One thing in the owner's pictures a chat begun that way does not show:
+the world the Atlas read had The Eld's own story in it (when it last
+advanced, in The Eld's bells), and the date at its head was The Eld's,
+while the chat behind showed Night City's tracker. That is what the
+extension holds for the Eld chat itself. SillyTavern calls an
+extension's chat-change handlers one after another, among every other
+listener's, and waits for each: one that does not finish, anywhere
+before them, and they are never called, so what the extension holds
+stays the last chat's. Whether that happened on the owner's machine was
+not seen (it could not be reached from here); it was made to happen
+here, and the windows then showed the last chat as the one in front.
+Both are put right.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D215 | A chat is moved to the campaign's world with one button; and what the extension holds is checked to be the chat in front's | **Held.** **Move this chat** (`moveChatToWorld`, `src/systems/features/liveWorld.js`). The line under the campaign (D214) offers **Move this chat to Night City** for a chat in front that is not part of the campaign's world and is not a scene (a scene is its world's). From another world of the player's the chat is seeded anew from the world it goes to: the clocks, where its people were and the news it carried are the other world's, and are left behind; where the chat stands now is recorded from its last reply. From the blank world it is carried over as Make this a world carries it: the places it has been to are kept, and the world's own places take them in. The chat's world as it was is kept beside it once, and **Put it back** is offered while the Atlas is open. For a chat in no world of the player's the move is the main button; for a chat in another of their worlds it stands beside that world's campaign and the world shown, none pressed for them, since the Atlas cannot know whether the chat is in the wrong world or the campaign is the wrong one. What is sent with a reply follows at once: the world's lines are the new world's. **The chat in front's data** (`src/core/chatGuard.js`). The extension notes which chat its chat-change handlers last ran to the end for (the card or the group, and the file). Where that matters (the Atlas or the World Builder opened, a message sent, a reply asked for) it checks that this is still the chat in front; when it is not, SillyTavern is given a moment to announce the chat itself, and then the handlers are run, in their order, each waited for. The Atlas says so when it had to ("The extension was still holding the chat you had open before. It has been loaded again for this chat."), and the System Log and the console name both chats. |
+
+What it does not do. Moving a chat moves its world, nothing else: the
+ledger, the quests, the inventory and the tracker it has are the
+chat's own and are not touched. A chat that was begun as a scene of
+another world and has since lost its place in that world's list would
+carry that world's ledger and quests too; whether the owner's does was
+not seen. Nothing tells a chat that is in the wrong world from a chat
+opened under the wrong campaign: both are offered. What stops
+SillyTavern reaching the handlers, where that is what happened, is not
+found or fixed: the handlers are run when it is noticed, and not
+before a window is opened or a message sent. Run in the real
+SillyTavern at a phone's width: a chat begun in The Eld under a
+campaign whose world is Night City, the line and its three buttons,
+what is sent with a reply before and after the move, Put it back, the
+move again, a reload of the page; and a listener put ahead of the
+extension's that never finishes, the last chat's world held, the Atlas
+opened (loaded again, and said so), and the check before a reply.
+
+Tests: `tools/hub-flow-test.mjs` §32 (moved from another world and
+from the blank one, what is kept and what is left, the refusals, Put
+it back; the guard: nothing to do, another chat, the handlers run once
+in order, the moment given to SillyTavern, the same name under another
+card, no card known, no chat); `tools/atlas-browser-test.mjs` §5k (the
+line with the move, the main button, the way back).

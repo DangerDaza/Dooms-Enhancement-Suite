@@ -387,6 +387,75 @@ export async function adoptWorld(id, { ownName = false } = {}) {
     return { ok: true, rebound: bound.rebound };
 }
 
+const MOVED_KEY = 'dooms_world_before_move';    // the chat's world as it was before it was moved to another (D215): one step back
+
+/**
+ * The chat in front given another world (docs/long-shot-plan.md D215): a
+ * chat that carries a world it should not have (it was begun while that
+ * one was the world for new chats, or under another campaign).
+ *
+ * From the blank world the chat is carried over, as Make this a world
+ * carries it: what play has built (the places been to, where people were
+ * last seen) is kept, and the world's own places take them in. From a
+ * world of the player's own it is seeded anew from the world it goes
+ * to: the clocks, the people's places and the news it had are the other
+ * world's, and are not this one's to keep. Its world as it was is kept
+ * beside it once, for Put it back.
+ * @returns {Promise<{ ok: boolean, error?: string, from?: string, fresh?: boolean }>}
+ */
+export async function moveChatToWorld(id) {
+    if (!ready()) return { ok: false, error: 'This chat has no world to move.' };
+    const to = String(id || '').trim();
+    if (!to || to === state.pack) return { ok: false, error: 'The chat is in that world already.' };
+    const r = await loadPack(to, { fresh: true });
+    if (!r.ok) return { ok: false, error: r.errors.join(' ') };
+    if (!ready()) return { ok: false, error: 'The chat changed while its world was being moved.' };
+    const from = state.pack;
+    const before = { pack: from, name: activePack ? activePack.name : from, state: clone(state), at: Date.now() };
+    const fresh = from !== BLANK_PACK_ID;
+    if (chat_metadata && typeof chat_metadata === 'object') chat_metadata[MOVED_KEY] = before;
+    if (fresh) {
+        activePack = r.pack;
+        missingWorld = '';
+        commit(seedWorldState(r.pack), { source: 'world' }, { immediate: true });
+        recordCurrentScene();    // where the chat stands now, from its last reply
+    } else {
+        const bound = rebindStateToPack(state, r.pack);
+        const next = clampClocksToPack({ ...bound.state, pack: r.pack.id, packVersion: r.pack.version || 1, name: '' }, r.pack).state;
+        activePack = r.pack;
+        missingWorld = '';
+        commit(next, { source: 'world' }, { immediate: true });
+    }
+    log(`the chat was moved from "${before.name}" to "${r.pack.name}"`, { fresh });
+    return { ok: true, from, fromName: before.name, fresh };
+}
+
+/** What Put it back would put back: the world the chat was moved from, and when; null when it was not moved, or is not where the move left it. */
+export function movedFrom() {
+    try {
+        const b = chat_metadata && typeof chat_metadata === 'object' ? chat_metadata[MOVED_KEY] : null;
+        return b && typeof b === 'object' && b.pack && b.state && state && b.pack !== state.pack ? { pack: String(b.pack), name: String(b.name || b.pack), at: Number(b.at) || 0 } : null;
+    } catch (e) { return null; }
+}
+
+/** The chat's world put back as it was before it was moved (D215), where that world is still there. */
+export async function putChatWorldBack() {
+    if (!ready()) return { ok: false, error: 'This chat has no world.' };
+    const b = chat_metadata && typeof chat_metadata === 'object' ? chat_metadata[MOVED_KEY] : null;
+    if (!b || typeof b !== 'object' || !b.pack || !b.state) return { ok: false, error: 'There is nothing to put back.' };
+    const r = await loadPack(String(b.pack), { fresh: true });
+    if (!r.ok) return { ok: false, error: r.errors.join(' ') };
+    if (!ready()) return { ok: false, error: 'The chat changed meanwhile.' };
+    const restored = normalizeWorldState(b.state);
+    activePack = r.pack.id === BLANK_PACK_ID ? { ...r.pack, name: restored.name || characterName() } : r.pack;
+    missingWorld = '';
+    delete chat_metadata[MOVED_KEY];
+    commit(restored, { source: 'world' }, { immediate: true });
+    reconcile({ at: 'load' });
+    log(`the chat's world was put back: "${activePack.name}"`);
+    return { ok: true, name: activePack.name };
+}
+
 export function __setDraftTransport(fn) {
     draftTransport = typeof fn === 'function' ? fn : null;
 }
