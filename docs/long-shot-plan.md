@@ -1672,3 +1672,49 @@ the Lore Library's own doings, the Lore Library off, a campaign
 deleted); `tools/atlas-browser-test.mjs` §5k (the head, the line for
 another world, the Atlas asking for a campaign and for a world, Change,
 the refusals).
+
+## 53. The chat you are in is shown while the campaign's world is empty (2026-11-16, D214)
+
+The owner, the day after D213, with two pictures: a chat 125 messages
+long on their Night City narrator card, and the Atlas over it showing
+the campaign's world, Night City, empty ("No scene of this world has
+ended yet: this is where it begins", "Start scene 1"), with no word of
+the chat and no button for it. "I am 125 messages into my night city
+rp and I can't see it in the atlas? Why is this all so complicated?"
+
+D213 made the Atlas show the campaign's world whatever chat is in
+front, and the chat only when it was that world. A chat begun before
+the campaign had its world is not that world: it carries the world it
+started in (the blank one, or another). So the Atlas showed a world
+with nothing in it over a story with everything in it, and the one way
+back to the chat was on a screen that only shows with no campaign on.
+Play as scenes was offered only where the chat could be taken into the
+world shown, and where it could not (its card narrated another world
+from an earlier try) it was not offered and nothing said why.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D214 | The Atlas shows the chat in front while nothing has been played in the campaign's world; either can always be reached from the other; what stands in the way is said | **Held.** **What is shown** (`campaignView`). An ordinary chat in front that is not part of the campaign's world is shown as it stands while nothing has been played in that world: no scene, no memory. An empty world has nothing to show, and the chat is the story so far. Once something has been played in the world, the world is shown, as D213 has it. The player's own choice outlasts both rules until the campaign or its world changes or the Atlas closes. **The line under the campaign** (`mixup`) is there whenever the chat in front is not part of the campaign's world, and says which of the two is shown. With the chat shown: "This is the chat in front. Nothing has been played in Night City yet, and this chat is not part of it.", with **Make this chat Night City's beginning** (Play as scenes: the chat as it stands becomes what the world remembers) as the main button and **Show Night City** beside it. With the world shown: "The chat in front is not part of Night City." and **Show this chat**. A chat of another world of the player's is named with whose it is, and offered that campaign, or to be made this campaign's world (D213), in the same line. The line's ways out are buttons, not links. The screen that asks for a campaign's world has **Show this chat's map for now** as the one that asks for a campaign has. **A card that narrates another world** no longer stands in the way of Play as scenes where every scene gets a narrator card of its own (D209, the default): the world needs no narrator of its own, the chat is taken, kept as scene 0 on its own card, and the card stays the other world's. Where scenes are chats on the world's one card it is refused as before, since the scenes would be chats on another world's card. The panel says who narrates as it is: "Every scene gets a narrator card of its own." **After the chat is taken** it is part of the world, and the Atlas shows the world again. |
+
+What it does not do. The chat is not carried into the campaign's world
+by itself: opening the Atlas changes nothing in a chat, and a chat of
+another story opened under the wrong campaign is shown, not taken. The
+chat shown this way is drawn from its own world (the blank one grows
+from play), so places built into the campaign's world in the World
+Builder are not on its map until the chat is taken into it. Whether the
+owner's chat is in the blank world or in another of their worlds was
+not known when this was built (their computer could not be reached from
+here): both were run. Run in the real SillyTavern at a phone's width:
+a chat begun before the campaign had its world, the Atlas opened on it
+(the chat, the line, the two buttons), the world and back, the chat
+taken as the world's beginning with its card narrating another world,
+the Atlas after; a world that has been played in with a stranger's chat
+in front, and that chat and back; a chat of another of the player's
+worlds while the campaign's is empty.
+
+Tests: `tools/hub-flow-test.mjs` §31 (a chat on a card that narrates
+another world: taken with a card for every scene, refused without, the
+world left with no narrator of its own); `tools/atlas-browser-test.mjs`
+§5k (the line with its main button, the way to the chat's map from the
+screen that asks for a world). What the Atlas shows is the controller's
+(`src/systems/ui/atlas.js`), run in the real SillyTavern as above.

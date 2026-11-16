@@ -1918,9 +1918,12 @@ export function scenesPlan() {
     // One card, one world (D114): a world that has its narrator keeps it; else the chat's card is the narrator, unless it narrates another world.
     const bound = entry && entry.card ? cardOf(world.id) : null;
     const other = bound ? '' : worldOfCard(card.avatar);
-    if (other && other !== world.id) return { ok: false, reason: 'bound-elsewhere', boundTo: other, world, campaign, card: { avatar: card.avatar, name: card.name } };
-    const narrator = bound ? { avatar: bound.avatar, name: bound.name } : { avatar: card.avatar, name: card.name };
-    return { ok: true, reason: '', world, campaign, card: narrator, replaces: !!(entry && entry.memory && entry.memory.takenAt), scenes: entry ? entry.scenes.filter(x => x.id !== ADOPTED_ID).length : 0 };
+    const each = cfg().sceneCards;
+    // With a card for every scene (D209) a world needs no narrator of its own: a chat on a card that narrates another world
+    // is taken all the same, and the card stays that world's (D214). Without, it is refused: the scenes would be chats on it.
+    if (other && other !== world.id && !each) return { ok: false, reason: 'bound-elsewhere', boundTo: other, world, campaign, card: { avatar: card.avatar, name: card.name } };
+    const narrator = bound ? { avatar: bound.avatar, name: bound.name } : other && other !== world.id ? { avatar: '', name: SCENE_NARRATOR_NAME } : { avatar: card.avatar, name: card.name };
+    return { ok: true, reason: '', world, campaign, card: narrator, sceneCards: each, replaces: !!(entry && entry.memory && entry.memory.takenAt), scenes: entry ? entry.scenes.filter(x => x.id !== ADOPTED_ID).length : 0 };
 }
 
 // ─── The campaign's world (D213) ────────────────────────────────────────
@@ -2383,7 +2386,7 @@ export async function commitAdopt({ recap = '', replace = false, continuity = nu
         putEntry(worldId, { ...r.entry, continuity: cont }, { source: 'adopt', world: worldId });
         const mirrored = await mirrorBook(worldId);    // the world's continuity book, made with its first continuity (D189)
         log(`${worldId} is played as scenes from "${chatId()}"`, { made: plan.world.made, replaced: plan.replaces, campaign: plan.campaign ? plan.campaign.id : '', backup: kept.file });
-        return { ok: true, reason: '', worldId, worldName: plan.world.name, made: plan.world.made, card: plan.card.name, replaced: plan.replaces, recap: r.scene.recap, backup: kept.file, continuity: continuity ? changeCounts(continuity) : null, book: mirrored.state === 'ok' ? mirrored.name : '' };
+        return { ok: true, reason: '', worldId, worldName: plan.world.name, made: plan.world.made, card: plan.card.name, sceneCards: !!plan.sceneCards, replaced: plan.replaces, recap: r.scene.recap, backup: kept.file, continuity: continuity ? changeCounts(continuity) : null, book: mirrored.state === 'ok' ? mirrored.name : '' };
     } catch (e) {
         return { ok: false, reason: 'error', errors: [String(e && e.message || e)] };
     } finally {

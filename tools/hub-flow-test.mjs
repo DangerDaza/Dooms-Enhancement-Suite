@@ -2523,6 +2523,21 @@ console.log('\n§31 the campaign decides the world: one campaign, one world, att
     await openPlain('Drifter - a blank one');
     const fresh = hub.scenesPlan();
     check('a chat with no world of the player\'s, in a campaign with none: a new world named after the campaign, under a free name', fresh.ok && fresh.world.made === true && fresh.world.name === 'Gamma' && fresh.world.id === 'gamma' && fresh.campaign.id === 'cC', JSON.stringify(fresh));
+    // A chat on a card that narrates another world (D214): with a card for every scene it is taken all the same.
+    ctxTarget.characterId = at('Teller.png');
+    ctxTarget.name2 = 'Teller';
+    files.set('Teller - on another world\'s card', { header: { chat_metadata: {} }, messages: [], avatar: 'Teller.png', chName: 'Teller' });
+    await openPlain('Teller - on another world\'s card');
+    const onBound = hub.scenesPlan();
+    check('a chat on a card that narrates another world: with a narrator card for every scene the world needs none of its own, and the chat is taken', hub.worldEntry('cardland').card === 'Teller.png' && onBound.ok && onBound.sceneCards === true && onBound.card.avatar === '' && onBound.card.name === 'Narrator' && onBound.world.made === true, JSON.stringify(onBound));
+    extensionSettings.hub.sceneCards = false;
+    const refusedBound = hub.scenesPlan();
+    check('with scenes on the world\'s one card it is refused, as before: the scenes would be chats on a card that is another world\'s', refusedBound.ok === false && refusedBound.reason === 'bound-elsewhere' && refusedBound.boundTo === 'cardland');
+    extensionSettings.hub.sceneCards = true;
+    const takenBound = await hub.commitAdopt({ recap: 'So far.' });
+    const gw = takenBound.ok ? hub.worldEntry(takenBound.worldId) : null;
+    check('taken: the new world has no narrator card of its own, the card stays the other world\'s, and the chat is kept as scene 0 on its own card', takenBound.ok && takenBound.sceneCards === true && gw.card === '' && hub.worldEntry('cardland').card === 'Teller.png' && gw.scenes[0].id === 's0' && gw.scenes[0].card === 'Teller.png' && hub.startPlanFor(takenBound.worldId).ok && hub.startPlanFor(takenBound.worldId).newCard === true, JSON.stringify([takenBound.ok, takenBound.reason, gw && gw.card, gw && gw.scenes[0]]));
+    await hub.attachWorld('cC', '');
     await hub.attachWorld('cA', 'alpha');
     await hub.attachWorld('cB', 'alpha-2');
     lb.activeCampaignId = 'cA';

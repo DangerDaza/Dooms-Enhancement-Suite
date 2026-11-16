@@ -785,7 +785,7 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
         const d = result && typeof result === 'object' ? result : {};
         return `<div class="dooms-atlas-setup-card is-scenes">
             <h3><i class="fa-solid fa-check" aria-hidden="true"></i> ${e(d.worldName || world)} is played as scenes</h3>
-            <p>${d.replaced ? 'Its memory is this chat as it stands now.' : 'This chat as it stands is its memory, and is kept as scene 0.'} ${e(d.card || 'The card')} narrates its scenes, and each scene opens on your map.</p>
+            <p>${d.replaced ? 'Its memory is this chat as it stands now.' : 'This chat as it stands is its memory, and is kept as scene 0.'} ${d.sceneCards ? 'Every scene gets a narrator card of its own' : `${e(d.card || 'The card')} narrates its scenes`}, and each scene opens on your map.</p>
             <p>This chat is unchanged otherwise and can go on being played. A scene starts in a chat of its own and is told what happened here.</p>
             ${d.backup ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> A copy of the chat as it was is saved beside it as <strong>${e(d.backup)}</strong>.</p>` : ''}
             ${d.book ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-book" aria-hidden="true"></i> Where its people stand and what is left open are kept in the lorebook <strong>${e(d.book)}</strong>, in your Lore Library: an entry a person, yours to read and change.</p>` : ''}
@@ -845,7 +845,7 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
         <p>A story played as scenes is many short chats instead of one long one. Every scene starts fresh, on your map, knowing what happened before it.</p>
         <ul class="dooms-atlas-scenes-list">
             <li>${worldLine}</li>
-            <li><strong>${e((p.card && p.card.name) || 'This chat\'s card')}</strong> narrates its scenes.</li>
+            <li>${p.sceneCards ? 'Every scene gets a narrator card of its own, with its openings as the card\'s greetings.' : `<strong>${e((p.card && p.card.name) || 'This chat\'s card')}</strong> narrates its scenes.`}</li>
             <li>This chat as it stands becomes its memory: the tracker, the inventory, the quests, the world, the canon, the hooks and the map.</li>
             <li>This chat is kept as scene 0 and stays an ordinary chat you can go on playing.</li>
             <li>A copy of the chat as it is now is saved beside it first. If the copy cannot be saved, nothing is changed.</li>
@@ -1227,8 +1227,9 @@ export function atlasCampaignRowHtml(c) {
         ? `<p class="dooms-atlas-campaign-world"><span class="dooms-atlas-card-label">World</span> <span class="dooms-atlas-campaign-world-name">${e(c.world.name)}</span> <button type="button" class="dooms-atlas-link" data-act="world-change" title="Point ${attr(now.name)} at another world of yours, in case of a mix-up. The world it has now keeps its scenes and its memory."${off}>Change</button></p>`
         : '';
     const n = c.notice && c.notice.text ? c.notice : null;
+    const acts = n && Array.isArray(n.actions) ? n.actions : [];
     const notice = n
-        ? `<p class="dooms-atlas-between dooms-atlas-mixup" role="status"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> <span>${e(n.text)}</span>${(Array.isArray(n.actions) ? n.actions : []).map(a => ` <button type="button" class="dooms-atlas-link" data-act="${attr(a.act)}"${a.id ? ` data-id="${attr(a.id)}"` : ''}${a.title ? ` title="${attr(a.title)}"` : ''}${off}>${e(a.label)}</button>`).join('')}</p>`
+        ? `<div class="dooms-atlas-between dooms-atlas-mixup" role="status"><p><i class="fa-solid fa-circle-info" aria-hidden="true"></i> <span>${e(n.text)}</span></p>${acts.length ? `<p class="dooms-atlas-mixup-acts">${acts.map(a => `<button type="button" class="${a.act === 'scenes' ? 'dooms-atlas-btn is-primary' : 'dooms-atlas-btn'}" data-act="${attr(a.act)}"${a.id ? ` data-id="${attr(a.id)}"` : ''}${a.title ? ` title="${attr(a.title)}"` : ''}${off}>${e(a.label)}</button>`).join('')}</p>` : ''}</div>`
         : '';
     return `${select}${world}${notice}`;
 }
@@ -1284,7 +1285,7 @@ export function atlasCampaignGateHtml({ campaigns = [], front = null, busy = fal
  * @param {Array<{ id: string, name: string, campaign: string, campaignName: string, scenes: number }>} o.worlds
  * @param {boolean} [o.adopt]   the chat in front can be played as scenes: it is where the world begins
  */
-export function atlasWorldChoiceHtml({ campaign = null, current = null, worlds = [], adopt = false, busy = false, error = '' } = {}) {
+export function atlasWorldChoiceHtml({ campaign = null, current = null, worlds = [], adopt = false, busy = false, error = '', chat = false } = {}) {
     const c = campaign || { id: '', name: 'This campaign' };
     const list = Array.isArray(worlds) ? worlds : [];
     const off = busy ? ' disabled' : '';
@@ -1310,6 +1311,7 @@ export function atlasWorldChoiceHtml({ campaign = null, current = null, worlds =
             ${list.length ? `<h4 class="dooms-atlas-gate-head">${current ? 'Your worlds' : 'Or use a world you have'}</h4><ul class="dooms-atlas-gate-list">${rows}</ul>` : ''}
             ${error ? `<p class="dooms-atlas-gate-error" role="alert">${e(error)}</p>` : ''}
             ${busy ? '<p class="dooms-atlas-gate-busy" role="status"><i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Working…</p>' : ''}
+            ${!current && chat ? `<p class="dooms-atlas-gate-foot"><button type="button" class="dooms-atlas-link" data-act="front-show" title="The chat in front as it stands: its own map, people and news"${off}>Show this chat's map for now</button></p>` : ''}
             ${current ? `<p class="dooms-atlas-gate-foot"><button type="button" class="dooms-atlas-btn" data-act="world-keep"${off}>Keep ${e(current.name)}</button> <button type="button" class="dooms-atlas-link" data-act="world-detach" title="${attr(c.name)} is left with no world; ${attr(current.name)} keeps its scenes and its memory"${off}>Leave ${e(c.name)} without a world</button></p>` : ''}
         </section>`;
 }

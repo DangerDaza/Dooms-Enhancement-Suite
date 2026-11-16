@@ -74,7 +74,9 @@
 .dooms-atlas-campaign-world-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .dooms-atlas-campaign-world .dooms-atlas-link { flex: 0 0 auto; font-size: 0.95em; }
 .dooms-atlas-mixup { border-color: var(--atlas-accent2); }
-.dooms-atlas-mixup .dooms-atlas-link { font-size: 1em; margin-left: 6px; text-decoration: underline; }
+.dooms-atlas-mixup p { margin: 0; }
+.dooms-atlas-mixup-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px !important; }
+.dooms-atlas-mixup-acts .dooms-atlas-btn { font-size: 1em; padding: 5px 9px; }
 /* What the Atlas asks for in place of the tabs (D213): a campaign, or the campaign's world. */
 .dooms-atlas-gate { display: flex; flex-direction: column; gap: 10px; }
 .dooms-atlas-gate h3 { margin: 0; font-size: 1.05em; font-family: var(--atlas-display); color: var(--atlas-text); overflow-wrap: anywhere; }
