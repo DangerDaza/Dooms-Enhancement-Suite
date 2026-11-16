@@ -39,9 +39,9 @@ import {
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
     readConflicts, mergeConflicts, normalizeConflicts,
     ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, worldsByCampaign, loreLibraryOn,
-    packOf, entryUntouched, storyIdsOf, nextStoryId, storyOfChat, lastStoryOf, storiesOf,
+    packOf, entryUntouched, storyIdsOf, nextStoryId, storyOfChat, lastStoryOf, storiesOf, storyPlayedAt,
 } from '../../utils/hub.js';
-import { normalizeBook } from '../../utils/atlas.js';
+import { normalizeBook, bookIsEmpty } from '../../utils/atlas.js';
 import { narratorTexts, countStyle, applyStyle } from '../../utils/styleLaw.js';
 import { continuityDraft, readContinuity, stepDraft, draftChanges, applyContinuity, changeCounts, standingLines, threadLines, hasContinuity } from '../../utils/continuity.js';
 import { continuityBookName, readBook, planBook, trackWritten, forgetBook, renameBook } from '../../utils/continuityBook.js';
@@ -214,6 +214,51 @@ export function storyInFront() {
         const card = chatCard();
         return st && st.pack ? storyOfChat(store().worlds, String(st.pack), chatId(), card ? card.avatar : '') : '';
     } catch (e) { return ''; }
+}
+
+// ─── The world's one map (D217) ─────────────────────────────────────────
+//
+// A world's stories share the world as it is built, and its map: the
+// markers placed, made and named, the regions, the roads, the land. The
+// map is kept by the world's id in the hub's store, not in a chat and not
+// in a story's memory, so a marker put down in one story is there in the
+// others, between scenes and in every chat of the world.
+
+/** Whether an id is one of the player's own worlds (not the blank one, not the template). */
+export function isOwnWorld(packId) {
+    const id = String(packId || '');
+    return !!id && ownWorlds(extensionSettings)[id] !== undefined;
+}
+
+/**
+ * The world's map; null when it has none yet. From before the map was the
+ * world's: the map of the story played last that has one is taken as it
+ * (kept from the next save on).
+ */
+export function worldMap(packId) {
+    const pack = packOf(packId);
+    if (!isOwnWorld(pack)) return null;
+    const s = store();
+    if (!s.maps || typeof s.maps !== 'object') s.maps = {};
+    if (s.maps[pack]) return JSON.parse(JSON.stringify(s.maps[pack]));
+    const ids = storyIdsOf(s.worlds, pack).sort((a, b) => storyPlayedAt(s.worlds[b]) - storyPlayedAt(s.worlds[a]));
+    for (const id of ids) {
+        const m = s.worlds[id].memory;
+        const b = m && m.stores ? m.stores.dooms_atlas : null;
+        if (b && !bookIsEmpty(b)) { s.maps[pack] = normalizeBook(b); return JSON.parse(JSON.stringify(s.maps[pack])); }
+    }
+    return null;
+}
+
+/** The world's map replaced, for all its stories and every chat of it. False for a world that is not the player's own. */
+export function setWorldMap(packId, book) {
+    const pack = packOf(packId);
+    if (!isOwnWorld(pack)) return false;
+    const s = store();
+    if (!s.maps || typeof s.maps !== 'object') s.maps = {};
+    s.maps[pack] = normalizeBook(book);
+    saveStore({ source: 'map', world: pack });
+    return true;
 }
 
 /** The worlds the hub can play: the user's own (the blank world and the template are not bound). */

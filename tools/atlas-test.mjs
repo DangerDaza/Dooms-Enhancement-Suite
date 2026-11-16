@@ -20,6 +20,7 @@ import {
     atlasModel, distanceBetween, travelHours, describeLength, describeTime, describeDistance,
     filterMarkers, kindCounts, withSpot, labelSegments, roomKey, foldPlaces,
     withWorld, roadAsDrawn, describeRoad, normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, territoryCells, territoryShades, landmassOutline, territoryAt, pointInPolygon, wrapInRegion, TERRITORY_RADIUS, toggleRoad, setRoadTime, routeBetween, describeJourney, CROSS_COUNTRY, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem, landFrame, landTerrain, edgeDistance, spotOnLand, journeyGap,
+    rememberPlaced, bookIsEmpty,
 } from '../src/utils/atlas.js';
 import { generateWorld, WORLD_SIZES } from '../src/utils/worldGen.js';
 
@@ -753,6 +754,32 @@ console.log('\n§9 the clean-up pass (D155)');
     for (const item of r.items) book = applyTidyItem(book, item);
     const after = atlasModel({ pack: p, state, book });
     check('approved: the duplicate is merged, the non-place deleted, the rest untouched', same(book.merged, { 'loc:burned-mill-ruins': 'loc:the-burnt-mill' }) && same(book.gone, ['loc:somewhere-dark']) && after.all.length === m.all.length - 2 && same(after.tray.find(x => x.id === 'loc:the-burnt-mill').names, [{ id: 'loc:burned-mill-ruins', label: 'Burned mill ruins' }]) && same(after.deleted, [{ id: 'loc:somewhere-dark', label: 'Somewhere dark' }]));
+}
+
+console.log('\nthe map is the world\'s: a place one story found and placed is there for the others (D217)');
+{
+    const eq = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+    const pack = normalizePack({ id: 'night-city', name: 'Night City', version: 1, places: [{ id: 'kabuki', label: 'Kabuki', kind: 'district' }], clocks: [], cast: [] }).pack;
+    const storyA = { visited: [{ id: 'loc:the-afterlife', label: 'The Afterlife', visits: ['m1'] }, { id: 'loc:lizzies-bar', label: "Lizzie's Bar", visits: ['m2'] }], where: {} };
+    const storyB = { visited: [], where: {} };
+    check('a book with nothing in it is empty; one with a marker placed is not', bookIsEmpty(null) && bookIsEmpty({}) && bookIsEmpty(normalizeBook({ spots: {} })) && !bookIsEmpty(placeAt(null, 'kabuki', { x: 1, y: 1 })));
+    let book = placeAt(placeAt(null, 'loc:the-afterlife', { x: 3, y: 4 }), 'kabuki', { x: 0, y: 0 });
+    const drawnA = atlasModel({ pack, state: storyA, book });
+    book = rememberPlaced(book, drawnA);
+    check('a place the story named, once it is on the map, is written into the book by its name; one of the world\'s own, and one still in the tray, are not', eq(book.known.map(k => [k.id, k.label]), [['loc:the-afterlife', 'The Afterlife']]), JSON.stringify(book.known));
+    const seenB = atlasModel({ pack, state: storyB, book });
+    const there = seenB.markers.find(x => x.id === 'loc:the-afterlife');
+    check('another story of the world, which has not been there, has it on its map where it was put, not as a place it has visited', !!there && there.label === 'The Afterlife' && there.x === 3 && there.y === 4 && there.visited === false && !seenB.tray.some(t => t.id === 'loc:the-afterlife'), JSON.stringify(seenB.markers.map(x => [x.id, x.visited])));
+    check('a place the first story has not put on the map is not on the other\'s', !seenB.markers.some(x => x.id === 'loc:lizzies-bar') && !seenB.tray.some(t => t.id === 'loc:lizzies-bar'));
+    const againA = atlasModel({ pack, state: storyA, book });
+    check('the story that found it has it once, as a place it has been to', againA.markers.filter(x => x.id === 'loc:the-afterlife').length === 1 && againA.markers.find(x => x.id === 'loc:the-afterlife').visited === true);
+    const renamed = rememberPlaced(editMarker(book, 'loc:the-afterlife', { label: 'The Afterlife (the morgue)' }), againA);
+    check('renamed in one story, it carries the new name in the other', atlasModel({ pack, state: storyB, book: renamed }).markers.find(x => x.id === 'loc:the-afterlife').label === 'The Afterlife (the morgue)', JSON.stringify(renamed.known));
+    const kept = rememberPlaced(placeAt(book, 'kabuki', { x: 9, y: 9 }), seenB);
+    check('a map saved from the story that has not been there keeps it', eq(kept.known.map(k => k.id), ['loc:the-afterlife']));
+    const off = rememberPlaced(unplace(book, 'loc:the-afterlife'), againA);
+    check('taken off the map again, it is forgotten: the other story no longer has it', off.known === undefined && !atlasModel({ pack, state: storyB, book: off }).markers.some(x => x.id === 'loc:the-afterlife'));
+    check('what is kept is made safe: only places the story named, once each, and only while they have a spot', eq(normalizeBook({ spots: { 'loc:a': { x: 1, y: 1 } }, known: [{ id: 'loc:a', label: 'A' }, { id: 'loc:a', label: 'Again' }, { id: 'loc:b', label: 'No spot' }, { id: 'kabuki', label: 'Not a story place' }, null] }).known, [{ id: 'loc:a', label: 'A' }]));
 }
 
 console.log(failures ? `\n${failures} failure(s)` : '\nall pass');

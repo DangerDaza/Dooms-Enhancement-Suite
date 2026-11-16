@@ -19,23 +19,39 @@ import { stripSceneNoise } from '../../utils/liveWorld.js';
 import { chatLines, chunkLines, recentLines, buildScanPrompt, parseScan, mergeScans, buildSetupPrompt, parseSetup, SETUP_LIMITS, buildFillPrompt, parseFill } from '../../utils/atlasSetup.js';
 import { buildNamesPrompt, parseNames } from '../../utils/atlasWorld.js';
 import { chatArray, cardOfTheChat, loreOfTheChat, playerNames } from './liveWorld.js';
-import { carrySceneBook } from './hub.js';
+import { carrySceneBook, isOwnWorld, worldMap, setWorldMap } from './hub.js';
 
 const META_KEY = 'dooms_atlas';
 export const ATLAS_BOOK_CHANGED_EVENT = 'dooms:atlas-book-changed';
 
 /** This chat's book, made safe; an empty one when the chat has none. */
+/** The world the chat in front is in, as its metadata says; '' when it has none. */
+function chatWorld() {
+    const w = chat_metadata && typeof chat_metadata === 'object' ? chat_metadata.dooms_world : null;
+    return w && typeof w === 'object' && typeof w.pack === 'string' ? w.pack : '';
+}
+
+/**
+ * The map's book for the chat in front. A chat of one of the player's own
+ * worlds reads the world's one map (D217), shared by its stories and its
+ * chats; until that world has one, and in the blank world, the chat's own.
+ */
 export function getBook() {
     const raw = chat_metadata && typeof chat_metadata === 'object' ? chat_metadata[META_KEY] : null;
+    try {
+        const pack = chatWorld();
+        if (pack && isOwnWorld(pack)) { const shared = worldMap(pack); if (shared) return normalizeBook(shared); }
+    } catch (e) { /* the hub is away: the chat's own */ }
     return normalizeBook(raw);
 }
 
-/** The book replaced and saved with the chat; false when no chat's metadata is there to keep it. */
+/** The book replaced and saved: with the chat, and, in one of the player's own worlds, as the world's map (D217). False when no chat's metadata is there to keep it. */
 export function setBook(book) {
     if (!chat_metadata || typeof chat_metadata !== 'object') return false;
     chat_metadata[META_KEY] = normalizeBook(book);
     try { saveChatDebounced(); } catch (e) { /* no chat open */ }
-    try { carrySceneBook(chat_metadata[META_KEY]); } catch (e) { /* not a scene, or the hub is away: the chat keeps it */ }    // in a scene being played, the world has it at once (D173)
+    try { const pack = chatWorld(); if (pack && isOwnWorld(pack)) setWorldMap(pack, chat_metadata[META_KEY]); } catch (e) { /* the hub is away: the chat keeps it */ }
+    try { carrySceneBook(chat_metadata[META_KEY]); } catch (e) { /* not a scene, or the hub is away: the chat keeps it */ }    // in a scene being played, its story's memory has it as well (D173)
     try { window.dispatchEvent(new CustomEvent(ATLAS_BOOK_CHANGED_EVENT)); } catch (e) { /* no window (tests) */ }
     return true;
 }

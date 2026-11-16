@@ -325,7 +325,45 @@ export function normalizeBook(raw) {
     const scales = {};    // a layer's own scale
     if (r.scales && typeof r.scales === 'object') for (const [id, sc] of Object.entries(r.scales)) { if (idOk(id) && ATLAS_SCALES[sc]) scales[id] = sc; }
     const world = normalizeWorldSpec(r.world);    // the generated world the top map is drawn on (D182): what it is made from, never its shapes
-    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', ground: GROUND_IDS.has(r.ground) ? r.ground : '', drawn: r.drawn === true, spots, inside, scales, grounds, roads, cut, roadHours, gone, merged, made, edits, ...(world ? { world } : {}) };
+    // Places a story named that were put on the map (D217): the map is the world's, shared by its stories, so a place
+    // one story found and placed is on the map for the others, which have not been there. Kept by its id and its name.
+    const known = [];
+    const knownSeen = new Set();
+    for (const k of Array.isArray(r.known) ? r.known : []) {
+        if (!k || typeof k !== 'object' || !idOk(k.id) || !k.id.startsWith('loc:') || knownSeen.has(k.id) || !spots[k.id]) continue;
+        knownSeen.add(k.id);
+        known.push({ id: k.id, label: clean(k.label, 80) || k.id.slice(4), ...(cleanKind(k.kind) ? { kind: cleanKind(k.kind) } : {}) });
+        if (known.length >= 600) break;
+    }
+    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', ground: GROUND_IDS.has(r.ground) ? r.ground : '', drawn: r.drawn === true, spots, inside, scales, grounds, roads, cut, roadHours, gone, merged, made, edits, ...(known.length ? { known } : {}), ...(world ? { world } : {}) };
+}
+
+/** Whether a book holds nothing: no marker placed or made, nothing renamed, merged, removed or drawn, no scale chosen. */
+export function bookIsEmpty(book) {
+    return JSON.stringify(normalizeBook(book)) === JSON.stringify(normalizeBook(null));
+}
+
+/**
+ * The story's own places that are on the map, written into the book by
+ * name (D217): a place the story named, once it is placed, is on the
+ * world's map for every story of the world. `model` is the map as it was
+ * drawn (its `all`: every marker with its id, name and kind). A place
+ * taken off the map again is forgotten.
+ */
+export function rememberPlaced(book, model) {
+    const b = normalizeBook(book);
+    const all = model && Array.isArray(model.all) ? model.all : [];
+    const had = new Map((b.known || []).map(k => [k.id, k]));
+    const known = [];
+    for (const id of Object.keys(b.spots)) {
+        if (!id.startsWith('loc:')) continue;
+        const m = all.find(x => x && x.id === id);    // a `loc:` id is a place the story named: the world's own have their own ids, the ones made by hand `pin:`
+        const edit = b.edits[id] || {};
+        if (m) known.push({ id, label: edit.label || m.label || id.slice(4), ...((edit.kind || m.kind) ? { kind: edit.kind || m.kind } : {}) });
+        else if (had.has(id)) known.push({ ...had.get(id), ...(edit.label ? { label: edit.label } : {}), ...(edit.kind ? { kind: edit.kind } : {}) });
+    }
+    const { known: _old, ...rest } = b;
+    return normalizeBook(known.length ? { ...rest, known } : rest);
 }
 
 /** A marker put at a spot (or moved there). With `layer` given, on that place's map ('' = the top map): what is dropped on a map belongs to it (D156). */
@@ -1285,7 +1323,10 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
     };
     const named = new Map();    // a marker made by hand -> the story's locations that are it
     const story = [];
-    for (const sp of storyPlaces(pack, state)) {
+    // This story's own places, and the ones another story of the world found and put on the map (D217).
+    const mine = storyPlaces(pack, state);
+    const theirs = (bk.known || []).filter(k => bk.spots[k.id] && !ids.has(k.id) && !mine.some(x => x.id === k.id)).map(k => ({ id: k.id, label: k.label, image: '' }));
+    for (const sp of [...mine, ...theirs]) {
         const pin = bk.merged[sp.id] ? '' : pinFor(sp.label);    // what the player (or the set-up) merged by hand stands as merged
         if (!pin) { story.push(sp); continue; }
         alias.set(sp.id, pin);

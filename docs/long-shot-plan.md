@@ -1834,3 +1834,44 @@ none, the campaign and the D menu, Settings' lines), and §9, §23, §24,
 or expected a world given to a new chat; `tools/live-world-flow-test.mjs`
 (Re-seed); `tools/atlas-browser-test.mjs` §5k (the list of stories, the
 panel's word).
+
+## 56. The map is the world's: one map for all its stories (2026-11-16, D217)
+
+The owner, asked what two stories of a world should share: "Built
+world and the map": the world as the World Builder has it, and one
+Atlas map, so that "markers you place or name in one storyline appear
+in the others"; what happens, where people are and everything else
+stay each story's own.
+
+The map's book (where markers stand, the ones made by hand, the names
+and kinds changed, the regions, the roads, the land) was kept with a
+chat and copied: into a story's memory at an End, from there into the
+next scene's chat, and back. Two stories of a world had two maps.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D217 | A world has one map, kept with the world; a place a story found, once it is put on the map, is on it for every story | **Held.** **Where it is kept** (`worldMap`, `setWorldMap`, `src/systems/features/hub.js`): by the world's id in the hub's store (`maps`), not in a chat and not in a story's memory. A chat of one of the player's own worlds reads that map and writes it (`getBook`, `setBook`, `src/systems/features/atlasBook.js`); so does the Atlas between scenes. A marker put down in one story's scene is there at once in another story's chat, in a chat of the world that is part of no story, and between scenes. A chat in the blank world keeps its own map, as before. **Between scenes** the map is saved whatever scene of whatever story is being played: the refusal D173 needed ("the map is changed there") is gone, since there is one map to change. **From before**: a world with no map of its own yet takes the map of its story played last that has one, the first time it is asked for; a chat's own copy and a story's copy are left where they are and no longer read once the world has its map. **A place a story named** is that story's (it is on the map because the story has been there). Put on the map, it is written into the map by its id and its name (`rememberPlaced`, `known`, `src/utils/atlas.js`), and the other stories of the world have it as a marker where it was put, not as a place they have visited; renamed, it carries the new name there; taken off the map, it is forgotten. A place still waiting in the list of one story is not shown to the others. |
+
+What it does not do. Where people are, where the party is, which places
+have been visited and what is said about a place are each story's own:
+the same marker shows different faces and a different "visited" in two
+stories. Two stories that each name a place of the same name share its
+spot; two that name one place differently have two markers until they
+are merged by hand. Changes made at the same moment in two browser tabs
+are last-write-wins, as any setting is. A world that is not one of the
+player's own (the example, the blank world) keeps its map with the chat
+or the story as before. The copies of the map still carried into a
+scene's chat and into a story's memory are written and never read where
+the world has its own; they are not removed. Run in the real
+SillyTavern: two stories of one world; the world's places put on the
+map from the second story between scenes, seen placed from the first
+story's chat; a marker added with the pin tool in the first, seen in the
+second's list and on its map.
+
+Tests: `tools/atlas-test.mjs` (an empty book, a story's place written
+in by name when placed, seen by a story that has not been there, not
+doubled for the one that has, renamed, kept by a save from the other
+story, forgotten when taken off, made safe); `tools/hub-flow-test.mjs`
+§34 (made in one story's chat and read in the other's, both ways, in a
+chat part of no story, in a scene, a story's own place put on the map,
+the blank world's own map, a world from before).

@@ -13,7 +13,7 @@ import { ensureChatState } from '../../core/chatGuard.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects, normalizeWorldState } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, ATLAS_SCALES, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad, setRoadTime, describeJourney, describeLength, describeTime, travelHours, territoryAt, spotOnLand, normalizeBook, journeyGap, withWorld, describeRoad , labelSegments } from '../../utils/atlas.js';
+import { atlasModel, rememberPlaced, describeDistance, ATLAS_KINDS, ATLAS_SCALES, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad, setRoadTime, describeJourney, describeLength, describeTime, travelHours, territoryAt, spotOnLand, normalizeBook, journeyGap, withWorld, describeRoad , labelSegments } from '../../utils/atlas.js';
 import { worldGenState, worldGenDefaults, planWorldGen, applyWorldGen, worldReach, landsToName, applyNames } from '../../utils/atlasWorld.js';
 import { randomSeed, WORLD_SHAPES } from '../../utils/worldGen.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
@@ -30,7 +30,7 @@ import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFac
 import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml, atlasCampaignGateHtml, atlasWorldChoiceHtml } from './atlasViews.js';
 import { isCanonOn } from '../features/canon.js';
 import { isVoicesEnabled, getEngine, getEngineIfLoaded, unlockVoicesAudio } from '../voices/voiceBoot.js';
-import { lastScenePresent, sceneAway, deletePlan, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, campaignNow, campaignsDecide, campaignList, worldOfCampaign, worldsWithCampaigns, worldStories, lastStory, storyInFront, attachWorld, makeCampaignWorld, switchCampaign, makeCampaign, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
+import { lastScenePresent, sceneAway, deletePlan, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, campaignNow, campaignsDecide, campaignList, worldOfCampaign, worldsWithCampaigns, worldStories, lastStory, storyInFront, worldMap, setWorldMap, attachWorld, makeCampaignWorld, switchCampaign, makeCampaign, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
 import { describeStartResult, describeEndResult, describeDeleteResult, gapOf, hubConfig, packOf } from '../../utils/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
@@ -125,14 +125,23 @@ function theState() {
 
 /** The map's book as the Atlas draws it: the chat's, or between scenes the world's own copy. */
 function theBook() {
-    return between() ? normalizeBook(source.memory.stores.dooms_atlas) : getBook();
+    if (!between()) return getBook();
+    // Between scenes: the world's one map (D217), shared by its stories; from before it had one, the story's own copy.
+    let shared = null;
+    try { shared = worldMap(packOf(source.worldId)); } catch (e) { shared = null; }
+    return normalizeBook(shared || source.memory.stores.dooms_atlas);
 }
 
 /** The book saved where it was read from. '' when it was; else why not, in words. */
 function saveTheBook(next) {
-    if (!between()) return setBook(next) ? '' : 'The map could not be saved: no chat is open.';
-    const r = setWorldBook(source.worldId, next, { pack: picked ? pickedPack : null });    // a picked world no scene has ended in begins its memory with its map (D194)
-    if (r.ok) { source = { ...source, memory: { ...source.memory, stores: { ...source.memory.stores, dooms_atlas: normalizeBook(next) } } }; return ''; }
+    // A place the story named, once it is on the map, is on it for every story of the world (D217).
+    let book = next;
+    try { book = rememberPlaced(next, model); } catch (e) { book = next; }
+    if (!between()) return setBook(book) ? '' : 'The map could not be saved: no chat is open.';
+    // Between scenes the map is the world's own (D217): saved there, whatever scene of whatever story is being played.
+    if (setWorldMap(packOf(source.worldId), book)) return '';
+    const r = setWorldBook(source.worldId, book, { pack: picked ? pickedPack : null });    // a world that is not the player's own keeps it in its memory, as before (D173, D194)
+    if (r.ok) { source = { ...source, memory: { ...source.memory, stores: { ...source.memory.stores, dooms_atlas: normalizeBook(book) } } }; return ''; }
     if (r.reason === 'scene-open') return `Scene ${sceneNumber(r.scene.id)} is being played: the map is changed there. "Go to it" is under the world's name.`;
     return 'The map could not be saved: this world has no memory yet.';
 }

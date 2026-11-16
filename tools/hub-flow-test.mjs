@@ -2800,5 +2800,72 @@ console.log('\n§33 a world\'s stories: scenes belong to one chat\'s story, the 
     hub.__setRecapTransport(null);
 }
 
+console.log('\n§34 the map is the world\'s: one map for all its stories and every chat of it (D217)');
+{
+    const atlasBook = await import(`${DES}/src/systems/features/atlasBook.js`);
+    const A = await import(`${DES}/src/utils/atlas.js`);
+    const W = 'storyland';
+    const W2 = 'storyland~2';
+    const packWas = extensionSettings.liveWorld.pack;
+    const at = (avatar) => ctxTarget.characters.findIndex(c => c.avatar === avatar);
+    const on = async (avatar, name, file) => { ctxTarget.characterId = at(avatar); ctxTarget.name2 = name; await openFile(file); };
+    const pinsOf = (book) => book.made.map(m => m.label);
+
+    // The first story's chat: a marker made there.
+    await on('Wanderer.png', 'Wanderer', 'Wanderer - the first story');
+    check('(the world has no map of its own yet)', hub.worldMap(W) === null || pinsOf(hub.worldMap(W)).length === 0);
+    const made = A.addPin(atlasBook.getBook(), { label: 'The Afterlife', x: 2, y: 3 });
+    check('a marker made in one story\'s chat is saved as the world\'s map', atlasBook.setBook(made.book) && same(pinsOf(hub.worldMap(W)), ['The Afterlife']) && same(pinsOf(hub.worldMap(W2)), ['The Afterlife']));
+    // The second story's chat.
+    await on('Drifter.png', 'Drifter', 'Drifter - the second story');
+    const seen = atlasBook.getBook();
+    check('the other story\'s chat has it on its map, where it was put', same(pinsOf(seen), ['The Afterlife']) && same(seen.spots[made.id], { x: 2, y: 3 }), JSON.stringify([pinsOf(seen), seen.spots]));
+    atlasBook.setBook(A.addPin(seen, { label: "Lizzie's Bar", x: 5, y: 5 }).book);
+    await on('Wanderer.png', 'Wanderer', 'Wanderer - the first story');
+    check('and what is made there is on the first story\'s', same(pinsOf(atlasBook.getBook()), ['The Afterlife', "Lizzie's Bar"]));
+    // A chat of the world that is part of no story.
+    await openFile('Wanderer - just a chat');
+    check('a chat of the world that is part of no story has the same map', lw.getWorldState().pack === W && same(pinsOf(atlasBook.getBook()), ['The Afterlife', "Lizzie's Bar"]));
+    // A scene of a story: the chat it is started in is given the map as it stands.
+    const open2 = hub.worldEntry(W2).scenes.find(x => x.id !== 's0' && x.chat && files.has(x.chat));
+    if (open2) { ctxTarget.characterId = ctxTarget.characters.findIndex(c => c.avatar === (open2.card || 'Drifter.png')); await openFile(open2.chat); }
+    check('a scene of a story reads the world\'s map as it stands now, not the copy it was started with', !!open2 && !!hub.currentScene() && hub.currentScene().worldId.split('~')[0] === W && !same(pinsOf(meta.dooms_atlas || { made: [] }), ['The Afterlife', "Lizzie's Bar"]) && same(pinsOf(atlasBook.getBook()), ['The Afterlife', "Lizzie's Bar"]), JSON.stringify([open2 && open2.chat, pinsOf(atlasBook.getBook())]));
+
+    // A place a story named, put on the map: on the other story's map too.
+    await on('Wanderer.png', 'Wanderer', 'Wanderer - the first story');
+    const box = JSON.stringify({ date: { value: 'Day 3' }, time: { start: 'noon', end: 'noon' }, location: { value: 'The Coyote Cojo' }, weather: { emoji: '☁', forecast: 'grey' } });
+    state.setLastGeneratedData({ ...state.lastGeneratedData, infoBox: box });
+    state.setCommittedTrackerData({ ...state.committedTrackerData, infoBox: box });
+    chat.push({ is_user: false, name: 'Wanderer', mes: 'The Coyote Cojo is loud.', extra: {} });
+    lw.recordCurrentScene();
+    const packS = lw.getActivePack();
+    const drawn = A.atlasModel({ pack: packS, state: lw.getWorldState(), book: atlasBook.getBook() });
+    const found = drawn.all.find(x => /coyote/i.test(x.label));
+    check('(the first story has been to a place the world does not have)', !!found && found.id.startsWith('loc:'), JSON.stringify(drawn.all.map(x => x.id)));
+    atlasBook.setBook(A.rememberPlaced(A.placeAt(atlasBook.getBook(), found.id, { x: 7, y: 1 }), drawn));
+    await on('Drifter.png', 'Drifter', 'Drifter - the second story');
+    const other = A.atlasModel({ pack: lw.getActivePack(), state: lw.getWorldState(), book: atlasBook.getBook() });
+    const there = other.markers.find(x => x.id === found.id);
+    check('put on the map in the first story, it is on the second story\'s map, which has not been there', !!there && /coyote/i.test(there.label) && there.x === 7 && there.y === 1 && there.visited === false, JSON.stringify(other.markers.map(x => [x.id, x.visited])));
+
+    // A chat in the blank world keeps its own map.
+    extensionSettings.liveWorld.pack = 'blank';
+    files.set('Wanderer - blank and its own map', { header: { chat_metadata: {} }, messages: [], avatar: 'Wanderer.png', chName: 'Wanderer' });
+    ctxTarget.characterId = at('Wanderer.png');
+    await openPlain('Wanderer - blank and its own map');
+    atlasBook.setBook(A.addPin(atlasBook.getBook(), { label: 'Only here', x: 1, y: 1 }).book);
+    check('a chat in the blank world keeps its own map, and the world\'s is not touched by it', same(pinsOf(atlasBook.getBook()), ['Only here']) && same(pinsOf(meta.dooms_atlas), ['Only here']) && same(pinsOf(hub.worldMap(W)), ['The Afterlife', "Lizzie's Bar"]) && hub.worldMap('blank') === null && hub.setWorldMap('blank', {}) === false && hub.isOwnWorld('blank') === false && hub.isOwnWorld(W) === true);
+
+    // From before the map was the world's: the map a story's memory holds is taken as the world's.
+    extensionSettings.liveWorld.customPacks.oldmapland = JSON.stringify({ ...example, id: 'oldmapland', name: 'Oldmapland' });
+    const oldBook = A.addPin(null, { label: 'From before', x: 4, y: 4 }).book;
+    extensionSettings.hub.worlds.oldmapland = JSON.parse(JSON.stringify({ ...hub.worldEntry(W), memory: { ...hub.worldEntry(W).memory, stores: { ...hub.worldEntry(W).memory.stores, dooms_atlas: oldBook } }, continuity: undefined }));
+    check('a world from before has the map its story remembers, as the world\'s', same(pinsOf(hub.worldMap('oldmapland')), ['From before']) && same(pinsOf(extensionSettings.hub.maps.oldmapland), ['From before']));
+    delete extensionSettings.hub.worlds.oldmapland;
+    delete extensionSettings.hub.maps.oldmapland;
+    delete extensionSettings.liveWorld.customPacks.oldmapland;
+    extensionSettings.liveWorld.pack = packWas;
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

@@ -274,8 +274,10 @@ export function normalizeWorldEntry(raw) {
 /** extensionSettings.hub made safe: the rules and every world's entry. */
 export function normalizeHub(raw) {
     const r = isObj(raw) ? raw : {};
-    const out = { v: 1, ...hubConfig({ hub: r }), worlds: {} };
+    const out = { v: 1, ...hubConfig({ hub: r }), worlds: {}, maps: {} };
     if (isObj(r.worlds)) for (const [id, w] of Object.entries(r.worlds)) { const k = clean(id, 70); if (k) out.worlds[k] = normalizeWorldEntry(w); }    // a story's id is its world's and a number (D216)
+    // A world's one map (D217), by the world's id: shared by its stories and by every chat of it.
+    if (isObj(r.maps)) for (const [id, b] of Object.entries(r.maps)) { const k = clean(id, 60); if (k && isObj(b)) out.maps[k] = normalizeBook(b); }
     return out;
 }
 
