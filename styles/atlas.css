@@ -68,7 +68,7 @@
 /* The campaign (D213): the Lore Library's active campaign decides the world the Atlas shows. Its row, the world it is attached to, and a word when another world is in front. */
 .dooms-atlas-world-pick { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; }
 .dooms-atlas-world-pick .dooms-atlas-card-label { flex: 0 0 4.6em; margin: 0; }
-.dooms-atlas-campaign-select { flex: 1 1 auto; min-width: 0; appearance: auto; font: inherit; font-size: 0.82em; padding: 4px 6px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
+.dooms-atlas-campaign-select, .dooms-atlas-story-select { flex: 1 1 auto; min-width: 0; appearance: auto; font: inherit; font-size: 0.82em; padding: 4px 6px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
 .dooms-atlas-campaign-world { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 0; font-size: 0.82em; color: var(--atlas-text); }
 .dooms-atlas-campaign-world .dooms-atlas-card-label { flex: 0 0 4.6em; margin: 0; font-size: 0.9em; }
 .dooms-atlas-campaign-world-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }

@@ -18,7 +18,7 @@ import { renderImage, sourceProblem } from '../features/imageGen.js';
 import { pushWindow, popWindow, takesEscape, closeOnBackdrop } from './windowStack.js';
 import { emptyWorld, worldFileName, worldToJson, packWarnings } from '../../utils/worldBuilder.js';
 import {
-    TEMPLATE_PACK_ID, BUILTIN_PACKS, listWorlds, getWorldRaw, saveWorld, deleteWorld, importWorldJson, worldFromThisChat, adoptWorld, draftWorldFromChat,
+    TEMPLATE_PACK_ID, BUILTIN_PACKS, listWorlds, getWorldRaw, saveWorld, deleteWorld, importWorldJson, worldFromThisChat, adoptWorld, draftWorldFromChat, moveChatToWorld, movedFrom, putChatWorldBack,
     isDrafting, getWorldState, WORLD_CHANGED_EVENT,
 } from '../features/liveWorld.js';
 import { builderShellHtml, builderHtml, statusHtml, nameHtml, POPUP_ID, WB_TABS } from './worldBuilderViews.js';
@@ -53,9 +53,10 @@ function chatOpen() {
 }
 
 function where() {
-    const cfg = liveWorldConfig(extensionSettings);
     const s = getWorldState();
-    return { pack: cfg.pack, chatPack: s ? s.pack : '', chatOpen: chatOpen() };
+    let moved = null;
+    try { moved = movedFrom(); } catch (e) { moved = null; }
+    return { chatPack: s ? s.pack : '', chatOpen: chatOpen(), moved };
 }
 
 async function refreshWorlds() {
@@ -306,13 +307,21 @@ async function remove() {
     render();
 }
 
-function useForNewChats() {
-    if (!selectedId || selectedId === 'new') return;
-    if (!extensionSettings.liveWorld || typeof extensionSettings.liveWorld !== 'object') extensionSettings.liveWorld = {};
-    extensionSettings.liveWorld.pack = selectedId;
-    try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] World Builder: settings save failed', e); }
-    try { window.dispatchEvent(new CustomEvent(WORLD_CHANGED_EVENT, { detail: { source: 'world' } })); } catch (e) { /* no window */ }
-    note = `New chats start in "${draft ? draft.name : selectedId}".`;
+/** The open chat put into this world (D215, D216): a chat begins in the blank world, and is given a world by hand. */
+async function useForThisChat() {
+    if (!selectedId || selectedId === 'new' || dirty) return;
+    const name = draft ? draft.name : selectedId;
+    let r;
+    try { r = await moveChatToWorld(selectedId); } catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
+    note = r.ok ? `This chat plays in "${name}" now.${r.fresh ? ` What it carried of "${r.fromName}" was left behind.` : ''}` : `The chat was not moved: ${r.error || 'its world could not be loaded'}`;
+    render();
+}
+
+/** The open chat's world put back as it was before it was moved. */
+async function putThisChatBack() {
+    let r;
+    try { r = await putChatWorldBack(); } catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
+    note = r.ok ? 'This chat is back in the world it was in.' : `It could not be put back: ${r.error || 'its world could not be loaded'}`;
     render();
 }
 
@@ -474,7 +483,8 @@ function build() {
         if (act === 'copy') { await saveCopy(); return; }
         if (act === 'export') { exportFile(); return; }
         if (act === 'delete') { await remove(); return; }
-        if (act === 'use') { useForNewChats(); return; }
+        if (act === 'use') { await useForThisChat(); return; }
+        if (act === 'use-undo') { await putThisChatBack(); return; }
         if (act === 'play') {    // the Atlas on this world, whatever chat is in front (docs/long-shot-plan.md D194)
             const id = selectedId;
             if (!id || id === 'new' || !discardOk()) return;

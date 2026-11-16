@@ -72,7 +72,6 @@ function worldRows(worlds, selectedId, w) {
     const templates = worlds.filter(x => x && !x.custom);
     const row = (x) => {
         const badges = [
-            w.pack === x.id ? '<span class="dooms-wb-badge is-new" title="New chats start here">new chats</span>' : '',
             w.chatPack === x.id ? '<span class="dooms-wb-badge is-chat" title="The open chat plays in it">this chat</span>' : '',
             x.template ? '<span class="dooms-wb-badge" title="Shipped with the extension; Save keeps a copy as your own">template</span>' : '',
             !x.ok ? '<span class="dooms-wb-badge is-broken" title="' + attr((x.errors || []).join(' ')) + '">cannot be read</span>' : '',
@@ -119,12 +118,13 @@ function editorHtml({ draft, selectedId, dirty, tab, note, adoptOnSave, where, w
         <span class="dooms-wb-name">${nameHtml(draft, dirty)}</span>
         <span class="dooms-world-muted">${notes}</span>
     </div>`;
-    const usedForNew = where.pack === selectedId;
+    const inChat = !!where.chatPack && where.chatPack === selectedId;    // the open chat plays in this world
     const foot = `<div class="dooms-wb-foot">
         <button type="button" class="rpg-accordion-action-btn" data-act="save"${errors.length ? ' disabled' : ''} title="${errors.length ? 'Fix what is listed first' : 'Keep the world under its id'}"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save</button>
         <button type="button" class="rpg-accordion-action-btn" data-act="copy"${errors.length ? ' disabled' : ''} title="Keep it under a new name as well"><i class="fa-solid fa-copy" aria-hidden="true"></i> Save as copy</button>
         <button type="button" class="rpg-accordion-action-btn" data-act="export"${errors.length ? ' disabled' : ''} title="Download the world as a JSON file"><i class="fa-solid fa-file-export" aria-hidden="true"></i> Export</button>
-        ${!isNew && !isTemplate ? `<button type="button" class="rpg-accordion-action-btn" data-act="use"${usedForNew ? ' disabled' : ''} title="New chats start in this world">${usedForNew ? 'Used for new chats' : 'Use for new chats'}</button>` : ''}
+        ${!isNew && !isTemplate ? `<button type="button" class="rpg-accordion-action-btn" data-act="use"${inChat || !where.chatOpen || dirty ? ' disabled' : ''} title="${inChat ? 'The open chat plays in this world' : !where.chatOpen ? 'Open a chat first' : dirty ? 'Save the world first' : 'The open chat plays in this world from now on. What it carries of another world is left behind; from the blank world, the places it has been to are kept. It can be put back.'}"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> ${inChat ? 'This chat is in it' : 'Use for this chat'}</button>` : ''}
+        ${where.moved ? `<button type="button" class="rpg-accordion-action-btn" data-act="use-undo" title="The open chat's world as it was before it was moved"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> ${where.moved.blank ? 'Put this chat back' : `Put this chat back in ${e(where.moved.name)}`}</button>` : ''}
         ${!isNew && !isTemplate ? '<button type="button" class="rpg-accordion-action-btn" data-act="play" title="This world in the Atlas: its map, its news, its scenes; a scene of it is started from there"><i class="fa-solid fa-earth-europe" aria-hidden="true"></i> Play in the Atlas</button>' : ''}
         ${!isNew && !isTemplate ? '<button type="button" class="rpg-accordion-action-btn is-danger" data-act="delete" title="Remove the world; a chat in it goes on in the blank world until it is imported back"><i class="fa-solid fa-trash" aria-hidden="true"></i> Delete</button>' : ''}
     </div>`;

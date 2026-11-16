@@ -74,6 +74,9 @@ const savedFiles = globalThis.__DES_SAVED_FILES__;
 const state = await import(`${DES}/src/core/state.js`);
 const { extensionSettings, lastGeneratedData, committedTrackerData } = state;
 const lw = await import(`${DES}/src/systems/features/liveWorld.js`);
+// A new chat begins in the blank world (D216). These flows were written when a setting chose the world a new chat
+// begins in; that choice is given here, so that they still open chats in the worlds they are about.
+lw.__setNewChatWorld(() => (extensionSettings.liveWorld && extensionSettings.liveWorld.pack) || '');
 const qc = await import(`${DES}/src/systems/features/questCut.js`);
 const svc = await import(`${DES}/src/systems/features/imageGen.js`);
 const packJson = JSON.stringify({ ...JSON.parse(readFileSync(new URL('../worldpacks/example.json', import.meta.url), 'utf8')), id: 'harbourside' });    // a copy of the template, as Start from Harbourside saves it

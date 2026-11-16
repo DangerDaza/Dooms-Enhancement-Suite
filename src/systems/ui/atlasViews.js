@@ -830,6 +830,7 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
     }
     const worldLine = made
         ? `A world named <strong>${e(world)}</strong> is made for ${p.campaign ? `the campaign ${e(p.campaign.name)}` : 'this chat'}. It has no places of its own: your map and the places the story has named stay exactly as they are.`
+        : p.story && p.story.made && p.story.others > 0 ? `<strong>${e(world)}</strong> is the world. This chat begins a story of its own there: the ${p.story.others === 1 ? 'story' : `${p.story.others} stories`} already played in ${e(world)} ${p.story.others === 1 ? 'is' : 'are'} not touched, and nothing of ${p.story.others === 1 ? 'it' : 'them'} is carried into this one.`
         : p.campaign && !p.replaces ? `<strong>${e(world)}</strong> is this story's world already.` : `<strong>${e(world)}</strong> is the world.`;
     const pick = choice ? `<fieldset class="dooms-atlas-scene-field dooms-atlas-scenes-reach-field">
             <legend class="dooms-atlas-card-label">How much of the chat the record is written from</legend>
@@ -1226,12 +1227,18 @@ export function atlasCampaignRowHtml(c) {
     const world = now && c.world
         ? `<p class="dooms-atlas-campaign-world"><span class="dooms-atlas-card-label">World</span> <span class="dooms-atlas-campaign-world-name">${e(c.world.name)}</span> <button type="button" class="dooms-atlas-link" data-act="world-change" title="Point ${attr(now.name)} at another world of yours, in case of a mix-up. The world it has now keeps its scenes and its memory."${off}>Change</button></p>`
         : '';
+    // The world's stories (D216), where it has more than one: each has its own scenes and its own memory.
+    const stories = Array.isArray(c.stories) ? c.stories : [];
+    const story = now && c.world && stories.length > 1
+        ? `<label class="dooms-atlas-world-pick" title="This world has more than one story. Each has its own scenes, its own date, people, news, quests and ledger; they share the world as it is built. The Atlas shows the story of the chat in front, else the one played last."><span class="dooms-atlas-card-label">Story</span>
+                <select class="dooms-atlas-story-select" aria-label="Which story of this world the Atlas shows"${off}>${stories.map(x => `<option value="${attr(x.id)}"${x.id === c.story ? ' selected' : ''}>${e(x.name)}${x.open ? ' · being played' : ''}</option>`).join('')}</select></label>`
+        : '';
     const n = c.notice && c.notice.text ? c.notice : null;
     const acts = n && Array.isArray(n.actions) ? n.actions : [];
     const notice = n
         ? `<div class="dooms-atlas-between dooms-atlas-mixup" role="status"><p><i class="fa-solid fa-circle-info" aria-hidden="true"></i> <span>${e(n.text)}</span></p>${acts.length ? `<p class="dooms-atlas-mixup-acts">${acts.map(a => `<button type="button" class="${a.primary || a.act === 'scenes' ? 'dooms-atlas-btn is-primary' : 'dooms-atlas-btn'}" data-act="${attr(a.act)}"${a.id ? ` data-id="${attr(a.id)}"` : ''}${a.title ? ` title="${attr(a.title)}"` : ''}${off}>${e(a.label)}</button>`).join('')}</p>` : ''}</div>`
         : '';
-    return `${select}${world}${notice}`;
+    return `${select}${world}${story}${notice}`;
 }
 
 const scenesWord = (n) => (n > 0 ? `${n} scene${n === 1 ? '' : 's'}` : 'no scenes yet');
@@ -1295,7 +1302,7 @@ export function atlasWorldChoiceHtml({ campaign = null, current = null, worlds =
             : w.campaign && w.campaign !== c.id ? `${e(w.campaignName || 'Another campaign')}'s world now: using it here leaves ${e(w.campaignName || 'that campaign')} without one`
             : 'in no campaign';
         return `<li class="dooms-atlas-gate-row${here ? ' is-current' : ''}">
-                <div class="dooms-atlas-gate-what"><strong>${e(w.name || w.id)}</strong><span>${scenesWord(w.scenes)} · ${where}</span></div>
+                <div class="dooms-atlas-gate-what"><strong>${e(w.name || w.id)}</strong><span>${w.stories > 1 ? `${w.stories} stories, ` : ''}${scenesWord(w.scenes)} · ${where}</span></div>
                 ${here ? '<span class="dooms-atlas-gate-tag">In use</span>' : `<button type="button" class="dooms-atlas-btn" data-act="world-use" data-id="${attr(w.id)}"${off}>Use this world</button>`}
             </li>`;
     }).join('');

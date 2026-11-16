@@ -514,15 +514,6 @@ function renderLiveWorldSettings() {
     $('#rpg-world-depth').val(cfg.depth);
     $('#rpg-world-role').val(cfg.role);
     $('#rpg-world-debug').prop('checked', cfg.debug);
-    // World for new chats: the blank world, your worlds, then the template (docs/world-builder-plan.md D98).
-    const custom = new Set(Object.keys(cfg.customPacks));
-    const ids = ['blank', ...Object.keys(cfg.customPacks), ...listPackIds().filter(id => id !== 'blank' && !custom.has(id))];
-    const label = (id) => (id === 'blank' ? 'The blank world (grows from play)' : (custom.has(id) ? id : `${id} (the example)`));
-    $('#rpg-world-pack').html(ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(label(id))}</option>`).join('')).val(ids.includes(cfg.pack) ? cfg.pack : 'blank');
-    // The names arrive once the worlds load; the ids stand until then.
-    ids.filter(id => id !== 'blank').forEach(id => loadPack(id).then(r => {
-        if (r.ok) $(`#rpg-world-pack option[value="${id.replace(/"/g, '\\"')}"]`).text(`${r.pack.name}${custom.has(id) ? '' : ' (the example)'}${r.pack.id !== r.pack.name.toLowerCase() && custom.has(id) ? ` · ${id}` : ''}`);
-    }).catch(() => {}));
     renderLiveWorldStatus();
     try { renderHubSettings(); } catch (e) { console.warn('[Dooms Tracker] Hub settings failed to render', e); }
 }
@@ -2234,10 +2225,6 @@ function bindSettingsUI() {
         _saveWorld({ reload: true });
         try { updatePortraitBar(); } catch (e) { /* the shelf's Map page (D56) follows the switch */ }
     });
-    $(document).on('change', '#rpg-world-pack', function () {
-        getWorldRules().pack = String($(this).val() || '');
-        _saveWorld();
-    });
     $(document).on('change', '#rpg-world-every', function () {
         const w = getWorldRules(); w.every = _clampWorld($(this).val(), 1, 50, 6); $(this).val(w.every); _saveWorld();
     });
@@ -2323,7 +2310,7 @@ function bindSettingsUI() {
     $(document).on('click', '#rpg-world-reseed', async function () {
         if (!isLiveWorldOn()) { toastr.info('Switch Live World on first.', 'Live World', { timeOut: 3000 }); return; }
         if (!getContext().chatId) { toastr.info('Open a chat first.', 'Live World', { timeOut: 3000 }); return; }
-        const confirmed = await callGenericPopup('Throw this chat\'s world away and seed it again from the chosen pack? The clocks, the last-seen places and the log of this chat are lost.', POPUP_TYPE.CONFIRM);
+        const confirmed = await callGenericPopup('Throw this chat\'s world away and start it again as its world is built? The clocks, the last-seen places and the log of this chat are lost.', POPUP_TYPE.CONFIRM);
         if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
         const r = await reseedWorld();
         if (!r.ok) toastr.warning(`The world was kept: ${r.error || 'the chosen pack could not be loaded.'}`, 'Live World', { timeOut: 7000 });

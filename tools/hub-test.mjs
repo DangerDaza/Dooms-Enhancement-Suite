@@ -22,6 +22,7 @@ import {
     hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE, backupFileName,
     loreEntries, castLore, standingLore, LORE_PER_PERSON, LORE_STANDING, sceneLength, sceneIsLong, continuationSeed,
     ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, activeCampaignWorldId, worldsByCampaign, loreLibraryOn,
+    STORY_SEP, packOf, entryUntouched, storyIdsOf, nextStoryId, storyOfChat, storyPlayedAt, lastStoryOf, storiesOf,
 } from '../src/utils/hub.js';
 import { normalizePack, seedWorldState, countMessage, applyAdvance, reconcileWithChat, seenInScene } from '../src/utils/liveWorld.js';
 import { visitPlace, reconcileVisited } from '../src/utils/worldMap.js';
@@ -646,14 +647,45 @@ console.log('\na campaign\'s world (D213)');
     check('played as much: the one remembered last', campaignWorldId(tie, 'c_eld') === 'redward');
     const list = worldsByCampaign(settings);
     check('every world of the player\'s with its campaign, by name; the chat it began from is no scene of it', same(list, [
-        { id: 'nightcity', name: 'Night City', campaign: 'c_nc', campaignName: 'Nightcity', scenes: 0 },
-        { id: 'redward', name: 'Redward', campaign: '', campaignName: '', scenes: 1 },
-        { id: 'spare', name: 'spare', campaign: '', campaignName: '', scenes: 0 },
-        { id: 'the-eld', name: 'The Eld', campaign: 'c_eld', campaignName: 'Eld', scenes: 2 },
+        { id: 'nightcity', name: 'Night City', campaign: 'c_nc', campaignName: 'Nightcity', scenes: 0, stories: 0 },
+        { id: 'redward', name: 'Redward', campaign: '', campaignName: '', scenes: 1, stories: 1 },
+        { id: 'spare', name: 'spare', campaign: '', campaignName: '', scenes: 0, stories: 0 },
+        { id: 'the-eld', name: 'The Eld', campaign: 'c_eld', campaignName: 'Eld', scenes: 2, stories: 1 },
     ]), JSON.stringify(list));
     check('of two worlds that name one campaign only the one it uses is said to be its world', same(worldsByCampaign(two).filter(w => w.campaign === 'c_eld').map(w => w.id), ['the-eld']));
     check('a world whose campaign is gone is in no campaign', worldsByCampaign({ ...settings, lorebook: { ...settings.lorebook, campaigns: { c_eld: settings.lorebook.campaigns.c_eld } } }).find(w => w.id === 'nightcity').campaign === '');
     check('the status line says whose world it is where it is told; untold, the line is as it was', hubStatusLine({ worldName: 'The Eld', entry: null, sceneCards: true, campaign: 'Eld' }).startsWith('The Eld (Eld\'s world): ') && hubStatusLine({ worldName: 'Redward', entry: null, sceneCards: true, campaign: '' }).startsWith('Redward (in no campaign): ') && hubStatusLine({ worldName: 'The Eld', entry: null, sceneCards: true }).startsWith('The Eld: '));
+}
+
+console.log('\na world\'s stories (D216)');
+{
+    const sc = (id, extra = {}) => normalizeScene({ id, title: id, status: 'ended', chat: `${id}.jsonl`, place: { label: '' }, ...extra });
+    const story = (o) => normalizeWorldEntry(o);
+    const worlds = {
+        'night-city': story({ campaign: 'c1', memory: { v: 1, takenAt: 100, scene: 's1', stores: {}, facts: {} }, scenes: [sc('s0', { chat: 'Jack - 2026-11-15', card: 'Narrator.png' }), sc('s1', { startedAt: 90, endedAt: 100 })] }),
+        'night-city~2': story({ name: 'The Arasaka job', memory: { v: 1, takenAt: 300, scene: 's0', stores: {}, facts: {} }, scenes: [sc('s0', { chat: 'V - 2026-11-16', card: 'Narrator.png' })] }),
+        'night-city~3': story({ scenes: [sc('s1', { status: 'open', startedAt: 250, endedAt: 0 })] }),
+        'night-city~4': story({ card: 'x.png' }),
+        'the-eld': story({ scenes: [sc('s0', { chat: 'Jack - 2026-11-15', card: 'Eld.png' })], memory: { v: 1, takenAt: 50, scene: 's0', stores: {}, facts: {} } }),
+        empty: story({ campaign: 'c9' }),
+    };
+    check('a story\'s world is its id up to its number; a world\'s own id is its first story\'s', packOf('night-city~2') === 'night-city' && packOf('night-city') === 'night-city' && packOf('') === '' && STORY_SEP === '~');
+    check('a story with no scene and no memory stands untouched, whatever else is kept under its id', entryUntouched(worlds.empty) && entryUntouched(worlds['night-city~4']) && entryUntouched(null) && !entryUntouched(worlds['night-city']) && !entryUntouched(worlds['night-city~3']));
+    check('a world\'s stories in the order they were begun; one that stands untouched is not one', same(storyIdsOf(worlds, 'night-city'), ['night-city', 'night-city~2', 'night-city~3']) && same(storyIdsOf(worlds, 'the-eld'), ['the-eld']) && same(storyIdsOf(worlds, 'empty'), []) && same(storyIdsOf(worlds, 'nowhere'), []) && same(storyIdsOf(null, 'x'), []));
+    check('a new story takes the world\'s own id while nothing is kept under it, else the next number free', nextStoryId(worlds, 'empty') === 'empty' && nextStoryId(worlds, 'brand-new') === 'brand-new' && nextStoryId(worlds, 'night-city') === 'night-city~4' && nextStoryId(worlds, 'the-eld') === 'the-eld~2');
+    check('the story a chat began is the one whose scene 0 is that chat, under that card', storyOfChat(worlds, 'night-city', 'Jack - 2026-11-15', 'Narrator.png') === 'night-city' && storyOfChat(worlds, 'night-city', 'v - 2026-11-16.jsonl') === 'night-city~2' && storyOfChat(worlds, 'the-eld', 'Jack - 2026-11-15', 'Eld.png') === 'the-eld');
+    check('a chat of the same name on another card, a chat that began none, a scene\'s own chat: none', storyOfChat(worlds, 'night-city', 'Jack - 2026-11-15', 'Other.png') === '' && storyOfChat(worlds, 'night-city', 'Somebody else') === '' && storyOfChat(worlds, 'night-city', 's1') === '' && storyOfChat(worlds, 'night-city', '') === '');
+    check('when a story was last played: its last End or Start', storyPlayedAt(worlds['night-city']) === 100 && storyPlayedAt(worlds['night-city~2']) === 300 && storyPlayedAt(worlds['night-city~3']) === 250 && storyPlayedAt(null) === 0);
+    check('the story of a world played last', lastStoryOf(worlds, 'night-city') === 'night-city~2' && lastStoryOf(worlds, 'the-eld') === 'the-eld' && lastStoryOf(worlds, 'empty') === '');
+    const list = storiesOf(worlds, 'night-city', (avatar) => (avatar === 'Narrator.png' ? 'Nightcity - Narrator' : ''));
+    check('a world\'s stories for a list: named by their own name, else the card they began on, else their number; their scenes, whether one is being played', same(list.map(x => [x.id, x.name, x.scenes, x.open]), [['night-city', 'Nightcity - Narrator', 1, false], ['night-city~2', 'The Arasaka job', 0, false], ['night-city~3', 'Story 3', 1, true]]), JSON.stringify(list));
+    const twin = storiesOf({ a: worlds['night-city'], 'a~2': story({ scenes: [sc('s0', { chat: 'Another', card: 'Narrator.png' })], memory: { v: 1, takenAt: 5, scene: 's0', stores: {}, facts: {} } }) }, 'a', () => 'Nightcity - Narrator');
+    check('two stories begun on one card are told apart', same(twin.map(x => x.name), ['Nightcity - Narrator', 'Nightcity - Narrator (2)']));
+    check('a story\'s own name is kept with it', normalizeWorldEntry({ name: '  The   Arasaka job ' }).name === 'The Arasaka job' && normalizeWorldEntry({}).name === '');
+    const hub = normalizeHub({ worlds: { [`${'w'.repeat(60)}~12`]: {} } });
+    check('a story of a world with the longest id there can be is kept under its own id, and a scene\'s mark names it whole', Object.keys(hub.worlds)[0] === `${'w'.repeat(60)}~12` && readMark({ [HUB_META_KEY]: hubMark({ world: `${'w'.repeat(60)}~12`, scene: 's1' }) }).world === `${'w'.repeat(60)}~12`);
+    const settings = { liveWorld: { customPacks: { 'night-city': '{"name":"Night City"}' } }, lorebook: { campaigns: { c1: { name: 'Nightcity' } }, campaignOrder: ['c1'] }, hub: { worlds } };
+    check('a world is listed with the scenes of all its stories and how many stories it has; its campaign is the one kept under its own id', same(worldsByCampaign(settings), [{ id: 'night-city', name: 'Night City', campaign: 'c1', campaignName: 'Nightcity', scenes: 2, stories: 3 }]) && campaignWorldId(settings, 'c1') === 'night-city', JSON.stringify(worldsByCampaign(settings)));
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

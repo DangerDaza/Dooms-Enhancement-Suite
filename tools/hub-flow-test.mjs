@@ -188,6 +188,9 @@ const { extensionSettings } = state;    // the tracker singletons are read throu
 const persistence = await import(`${DES}/src/core/persistence.js`);
 const lwUtils = await import(`${DES}/src/utils/liveWorld.js`);
 const lw = await import(`${DES}/src/systems/features/liveWorld.js`);
+// A new chat begins in the blank world (D216). These flows were written when a setting chose the world a new chat
+// begins in; that choice is given here, so that they still open chats in the worlds they are about.
+lw.__setNewChatWorld(() => (extensionSettings.liveWorld && extensionSettings.liveWorld.pack) || '');
 const cn = await import(`${DES}/src/systems/features/canon.js`);
 const inv = await import(`${DES}/src/systems/features/inventory.js`);
 const hub = await import(`${DES}/src/systems/features/hub.js`);
@@ -639,7 +642,7 @@ console.log('\n§9 a chat already played, taken as where a campaign\'s scenes be
     hub.__setChatBridge(null);
     extensionSettings.lorebook.activeCampaignId = 'camp1';
     const joins = hub.scenesPlan();
-    check('with the campaign on, another chat of it is taken into the campaign\'s world, which keeps its narrator', joins.ok && joins.world.id === 'first-descent' && joins.world.made === false && joins.card.avatar === 'The Redward.png' && joins.replaces === true, JSON.stringify(joins));
+    check('with the campaign on, another chat is played in the campaign\'s world as a story of its own: the story there is is not replaced (D216)', joins.ok && joins.world.id === 'first-descent' && joins.world.made === false && joins.story.id === 'first-descent~2' && joins.story.made === true && joins.story.others === 1 && joins.card.avatar === 'Third.png' && joins.replaces === false, JSON.stringify(joins));
     extensionSettings.liveWorld.enabled = false;
     check('a chat that is no scene has no entry in the Doom button\'s menu', hub.currentScene() === null && hub.sceneMenu() === null);
     check('with Live World off there is nothing to play as scenes', hub.scenesPlan().reason === 'off' && (await hub.prepareAdopt()).reason === 'off');
@@ -1668,7 +1671,7 @@ console.log('\n§22 a scene opened from the list: its file looked for first, its
     files.set(sc.chat, kept);
 }
 
-console.log('\n§23 a world with a narrator of its own, a long chat on another card taken as its scene 0 (D204: the owner\'s report)');
+console.log('\n§23 a world with a story and its narrator; a long chat on another card, in that world, begins a story of its own (D204, D216)');
 {
     // Harbourside has had its narrator, Mara Vane, since §1. A long chat on another card, on that world, is played as scenes.
     const W = 'harbourside';
@@ -1689,12 +1692,15 @@ console.log('\n§23 a world with a narrator of its own, a long chat on another c
     lw.recordCurrentScene();
     await persistence.saveChatData({ immediate: true });
     extensionSettings.liveWorld.pack = was;
+    const W2 = 'harbourside~2';
+    const firstWas = JSON.stringify(hub.worldEntry(W));
     const plan = hub.scenesPlan();
-    check('the world keeps the narrator it has: the chat\'s own card is not made its narrator', plan.ok && plan.world.id === W && plan.card.avatar === 'Mara Vane.png' && hub.cardOf(W).avatar === 'Mara Vane.png', JSON.stringify([plan.ok, plan.reason, plan.card, plan.world]));
-    const done = await hub.commitAdopt({ recap: 'Three days in the harbour.', replace: true });
-    const s0 = done.ok ? hub.worldEntry(W).scenes.find(x => x.id === 's0') : null;
-    check('taken, scene 0 is the long chat and its record names the card the chat is on, not the narrator', done.ok && !!s0 && s0.chat === long && s0.card === 'Third.png' && hub.worldEntry(W).card === 'Mara Vane.png', JSON.stringify([done.ok, done.reason, s0 && [s0.chat, s0.card]]));
-    check('the card of a scene is its own where it has one, the world\'s narrator where it has none', hub.cardOfScene(W, s0).avatar === 'Third.png' && hub.cardOfScene(W, { id: 'sx', chat: 'x' }).avatar === 'Mara Vane.png' && hub.cardOfScene(W, { id: 'sx', chat: 'x', card: 'Nobody.png' }) === null);
+    check('the long chat begins a story of its own in that world: the story there is and its narrator are not its to take', plan.ok && plan.world.id === W && plan.story.id === W2 && plan.story.made === true && plan.story.others === 1 && plan.replaces === false && plan.card.avatar === 'Third.png' && hub.cardOf(W).avatar === 'Mara Vane.png', JSON.stringify([plan.ok, plan.reason, plan.card, plan.world, plan.story]));
+    const done = await hub.commitAdopt({ recap: 'Three days in the harbour.' });
+    const s0 = done.ok ? hub.worldEntry(W2).scenes.find(x => x.id === 's0') : null;
+    check('taken, the new story\'s scene 0 is the long chat on its own card, and the world\'s first story is as it was: its memory, its scenes, its narrator', done.ok && done.worldId === W2 && done.packId === W && !!s0 && s0.chat === long && s0.card === 'Third.png' && hub.worldEntry(W2).card === 'Third.png' && JSON.stringify(hub.worldEntry(W)) === firstWas, JSON.stringify([done.ok, done.reason, done.worldId, s0 && [s0.chat, s0.card]]));
+    check('the two stories are listed for the world, in the order they were begun', same(hub.worldStories(W).map(x => x.id), [W, W2]) && hub.lastStory(W) === W2 && hub.storyInFront() === W2, JSON.stringify(hub.worldStories(W)));
+    check('the card of a scene is its own where it has one, its story\'s narrator where it has none', hub.cardOfScene(W2, s0).avatar === 'Third.png' && hub.cardOfScene(W, { id: 'sx', chat: 'x' }).avatar === 'Mara Vane.png' && hub.cardOfScene(W, { id: 'sx', chat: 'x', card: 'Nobody.png' }) === null);
     // From the narrator's card (a scene of the world, or any chat of it), scene 0 is opened.
     const mara = ctxTarget.characters.findIndex(c => c.avatar === 'Mara Vane.png');
     ctxTarget.characterId = mara;
@@ -1702,9 +1708,9 @@ console.log('\n§23 a world with a narrator of its own, a long chat on another c
     await openPlain('Mara Vane - between');
     globalThis.__DES_ACTIVE__ = [];
     opens.length = 0;
-    const r0 = await hub.openSceneChat(W, 's0');
-    check('opened from the narrator\'s card, scene 0 comes up on the card its chat is on, with its messages: its file is not looked for under the narrator', r0.ok && r0.empty === false && r0.messages === 7 && ctxTarget.characters[ctxTarget.characterId].avatar === 'Third.png' && ctxTarget.chatId === long && same(globalThis.__DES_ACTIVE__, ['Third.png']) && !files.has('Mara Vane - the long chat'), JSON.stringify([r0, ctxTarget.characters[ctxTarget.characterId].avatar, ctxTarget.chatId, opens]));
-    check('nothing was made under the narrator\'s card in its name, and scene 0 is not marked gone', ![...files.entries()].some(([n, f]) => n === long && f.avatar === 'Mara Vane.png') && hub.worldEntry(W).scenes.find(x => x.id === 's0').gone !== true);
+    const r0 = await hub.openSceneChat(W2, 's0');
+    check('opened from the other story\'s narrator card, scene 0 comes up on the card its chat is on, with its messages: its file is not looked for under that narrator', r0.ok && r0.empty === false && r0.messages === 7 && ctxTarget.characters[ctxTarget.characterId].avatar === 'Third.png' && ctxTarget.chatId === long && same(globalThis.__DES_ACTIVE__, ['Third.png']) && !files.has('Mara Vane - the long chat'), JSON.stringify([r0, ctxTarget.characters[ctxTarget.characterId].avatar, ctxTarget.chatId, opens]));
+    check('nothing was made under the narrator\'s card in its name, and scene 0 is not marked gone', ![...files.entries()].some(([n, f]) => n === long && f.avatar === 'Mara Vane.png') && hub.worldEntry(W2).scenes.find(x => x.id === 's0').gone !== true);
     // And a scene on the narrator's card is opened there, from the long chat.
     const onNarrator = hub.worldEntry(W).scenes.find(x => x.id !== 's0' && !x.gone && x.chat && x.card === 'Mara Vane.png' && files.has(x.chat));
     const r1 = onNarrator ? await hub.openSceneChat(W, onNarrator.id) : { ok: false, reason: 'none' };
@@ -1712,14 +1718,14 @@ console.log('\n§23 a world with a narrator of its own, a long chat on another c
     // The card of scene 0 gone: said, not opened on another.
     const keptCard = ctxTarget.characters[third];
     ctxTarget.characters[third] = { name: 'Gone', avatar: 'Gone.png', chat: '' };
-    const noCard = await hub.openSceneChat(W, 's0');
+    const noCard = await hub.openSceneChat(W2, 's0');
     ctxTarget.characters[third] = keptCard;
     check('with the card of its chat gone, a scene is not opened on another card', noCard.ok === false && noCard.reason === 'card-gone');
 }
 
 console.log('\n§24 the openings are shown the last lines of the scene before, as they were played (D205)');
 {
-    const W = 'harbourside';
+    const W = 'harbourside~2';    // the story the long chat began in §23 (D216)
     const longChat = 'Third - the long chat';
     const reads = () => calls.filter(c => c.url === '/api/chats/get').length;
     let asked = null;
@@ -1758,9 +1764,12 @@ console.log('\n§24 the openings are shown the last lines of the scene before, a
     check('when time has passed it is the last eight', eight.ok && eight.tail.messages === 8 && asked.user.includes('Third: The tide turns on day 12.') && asked.user.includes('Jordan: Day 9.') && !asked.user.includes('Jordan: Day 8.'), JSON.stringify(eight.tail));
     hub.cancelStart();
     // Going on from a scene that is named: its own lines, from its own card.
-    const named = hub.worldEntry(W).scenes.find(x => x.id !== 's0' && !x.gone && x.chat && files.has(x.chat) && files.get(x.chat).messages.filter(m => !m.is_system && String(m.mes || '').trim()).length);
+    // (The world's first story has the scenes played before: the one named is one of those.)
+    const W1 = 'harbourside';
+    for (const sc of hub.worldEntry(W1).scenes.filter(x => x.status === 'open')) hub.setSceneAside(W1, sc.id);
+    const named = hub.worldEntry(W1).scenes.find(x => x.id !== 's0' && !x.gone && x.chat && files.has(x.chat) && files.get(x.chat).messages.filter(m => !m.is_system && String(m.mes || '').trim()).length);
     const lastOf = named ? files.get(named.chat).messages.filter(m => !m.is_system).pop() : null;
-    const from = named ? await hub.prepareScene({ worldId: W, seed: { kind: 'scene', id: named.id, label: 'x', text: '' }, place: null, cast: [], gap: { id: 'now' } }) : { ok: false };
+    const from = named ? await hub.prepareScene({ worldId: W1, seed: { kind: 'scene', id: named.id, label: 'x', text: '' }, place: null, cast: [], gap: { id: 'now' } }) : { ok: false };
     check('going on from a named scene, the lines are that scene\'s, read from its file', !!named && from.ok && from.tail.scene === named.id && from.tail.messages >= 1 && asked.user.includes(String(lastOf.mes).replace(/\s+/g, ' ').slice(0, 40)), JSON.stringify([named && named.id, from.ok, from.reason, from.tail]));
     hub.cancelStart();
     // The file gone: the record stands alone, and the Start says so.
@@ -2490,12 +2499,16 @@ console.log('\n§31 the campaign decides the world: one campaign, one world, att
     await hub.attachWorld('cA', 'alpha');
     check('(back with Alpha: Gamma has no world again)', hub.worldOfCampaign('cA') === 'alpha' && hub.worldOfCampaign('cC') === '' && filed[filed.length - 1][0] === 'cA');
 
-    // A new chat's world.
+    // A new chat's world (D216): the blank one, whatever campaign is on; a chat is put into a world by hand.
+    lw.__setNewChatWorld(null);
     await onTeller('Wanderer - of alpha');
-    check('with a campaign on that has a world, a new chat is that world', lw.getWorldState().pack === 'alpha', JSON.stringify(lw.getWorldState().pack));
+    check('with a campaign on that has a world, a new chat still begins in the blank world: no world is given to a chat that did not ask for it', lw.getWorldState().pack === 'blank', JSON.stringify(lw.getWorldState().pack));
+    check('moved by hand, it is the campaign\'s world', (await lw.moveChatToWorld('alpha')).ok && lw.getWorldState().pack === 'alpha');
     lb.activeCampaignId = 'cC';
+    extensionSettings.liveWorld.pack = 'alpha-2';
     await onTeller('Wanderer - of gamma');
-    check('with a campaign on that has none, a new chat is the world set for new chats', lw.getWorldState().pack === (extensionSettings.liveWorld.pack || 'blank'), JSON.stringify(lw.getWorldState().pack));
+    check('nor does the setting that once chose a world for new chats: it is not read any more', lw.getWorldState().pack === 'blank', JSON.stringify(lw.getWorldState().pack));
+    extensionSettings.liveWorld.pack = 'blank';
     lb.activeCampaignId = 'cB';
     await openFile('Wanderer - of alpha');
     check('a chat that has its world keeps it, whatever campaign is on', lw.getWorldState().pack === 'alpha');
@@ -2542,8 +2555,9 @@ console.log('\n§31 the campaign decides the world: one campaign, one world, att
     await hub.attachWorld('cB', 'alpha-2');
     lb.activeCampaignId = 'cA';
     await onTeller('Wanderer - of alpha again');
+    await lw.moveChatToWorld('alpha');
     const into = hub.scenesPlan();
-    check('a new chat in a campaign whose world has a memory is that world\'s, and playing it as scenes would replace what the world remembers: asked first', into.ok && into.world.id === 'alpha' && into.replaces === true && (await hub.commitAdopt({ recap: 'x' })).reason === 'has-memory', JSON.stringify(into));
+    check('another chat in a campaign whose world has a story begins a story of its own there: the story there is is not replaced, and nothing is asked', into.ok && into.world.id === 'alpha' && into.story.id === 'alpha~2' && into.story.made === true && into.story.others === 1 && into.replaces === false, JSON.stringify(into));
 
     // The scene the D menu leads back to.
     const sa = await start('alpha');
@@ -2592,6 +2606,7 @@ console.log('\n§31 the campaign decides the world: one campaign, one world, att
     check('a campaign deleted in the Lore Library leaves its world in no campaign, with its scenes', hub.campaignOfWorld('loose') === null && worldOf('loose').campaign === '' && packsNow().includes('loose'));
 
     // Tidy.
+    lw.__setNewChatWorld(() => (extensionSettings.liveWorld && extensionSettings.liveWorld.pack) || '');
     hub.__setCampaignApi(null);
     for (const w of ['alpha', 'alpha-2']) for (const sc of (hub.worldEntry(w) || { scenes: [] }).scenes.filter(x => x.status === 'open')) hub.setSceneAside(w, sc.id);
     delete shelfApi.unfile;
@@ -2681,6 +2696,108 @@ console.log('\n§32 a chat that carries the wrong world is moved to the campaign
     guard.setChatLoaders([]);
     check('(with no handlers given, as in every other part of this file, the guard does nothing)', guard.chatStateIsStale() === false);
     extensionSettings.liveWorld.pack = packWas;
+}
+
+console.log('\n§33 a world\'s stories: scenes belong to one chat\'s story, the world is shared, and nothing of one story reaches another (D216)');
+{
+    const W = 'storyland';
+    const W2 = 'storyland~2';
+    const cardsWas = extensionSettings.hub.sceneCards;
+    const lbWas = extensionSettings.lorebook;
+    const packWas = extensionSettings.liveWorld.pack;
+    extensionSettings.lorebook = { enabled: true, campaigns: {}, campaignOrder: [], activeCampaignId: null };
+    extensionSettings.hub.sceneCards = true;
+    extensionSettings.hub.styleLaw = false;
+    extensionSettings.liveWorld.customPacks[W] = JSON.stringify({ ...example, id: W, name: 'Storyland' });
+    extensionSettings.liveWorld.pack = W;    // (the flows' own way to open a chat in a world: see the top of this file)
+    hub.__setBookApi(shelfApi);
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 9","time":"morning"},"openers":[{"title":"The docks","text":"The docks are wet.","who":[]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}');
+    hub.__setGapTransport(async () => '{"elapsed":"a day","now":{"date":"Day 9","time":"dawn"},"clocks":{},"moved":[],"blurb":"x","heard":[]}');
+    hub.__setRecapTransport(async () => '{"recap":"What happened.","people":[],"threads":{"closed":[],"opened":[]}}');
+    const at = (avatar) => ctxTarget.characters.findIndex(c => c.avatar === avatar);
+    const ledger = (name, text) => ({ v: 1, entries: [{ id: 'c1', kind: 'person', name, text, msgId: '', gameDate: 'Day 1', at: 5, pinned: false, by: 'ai' }], counted: [], sinceLast: 0, last: null, lastError: null, retryNext: false, seq: 1 });
+    const begin = async (avatar, name, file, fact) => {
+        ctxTarget.characterId = at(avatar);
+        ctxTarget.name2 = name;
+        files.set(file, { header: { chat_metadata: {} }, messages: [], avatar, chName: name });
+        await openPlain(file);
+        chat.push(user(`I am ${name}'s player.`));
+        chat.push({ is_user: false, name, mes: `${name} tells the tale.`, extra: {} });
+        meta.dooms_canon = ledger(fact[0], fact[1]);
+        await persistence.saveChatData({ immediate: true });
+        await loaders();
+    };
+    const names = (entry) => ((entry.memory.stores.dooms_canon || {}).entries || []).map(x => x.name);
+
+    // The first chat begins the world's first story.
+    await begin('Wanderer.png', 'Wanderer', 'Wanderer - the first story', ['Jackie Welles', 'A fixer who owes the party a favour.']);
+    const p1 = hub.scenesPlan();
+    check('a chat of a world nothing has been played in begins its first story, kept under the world\'s own id', p1.ok && p1.world.id === W && p1.story.id === W && p1.story.made === true && p1.story.others === 0 && p1.replaces === false, JSON.stringify(p1));
+    const d1 = await hub.commitAdopt({ recap: 'The first story so far.' });
+    check('taken: the story\'s memory is that chat as it stands, its ledger with it', d1.ok && d1.worldId === W && same(names(hub.worldEntry(W)), ['Jackie Welles']), JSON.stringify([d1.ok, d1.reason]));
+    const firstWas = JSON.stringify(hub.worldEntry(W));
+
+    // A second chat, in the same world, on another card.
+    await begin('Drifter.png', 'Drifter', 'Drifter - the second story', ['Evelyn Parker', 'A doll at Clouds with a plan.']);
+    check('(the second chat is in the same world)', lw.getWorldState().pack === W && hub.storyInFront() === '');
+    const p2 = hub.scenesPlan();
+    check('a second chat of the same world begins a story of its own: the first is not replaced, and nothing is asked', p2.ok && p2.world.id === W && p2.world.made === false && p2.story.id === W2 && p2.story.made === true && p2.story.others === 1 && p2.replaces === false && p2.scenes === 0, JSON.stringify(p2));
+    check('with no story of its own yet, the chat has no scene to start: it has Play as scenes', hub.sceneStartPlan().reason === 'not-scenes');
+    const d2 = await hub.commitAdopt({ recap: 'The second story so far.' });
+    check('taken: its memory is its own chat\'s, and the first story is as it was, to the letter', d2.ok && d2.worldId === W2 && d2.packId === W && d2.story.made === true && JSON.stringify(hub.worldEntry(W)) === firstWas && hub.worldEntry(W2).memory.stores.dooms_world.pack === W, JSON.stringify([d2.ok, d2.reason, d2.worldId]));
+    check('the ledger is the story\'s own: what one chat established is not in the other\'s', same(names(hub.worldEntry(W2)), ['Evelyn Parker']) && same(names(hub.worldEntry(W)), ['Jackie Welles']));
+    const list = hub.worldStories(W);
+    check('the world lists its two stories, each named after the card its chat is on', same(list.map(x => [x.id, x.name, x.scenes, x.open]), [[W, 'Wanderer', 0, false], [W2, 'Drifter', 0, false]]) && hub.lastStory(W) === W2 && hub.storyInFront() === W2, JSON.stringify(list));
+
+    // A scene of the second story.
+    const startPlan2 = hub.sceneStartPlan();
+    check('from the chat it began from, a scene of the second story can be started', startPlan2.ok && startPlan2.worldId === W2 && startPlan2.number === 1, JSON.stringify(startPlan2));
+    const pr = await hub.prepareScene({ worldId: W2, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'now' } });
+    const c2 = pr.ok ? await hub.commitScene(pr.token, { choice: 0 }) : pr;
+    const header = c2.ok ? files.get(c2.file).header.chat_metadata : {};
+    check('the scene is the second story\'s: its mark names that story, its world is the shared one, and it is given that story\'s ledger alone', c2.ok && hub.currentScene().worldId === W2 && header.dooms_hub.world === W2 && header.dooms_world.pack === W && same((header.dooms_canon.entries || []).map(x => x.name), ['Evelyn Parker']), JSON.stringify([c2.ok, c2.reason, header.dooms_hub && header.dooms_hub.world, header.dooms_canon && header.dooms_canon.entries]));
+    check('the first story has no scene being played, and can start its own', hub.worldEntry(W).scenes.every(x => x.status !== 'open') && hub.startPlanFor(W).ok && hub.startPlanFor(W).number === 1 && hub.startPlanFor(W2).reason === 'scene-open');
+    // What the scene establishes stays in its story.
+    chat.push(user('I ask about the relic.'));
+    chat.push({ is_user: false, name: 'Narrator', mes: 'The relic is in Konpeki Plaza.', extra: {} });
+    meta.dooms_canon = { ...meta.dooms_canon, entries: [...meta.dooms_canon.entries, { id: 'c2', kind: 'thing', name: 'The relic', text: 'In Konpeki Plaza.', msgId: '', gameDate: 'Day 9', at: 9, pinned: false, by: 'ai' }], seq: 2 };
+    await persistence.saveChatData({ immediate: true });
+    await loaders();
+    const ended = await hub.endScene({ skipCanon: true, skipWorld: true });
+    check('ended: what the scene established is in its own story\'s memory, and the first story\'s is untouched', ended.ok && same(names(hub.worldEntry(W2)), ['Evelyn Parker', 'The relic']) && JSON.stringify(hub.worldEntry(W)) === firstWas, JSON.stringify([ended.ok, ended.reason, names(hub.worldEntry(W2))]));
+    check('the story played last is the second', hub.lastStory(W) === W2 && hub.worldStories(W)[1].scenes === 1);
+
+    // Back in the first story's chat.
+    ctxTarget.characterId = at('Wanderer.png');
+    ctxTarget.name2 = 'Wanderer';
+    await openFile('Wanderer - the first story');
+    const from1 = hub.sceneStartPlan();
+    check('from the first story\'s chat, the scene started is the first story\'s, numbered for it', hub.storyInFront() === W && from1.ok && from1.worldId === W && from1.number === 1, JSON.stringify(from1));
+    const again = hub.scenesPlan();
+    check('the chat a story began from, played as scenes again, is that story taken again: what it remembers would be replaced, and that is asked first', again.ok && again.story.id === W && again.story.made === false && again.replaces === true && (await hub.commitAdopt({ recap: 'x' })).reason === 'has-memory', JSON.stringify(again));
+    // A third chat of the world, part of no story.
+    files.set('Wanderer - just a chat', { header: { chat_metadata: {} }, messages: [], avatar: 'Wanderer.png', chName: 'Wanderer' });
+    await openPlain('Wanderer - just a chat');
+    check('a chat of the world that began no story is part of none: it starts no scene of another\'s, and would begin a third', lw.getWorldState().pack === W && hub.storyInFront() === '' && hub.sceneStartPlan().reason === 'not-scenes' && hub.scenesPlan().story.id === 'storyland~3' && hub.scenesPlan().story.others === 2);
+
+    // The campaign is the world's; the scene the D menu leads back to is any story's of it.
+    extensionSettings.lorebook = { enabled: true, campaigns: { cs: { id: 'cs', name: 'Storyland' } }, campaignOrder: ['cs'], activeCampaignId: 'cs' };
+    const att = await hub.attachWorld('cs', W);
+    const prA = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'now' } });
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 2","time":"noon"},"openers":[{"title":"The alley","text":"The alley is narrow.","who":[]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}');
+    const cA = prA.ok ? await hub.commitScene(prA.token, { choice: 0 }) : prA;
+    await openPlain('Wanderer - just a chat');
+    check('the campaign is the world\'s, whichever story: a scene of the first story being played is the way back under it', att.ok && cA.ok && same(hub.campaignOfWorld(W2), { id: 'cs', name: 'Storyland' }) && hub.sceneAway().worldId === W && hub.worldsWithCampaigns().find(w => w.id === W).stories === 2, JSON.stringify([att.ok, cA.ok, cA.reason, hub.sceneAway() && hub.sceneAway().worldId]));
+    const lines = await hub.hubStatusLines();
+    check('Settings has a line a story, each named', same(lines.filter(l => l.pack === W).map(l => [l.id, l.name]), [[W, 'Storyland, Wanderer'], [W2, 'Storyland, Drifter']]), JSON.stringify(lines.filter(l => l.pack === W).map(l => [l.id, l.name])));
+
+    for (const id of [W, W2]) for (const sc of hub.worldEntry(id).scenes.filter(x => x.status === 'open')) hub.setSceneAside(id, sc.id);
+    extensionSettings.lorebook = lbWas;
+    extensionSettings.liveWorld.pack = packWas;
+    extensionSettings.hub.sceneCards = cardsWas;
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+    hub.__setRecapTransport(null);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

@@ -75,6 +75,9 @@ const saves = globalThis.__DES_SAVES__;
 const state = await import(`${DES}/src/core/state.js`);
 const { extensionSettings, lastGeneratedData, committedTrackerData } = state;
 const lw = await import(`${DES}/src/systems/features/liveWorld.js`);
+// A new chat begins in the blank world (D216). These flows were written when a setting chose the world a new chat
+// begins in; that choice is given here, so that they still open chats in the worlds they are about.
+lw.__setNewChatWorld(() => (extensionSettings.liveWorld && extensionSettings.liveWorld.pack) || '');
 const STUB = await import(`${SANDBOX}/script.js`);
 const packJson = JSON.stringify({ ...JSON.parse(readFileSync(new URL('../worldpacks/example.json', import.meta.url), 'utf8')), id: 'harbourside' });    // a copy of the template, as Start from Harbourside saves it
 
@@ -222,7 +225,7 @@ extensionSettings.liveWorld.pack = 'no-such-world';
 await lw.onWorldChatChanged();
 check('a chat keeps the pack it was seeded with', lw.getActivePack().id === 'harbourside');
 const reseeded = await lw.reseedWorld();
-check('a re-seed with a pack that cannot load keeps the world and says why, without calling the kept world missing', !reseeded.ok && reseeded.error.includes('No pack named "no-such-world"') && lw.getWorldState().clocks.blockade === 4 && lw.getPackError() === '');
+check('a re-seed starts the chat\'s own world over as it is built, whatever the setting that once chose a world for new chats says (D216)', reseeded.ok && lw.getActivePack().id === 'harbourside' && lw.getWorldState().clocks.blockade === 1 && lw.getWorldState().log.length === 0 && lw.getPackError() === '', JSON.stringify(reseeded));
 extensionSettings.liveWorld.pack = 'harbourside';
 await lw.reseedWorld();
 check('...here the pasted one, since the built-in cannot be fetched in the sandbox', lw.getActivePack().id === 'harbourside' && lw.getWorldState().clocks.blockade === 1 && lw.getWorldState().log.length === 0);

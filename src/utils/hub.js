@@ -155,7 +155,7 @@ export function gapMoves(gap) {
 // ─── The store ──────────────────────────────────────────────────────────
 
 export function emptyWorldEntry() {
-    return { card: '', campaign: '', memory: null, scenes: [], seq: 0, style: { bans: [] }, continuity: emptyContinuity() };
+    return { card: '', name: '', campaign: '', memory: null, scenes: [], seq: 0, style: { bans: [] }, continuity: emptyContinuity() };
 }
 
 function cleanSeed(raw) {
@@ -253,6 +253,7 @@ export function normalizeWorldEntry(raw) {
     const r = isObj(raw) ? raw : {};
     const e = emptyWorldEntry();
     e.card = clean(r.card, 200);
+    e.name = clean(r.name, 80);            // the story's own name (D216); '' for one named after where it began
     e.campaign = clean(r.campaign, 80);    // the Lore Library campaign this world is the scenes of (D172); '' for a world of its own
     e.style = normalizeStyle(r.style);     // the phrases held against the next scenes (D179)
     e.continuity = normalizeContinuity(r.continuity);    // where each person stands now, and the threads left open (D188)
@@ -274,7 +275,7 @@ export function normalizeWorldEntry(raw) {
 export function normalizeHub(raw) {
     const r = isObj(raw) ? raw : {};
     const out = { v: 1, ...hubConfig({ hub: r }), worlds: {} };
-    if (isObj(r.worlds)) for (const [id, w] of Object.entries(r.worlds)) { const k = clean(id, 60); if (k) out.worlds[k] = normalizeWorldEntry(w); }
+    if (isObj(r.worlds)) for (const [id, w] of Object.entries(r.worlds)) { const k = clean(id, 70); if (k) out.worlds[k] = normalizeWorldEntry(w); }    // a story's id is its world's and a number (D216)
     return out;
 }
 
@@ -878,7 +879,7 @@ export function sceneTitle({ opener = null, seed = null, place = '' } = {}) {
 
 /** The hub's mark on a scene chat: what the strip, the Scenes panel and a rebuild from the card's chats read. */
 export function hubMark({ world = '', scene = '', title = '', seed = null, place = null, cast = [], gap = null, startedAt = 0, startDate = '', file = '', brief = '' } = {}) {
-    return { v: 1, world: clean(world, 60), scene: clean(scene, 24), file: clean(file, 200), title: clean(title, MAX_TITLE), seed: cleanSeed(seed), place: cleanPlace(place), cast: cast.map(n => clean(n, 60)).filter(Boolean).slice(0, MAX_CAST), gap: cleanGap(gap), startedAt: Number.isFinite(startedAt) ? startedAt : 0, startDate: clean(startDate, 80), brief: String(brief || '').slice(0, MAX_BRIEF + 200), endedAt: 0, endDate: '', end: null };
+    return { v: 1, world: clean(world, 70), scene: clean(scene, 24), file: clean(file, 200), title: clean(title, MAX_TITLE), seed: cleanSeed(seed), place: cleanPlace(place), cast: cast.map(n => clean(n, 60)).filter(Boolean).slice(0, MAX_CAST), gap: cleanGap(gap), startedAt: Number.isFinite(startedAt) ? startedAt : 0, startDate: clean(startDate, 80), brief: String(brief || '').slice(0, MAX_BRIEF + 200), endedAt: 0, endDate: '', end: null };
 }
 
 /** Whether a mark belongs to this chat file: a branch or a checkpoint of a scene carries the scene's mark under another name and is not the scene (D113). */
@@ -893,7 +894,7 @@ export function markIsOfFile(mark, file) {
 /** The mark read back from a chat's metadata; null when the chat is not a scene. */
 export function readMark(chatMeta) {
     const m = isObj(chatMeta) ? chatMeta[HUB_META_KEY] : null;
-    if (!isObj(m) || !clean(m.world, 60) || !clean(m.scene, 24)) return null;
+    if (!isObj(m) || !clean(m.world, 70) || !clean(m.scene, 24)) return null;
     const end = isObj(m.end) ? { canonAt: clean(m.end.canonAt, 60) } : null;
     return { ...hubMark(m), endedAt: Number.isFinite(m.endedAt) ? m.endedAt : 0, endDate: clean(m.endDate, 80), end };
 }
@@ -1455,6 +1456,114 @@ export function describeStartResult(r) {
     return why[r.reason] || `Nothing was started: ${r.error || r.reason || 'unknown'}.`;
 }
 
+// ─── A world's stories (D216) ───────────────────────────────────────────
+//
+// A world is shared by many chats; scenes belong to one story. A story
+// begins from one chat (Play as scenes) or from the world itself (its
+// first scene started with no chat), and has its own scenes and its own
+// memory: the date, where people are, the clocks, the news, the quests,
+// the inventory, the ledger. Two stories in one world never cross. What
+// they share is the world as it is built (its places, clocks and cast).
+//
+// A story is an entry of the hub's store, as a world's one memory was.
+// The first story of a world is kept under the world's own id, so that
+// everything made before stories is a first story as it stands; the
+// ones after it under the world's id, a `~` and a number. The world's
+// campaign is kept on the entry under the world's own id, whichever
+// story that is.
+
+export const STORY_SEP = '~';    // never in a world's id (letters, digits and hyphens)
+
+/** The world a story is of: the story's id up to its number. A world's own id is its first story's. */
+export function packOf(storyId) {
+    const id = String(storyId || '');
+    const at = id.indexOf(STORY_SEP);
+    return at < 0 ? id : id.slice(0, at);
+}
+
+/** Whether a story's entry stands untouched: no scene of it, and no memory an End or a chat taken wrote. */
+export function entryUntouched(entry) {
+    return !isObj(entry) || (!(isObj(entry.memory) && entry.memory.takenAt > 0) && !(Array.isArray(entry.scenes) && entry.scenes.length));
+}
+
+const storyNo = (id) => { const at = String(id).indexOf(STORY_SEP); const n = at < 0 ? 1 : Number(String(id).slice(at + 1)); return Number.isFinite(n) && n > 0 ? n : 1; };
+
+/** The stories of a world that have anything in them, in the order they were begun. */
+export function storyIdsOf(worlds, packId) {
+    const all = isObj(worlds) ? worlds : {};
+    const pack = String(packId || '');
+    if (!pack) return [];
+    return Object.keys(all).filter(id => packOf(id) === pack && !entryUntouched(all[id])).sort((a, b) => storyNo(a) - storyNo(b));
+}
+
+/** The id a new story of a world takes: the world's own while nothing is kept under it, else the next number free. */
+export function nextStoryId(worlds, packId) {
+    const all = isObj(worlds) ? worlds : {};
+    const pack = String(packId || '');
+    if (entryUntouched(all[pack])) return pack;
+    for (let n = 2; n < 1000; n++) { const id = `${pack}${STORY_SEP}${n}`; if (entryUntouched(all[id])) return id; }
+    return `${pack}${STORY_SEP}${Date.now()}`;
+}
+
+/**
+ * The story a chat began: the one whose scene 0 is that chat (D172),
+ * under that card where both are known. '' when the chat began none.
+ */
+export function storyOfChat(worlds, packId, chat, card = '') {
+    const all = isObj(worlds) ? worlds : {};
+    const file = String(chat || '').replace(/\.jsonl$/i, '').toLowerCase();
+    if (!file) return '';
+    for (const id of storyIdsOf(all, packId)) {
+        const s0 = all[id].scenes.find(x => x.id === ADOPTED_ID);
+        if (!s0 || !s0.chat || s0.gone) continue;
+        if (String(s0.chat).replace(/\.jsonl$/i, '').toLowerCase() !== file) continue;
+        if (card && s0.card && s0.card !== card) continue;
+        return id;
+    }
+    return '';
+}
+
+/** When a story was last played: its last End or its last Start, whichever is later. */
+export function storyPlayedAt(entry) {
+    if (!isObj(entry)) return 0;
+    const ended = isObj(entry.memory) && Number(entry.memory.takenAt) > 0 ? Number(entry.memory.takenAt) : 0;
+    const started = (Array.isArray(entry.scenes) ? entry.scenes : []).reduce((m, x) => Math.max(m, Number(x && x.startedAt) || 0, Number(x && x.endedAt) || 0), 0);
+    return Math.max(ended, started);
+}
+
+/** The story of a world played last; '' when it has none. */
+export function lastStoryOf(worlds, packId) {
+    const all = isObj(worlds) ? worlds : {};
+    const ids = storyIdsOf(all, packId);
+    if (!ids.length) return '';
+    return ids.slice().sort((a, b) => (storyPlayedAt(all[b]) - storyPlayedAt(all[a])) || (storyNo(b) - storyNo(a)))[0];
+}
+
+/**
+ * A world's stories for a list: each with its name (its own, else the
+ * card its first chat is on, else "Story N"), its scenes, whether one is
+ * being played, and when it was last played.
+ * @param {(avatar: string) => string} [cardName]  a card's name by its avatar
+ * @returns {{ id: string, name: string, scenes: number, open: boolean, playedAt: number }[]}
+ */
+export function storiesOf(worlds, packId, cardName = null) {
+    const all = isObj(worlds) ? worlds : {};
+    const ids = storyIdsOf(all, packId);
+    const seen = {};
+    return ids.map((id, i) => {
+        const e = all[id];
+        const s0 = e.scenes.find(x => x.id === ADOPTED_ID);
+        let from = '';
+        try { from = s0 && s0.card && typeof cardName === 'function' ? clean(cardName(s0.card), 80) : ''; } catch (err) { from = ''; }
+        let name = clean(e.name, 80) || from || `Story ${i + 1}`;
+        // Two stories begun on one card are told apart by their number.
+        seen[name] = (seen[name] || 0) + 1;
+        if (seen[name] > 1) name = `${name} (${seen[name]})`;
+        const open = openSceneOf(e);
+        return { id, name, scenes: e.scenes.filter(x => x.id !== ADOPTED_ID).length, open: !!(open && !open.gone), playedAt: storyPlayedAt(e) };
+    });
+}
+
 // ─── A campaign's world (D213) ──────────────────────────────────────────
 //
 // The Lore Library's active campaign decides the world, as it decides which
@@ -1489,7 +1598,7 @@ export function campaignWorldId(settings, campaignId) {
     const worlds = hubWorldsOf(settings);
     const hits = Object.keys(worlds).filter(w => own[w] !== undefined && isObj(worlds[w]) && worlds[w].campaign === id);
     if (hits.length < 2) return hits[0] || '';
-    const weight = (w) => [Array.isArray(worlds[w].scenes) ? worlds[w].scenes.length : 0, (isObj(worlds[w].memory) && Number(worlds[w].memory.takenAt)) || 0];
+    const weight = (w) => { const ids = storyIdsOf(worlds, w); return [ids.reduce((n, sid) => n + worlds[sid].scenes.length, 0), ids.reduce((m, sid) => Math.max(m, storyPlayedAt(worlds[sid])), 0)]; };
     return hits.sort((a, b) => { const x = weight(a); const y = weight(b); return (y[0] - x[0]) || (y[1] - x[1]) || a.localeCompare(b); })[0];
 }
 
@@ -1535,7 +1644,8 @@ export function worldsByCampaign(settings) {
         const e = isObj(worlds[id]) ? worlds[id] : null;
         const named = e && typeof e.campaign === 'string' && names[e.campaign] !== undefined ? e.campaign : '';
         const campaign = named && campaignWorldId(settings, named) === id ? named : '';
-        return { id, name: own[id], campaign, campaignName: campaign ? names[campaign] : '', scenes: e && Array.isArray(e.scenes) ? e.scenes.filter(x => isObj(x) && x.id !== ADOPTED_ID).length : 0 };
+        const stories = storyIdsOf(worlds, id);
+        return { id, name: own[id], campaign, campaignName: campaign ? names[campaign] : '', scenes: stories.reduce((n, sid) => n + worlds[sid].scenes.filter(x => isObj(x) && x.id !== ADOPTED_ID).length, 0), stories: stories.length };
     }).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 

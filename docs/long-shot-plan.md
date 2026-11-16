@@ -1779,3 +1779,58 @@ it back; the guard: nothing to do, another chat, the handlers run once
 in order, the moment given to SillyTavern, the same name under another
 card, no card known, no chat); `tools/atlas-browser-test.mjs` §5k (the
 line with the move, the main button, the way back).
+
+## 55. A world holds many stories; a new chat begins in no world (2026-11-16, D216)
+
+The owner, asked what a new chat should begin in once the setting that
+chose a world for it was gone: "Ok here the thing that I think is
+fucking us up. The world is supposed to have multiple chats applied to
+it. But scenes should only be applied to one chat, not the world. So
+you can have multiple storylines going on in the same world and not get
+them crossed." And: "Also cannon should be per chat."
+
+That is what was wrong underneath D213 to D215. A world had one memory
+and one list of scenes, so every chat played as scenes in it was the
+same story: a second chat taken into a world replaced what the world
+remembered (asked first, but there was nothing else it could do), a
+scene started from any chat of a world was that one story's, and a
+world given to a chat by a setting carried its one story's state with
+it. Asked what two stories of a world should share, which the Atlas
+should show, and what a new chat should begin in: the world as it is
+built and the map; the story of the chat in front; always the blank
+world.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D216 | Scenes belong to one chat's story; a world is shared by many; a new chat begins in the blank world | **Held.** **A story** is what a world's one memory was: its scenes, and what they remember (the date and place, where people are, the clocks, the news, the quests, the inventory, the ledger, the hooks, where its people stand and its open threads, its continuity book). A world has as many as are begun in it, and nothing of one reaches another: Canon's ledger is the story's own. They share the world as the World Builder has it (its places, clocks and cast). **In the store** a story is an entry as a world's was. The first story of a world is kept under the world's own id, so everything made before stories is a first story as it stands, with no migration; the ones after under the world's id, a `~` and a number (`packOf`, `storyIdsOf`, `nextStoryId`, `src/utils/hub.js`). A scene's mark names its story. The campaign is the world's, kept on the entry under the world's own id whichever story that is. **Play as scenes** (`scenesPlan`) begins a story for the chat in front: a new one, in the campaign's world, or the chat's own. Only the chat a story began from, played as scenes again, is that story taken again, and only then is anything replaced (asked first, as before). The panel says when the world has other stories that they are not touched. **A scene** is started in the story the chat in front belongs to (`storyInFront`): the scene's own story, or the story that chat began. A chat of a world that began no story has no scene to start: it has Play as scenes. **The Atlas** shows the story of the chat in front; else the one played last; in a world nothing has been played in, the world's own beginning. Where a world has more than one story a list of them is under the world's name, the one shown chosen and one being played marked; with one story there is no list. A chat of the campaign's world that is part of none of its stories is said to be so, with the way to see it and the word that Play as scenes begins a story of its own from it. The D menu's scene is any story's of the campaign's world, the one started last. Settings has a line a story. **A new chat** begins in the blank world, which grows from play, whatever campaign is on: the setting World for new chats is gone, with its row in Settings and its mark in the World Builder, and D213's rule that a new chat under a campaign is the campaign's world with it. A chat is put into a world by hand: **Use for this chat** on a world in the World Builder (where Use for new chats was), or Move this chat in the Atlas (D215), each with Put it back. From the blank world a chat moved into a world is given the world's own beginning (its clocks, where its cast stands) under what play has built. Re-seed in Settings starts the chat's own world over as it is built. |
+
+What it does not do. A story is named after the card its first chat is
+on (two on one card are numbered); it cannot be renamed. Stories are
+not deleted as such: a story's scenes are deleted one by one, and one
+with none left and no memory is not listed. The first story of a world
+begun before stories keeps whatever was taken into it: two chats taken
+into one world before this are one story still, the later one's memory.
+The map is a story's own until §56. With the Lore Library off there is
+no list of stories in the Atlas: a story is reached from its line in
+Settings. A world that was the world for new chats is not taken out of
+the chats that began in it: each is moved by hand, as D215 has it. Run
+in the real SillyTavern: a new chat with the old setting still naming a
+world (the blank world), moved into the campaign's world, played as
+scenes (the first story); a second chat moved into the same world (said
+to be part of no story), played as scenes (a story of its own, the
+panel saying the first is not touched); the list of two stories, the
+other picked, its first scene offered; the World Builder's Use for this
+chat and Put this chat back.
+
+Tests: `tools/hub-test.mjs` (a story's world, untouched entries, the
+stories of a world in order, the id a new one takes, the story a chat
+began, the one played last, the list and its names, the longest id,
+the campaign of a world with stories); `tools/hub-flow-test.mjs` §33
+(two chats of one world, two stories, the first as it was to the
+letter, the ledger of each its own through a scene and its End, a
+scene started from each chat, the same chat taken again, a chat part of
+none, the campaign and the D menu, Settings' lines), and §9, §23, §24,
+§31 rewritten where they took a second chat into a world's one memory
+or expected a world given to a new chat; `tools/live-world-flow-test.mjs`
+(Re-seed); `tools/atlas-browser-test.mjs` §5k (the list of stories, the
+panel's word).

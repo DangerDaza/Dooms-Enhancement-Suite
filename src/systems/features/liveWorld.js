@@ -39,7 +39,7 @@ import { renderImage, sourceProblem } from './imageGen.js';
 import { imageGenConfig } from '../../utils/imageGen.js';
 import { parseCaptionReply } from '../../utils/scenePictures.js';
 import { visitPlace, reconcileVisited, placesRow, buildPlacePrompt } from '../../utils/worldMap.js';
-import { readMark, markIsOfFile, activeCampaignWorldId } from '../../utils/hub.js';
+import { readMark, markIsOfFile } from '../../utils/hub.js';
 import { worldToRaw, worldSummary, worldFromState, buildWorldDraftPrompt, parseWorldDraft, rebindStateToPack, DRAFT_LIMITS } from '../../utils/worldBuilder.js';
 import {
     WORLD_SLOT,
@@ -420,8 +420,12 @@ export async function moveChatToWorld(id) {
         commit(seedWorldState(r.pack), { source: 'world' }, { immediate: true });
         recordCurrentScene();    // where the chat stands now, from its last reply
     } else {
-        const bound = rebindStateToPack(state, r.pack);
-        const next = clampClocksToPack({ ...bound.state, pack: r.pack.id, packVersion: r.pack.version || 1, name: '' }, r.pack).state;
+        // The world's own beginning (its clocks, where its cast stands, who is known), with what play has built laid over it.
+        const seeded = seedWorldState(r.pack);
+        const bound = rebindStateToPack(state, r.pack).state;
+        const known = { ...seeded.known };
+        for (const [who, tier] of Object.entries(bound.known || {})) if (known[who] !== 'known') known[who] = tier;
+        const next = clampClocksToPack({ ...bound, pack: r.pack.id, packVersion: r.pack.version || 1, name: '', clocks: { ...seeded.clocks }, known, where: { ...seeded.where, ...(bound.where || {}) }, blurb: bound.blurb || seeded.blurb }, r.pack).state;
         activePack = r.pack;
         missingWorld = '';
         commit(next, { source: 'world' }, { immediate: true });
@@ -434,7 +438,7 @@ export async function moveChatToWorld(id) {
 export function movedFrom() {
     try {
         const b = chat_metadata && typeof chat_metadata === 'object' ? chat_metadata[MOVED_KEY] : null;
-        return b && typeof b === 'object' && b.pack && b.state && state && b.pack !== state.pack ? { pack: String(b.pack), name: String(b.name || b.pack), at: Number(b.at) || 0 } : null;
+        return b && typeof b === 'object' && b.pack && b.state && state && b.pack !== state.pack ? { pack: String(b.pack), name: String(b.name || b.pack), blank: b.pack === BLANK_PACK_ID, at: Number(b.at) || 0 } : null;
     } catch (e) { return null; }
 }
 
@@ -626,6 +630,13 @@ function reconcile(detail) {
  * cannot be used leaves the chat without a world (the dashboard says why)
  * and the advancer never runs on empty state.
  */
+let newChatWorld = null;    // test hook: () => the world a chat with none begins in, '' for the blank one
+
+/** Test hook: the world a new chat begins in (it is the blank one; the flows written when a setting chose it give theirs). */
+export function __setNewChatWorld(fn) {
+    newChatWorld = typeof fn === 'function' ? fn : null;
+}
+
 export async function onWorldChatChanged() {
     const token = ++loadToken;
     state = null;
@@ -645,8 +656,11 @@ export async function onWorldChatChanged() {
     const meta = chat_metadata;
     const raw = meta && typeof meta === 'object' ? meta[META_KEY] : null;
     const stored = raw && typeof raw === 'object' && raw.seeded === true ? normalizeWorldState(raw) : null;
-    // A chat with no world yet is the active campaign's world when that has one (D213), else the world set for new chats.
-    const packId = stored && stored.pack ? stored.pack : (activeCampaignWorldId(extensionSettings) || cfg().pack);
+    // A chat with no world yet begins in the blank one, which grows from play (D216): no world is given to a chat that did
+    // not ask for it. It is put into a world by hand (the World Builder's Use for this chat, the Atlas's Move this chat).
+    let first = '';
+    try { first = newChatWorld ? String(newChatWorld() || '') : ''; } catch (e) { first = ''; }
+    const packId = stored && stored.pack ? stored.pack : (first || BLANK_PACK_ID);
     const res = await loadPack(packId);
     if (token !== loadToken || chat_metadata !== meta) return;    // another chat opened meanwhile (or was swapped in, its CHAT_CHANGED to come)
     loadedMeta = meta;
@@ -722,12 +736,14 @@ export function recordCurrentScene() {
 export async function reseedWorld() {
     if (!isLiveWorldOn()) return { ok: false, error: 'Live World is off.' };
     if (!chatId()) return { ok: false, error: 'No chat is open.' };
-    const res = await loadPack(cfg().pack, { fresh: true });
+    // From the world the chat is in, as it is built (D216: no setting chooses a world for a chat).
+    const id = ready() ? state.pack : BLANK_PACK_ID;
+    const res = await loadPack(id, { fresh: true });
     if (!res.ok) {
-        log(`re-seed refused: the pack "${cfg().pack}" cannot be used`, res.errors);
+        log(`re-seed refused: the world "${id}" cannot be used`, res.errors);
         return { ok: false, error: res.errors.join(' ') };    // the world stands; this chat's own packError is not touched
     }
-    if (chat_metadata && typeof chat_metadata === 'object') delete chat_metadata[META_KEY];
+    if (chat_metadata && typeof chat_metadata === 'object') chat_metadata[META_KEY] = seedWorldState(res.pack, { name: res.pack.id === BLANK_PACK_ID && state ? state.name : '' });
     await onWorldChatChanged();
     return { ok: !!state, error: state ? '' : (packError || 'The world could not be seeded.') };
 }

@@ -39,6 +39,7 @@ import {
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
     readConflicts, mergeConflicts, normalizeConflicts,
     ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, worldsByCampaign, loreLibraryOn,
+    packOf, entryUntouched, storyIdsOf, nextStoryId, storyOfChat, lastStoryOf, storiesOf,
 } from '../../utils/hub.js';
 import { normalizeBook } from '../../utils/atlas.js';
 import { narratorTexts, countStyle, applyStyle } from '../../utils/styleLaw.js';
@@ -181,6 +182,38 @@ function putEntry(worldId, entry, detail) {
 export function worldEntry(worldId) {
     const e = store().worlds[String(worldId || '').trim()];
     return e ? JSON.parse(JSON.stringify(e)) : null;
+}
+
+/** The campaign a story's world is attached to (D213, D216): kept on the entry under the world's own id. '' when it is in none. */
+function campaignIdOf(storyId) {
+    const e = store().worlds[packOf(storyId)];
+    return e && e.campaign ? String(e.campaign) : '';
+}
+
+/**
+ * A world's stories (D216), in the order they were begun: each with its
+ * name, its scenes, whether a scene of it is being played, and when it
+ * was last played.
+ */
+export function worldStories(packId) {
+    const list = bridge().characters();
+    return storiesOf(store().worlds, String(packId || ''), (avatar) => { const c = list.find(x => x && x.avatar === avatar); return c ? String(c.name || '') : ''; });
+}
+
+/** The story of a world played last; '' when nothing has been played in it. */
+export function lastStory(packId) {
+    return lastStoryOf(store().worlds, String(packId || ''));
+}
+
+/** The story the chat in front belongs to: the scene's, or the one this chat began; '' when it is part of none. */
+export function storyInFront() {
+    try {
+        const cur = currentScene();
+        if (cur) return cur.worldId;
+        const st = getWorldState();
+        const card = chatCard();
+        return st && st.pack ? storyOfChat(store().worlds, String(st.pack), chatId(), card ? card.avatar : '') : '';
+    } catch (e) { return ''; }
 }
 
 /** The worlds the hub can play: the user's own (the blank world and the template are not bound). */
@@ -397,7 +430,7 @@ export function unbindCard(worldId) {
  */
 export async function makeNarratorCard(worldId) {
     const id = String(worldId || '').trim();
-    const res = await loadPack(id);
+    const res = await loadPack(packOf(id));
     if (!res.ok) return { ok: false, reason: 'no-world', errors: res.errors };
     const pack = res.pack;
     const name = `Narrator of ${pack.name}`.slice(0, 80);
@@ -535,7 +568,8 @@ export function __setLoreReader(fn) {
 async function booksOf(worldId) {
     const e = store().worlds[String(worldId || '')];
     const lb = extensionSettings.lorebook;
-    const c = e && e.campaign && lb && lb.campaigns && typeof lb.campaigns === 'object' ? lb.campaigns[e.campaign] : null;
+    const of = campaignIdOf(worldId);
+    const c = of && lb && lb.campaigns && typeof lb.campaigns === 'object' ? lb.campaigns[of] : null;
     // The world's own continuity book (D189) is not read here: what it holds is given to a scene by itself, as how things stand now.
     const own = e && e.continuity && e.continuity.book ? e.continuity.book.name : '';
     const notOwn = (list) => list.map(String).filter(b => b && b !== own).slice(0, LORE_BOOKS);
@@ -687,15 +721,15 @@ async function writeBook(worldId, { force = false } = {}) {
         if (!name || !names.includes(name)) {
             if (!name) {
                 const lb = extensionSettings.lorebook;
-                const camp = entry.campaign && lb && lb.campaigns ? lb.campaigns[entry.campaign] : null;
-                const res = camp ? null : await loadPack(worldId);
+                const camp = campaignIdOf(worldId) && lb && lb.campaigns ? lb.campaigns[campaignIdOf(worldId)] : null;
+                const res = camp ? null : await loadPack(packOf(worldId));
                 const wanted = continuityBookName(camp ? camp.name : (res && res.ok ? res.pack.name : worldId));
                 name = wanted;
                 for (let n = 2; n < 100 && names.includes(name); n++) name = `${wanted} ${n}`;    // a book of that name that is not this world's is left alone
                 if (names.includes(name)) throw new Error(`no free name for the book ("${wanted}")`);
             }
             await api.create(name);
-            await api.file(entry.campaign, name);
+            await api.file(campaignIdOf(worldId), name);
             cont = forgetBook(cont);
             made = true;
         }
@@ -861,7 +895,7 @@ function castLines(names, worldState) {
 function memoryFor(entry, pack, worldId) {
     if (entry.memory && entry.memory.stores && entry.memory.stores.dooms_world) return entry.memory;
     const state = seedWorldState(pack, { name: '' });
-    state.pack = worldId;
+    state.pack = packOf(worldId);    // the story's world (D216)
     return { v: 1, takenAt: 0, scene: '', stores: { ...(entry.memory && entry.memory.stores ? entry.memory.stores : {}), dooms_world: state }, facts: entry.memory && entry.memory.facts ? entry.memory.facts : { date: '', time: '', location: '', weather: '' } };
 }
 
@@ -983,7 +1017,7 @@ async function lastLinesFor(worldId, entry, seed, gap, players) {
 export async function prepareScene({ worldId, seed = null, place = null, cast = [], gap = null, note = '', hookId = '' } = {}) {
     const g = guardStart(worldId);
     if (!g.ok) return g;
-    const res = await loadPack(g.id);
+    const res = await loadPack(packOf(g.id));
     if (!res.ok) return { ok: false, reason: 'no-world', errors: res.errors };
     const pack = res.pack;
     const token = ++pendingToken;
@@ -1116,7 +1150,7 @@ export async function proposeHubHooks(worldId) {
     // asked here would be lost at End, and a hook set aside offered again. The Map window serves the open scene's hooks.
     const open = openSceneOf(entry);
     if (open && !open.gone) return { ok: false, reason: 'scene-open', scene: JSON.parse(JSON.stringify(open)) };
-    const res = await loadPack(id);
+    const res = await loadPack(packOf(id));
     if (!res.ok) return { ok: false, reason: 'no-world', errors: res.errors };
     if (hooksBusyWorld) return { ok: false, reason: 'running' };
     const pack = res.pack;
@@ -1484,7 +1518,7 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         // The world moves for the scene just ended: over the snapshot's own world state, into the memory, never into the chat (§5.3).
         if (!keep && isLiveWorldOn() && !skipWorld && memory.stores.dooms_world) {
             step('world', 'running');
-            const res = await loadPack(g.cur.worldId);
+            const res = await loadPack(packOf(g.cur.worldId));
             if (res.ok) {
                 const recapText = skipRecap ? '' : String(recap || '').trim();
                 const moved = await moveWorldByGap(g.cur.worldId, res.pack, memory, { id: 'scene', words: 'the scene just played' }, [recapText, ...lastRecaps(entry, 1)].filter(Boolean), { mode: 'after', from: g.cur.mark.startDate, to: facts.date });
@@ -1663,8 +1697,8 @@ export function sceneStartPlan() {
         if (!cur.ended) return { ok: false, reason: 'scene-open', scene: cur.scene };
         worldId = cur.worldId;
     } else {
-        const st = getWorldState();
-        worldId = st && st.pack ? String(st.pack) : '';
+        // A chat that is no scene starts a scene of the story it began (D216); a chat that began none has Play as scenes.
+        worldId = storyInFront();
         const e = worldId ? store().worlds[worldId] : null;
         if (!e || !e.memory) return { ok: false, reason: 'not-scenes' };
     }
@@ -1914,16 +1948,20 @@ export function scenesPlan() {
         const name = (campaign && campaign.name) || state.name || (pack && pack.name) || 'The world';
         world = { id: freeWorldId(name), name, made: true };
     }
-    const entry = worlds[world.id] || null;
-    // One card, one world (D114): a world that has its narrator keeps it; else the chat's card is the narrator, unless it narrates another world.
-    const bound = entry && entry.card ? cardOf(world.id) : null;
+    // The story (D216): the one this chat began, taken again; else a new one in that world. A world's other stories are
+    // never touched: scenes belong to one chat's story, the world is shared.
+    const mineStory = world.made ? '' : storyOfChat(worlds, world.id, chatId(), card.avatar);
+    const story = { id: mineStory || (world.made ? world.id : nextStoryId(worlds, world.id)), made: !mineStory, others: world.made ? 0 : storyIdsOf(worlds, world.id).filter(x => x !== mineStory).length };
+    const entry = (mineStory && worlds[story.id]) || null;
+    // One card, one story (D114): a story that has its narrator keeps it; else the chat's card is the narrator, unless it narrates another.
+    const bound = entry && entry.card ? cardOf(story.id) : null;
     const other = bound ? '' : worldOfCard(card.avatar);
     const each = cfg().sceneCards;
     // With a card for every scene (D209) a world needs no narrator of its own: a chat on a card that narrates another world
     // is taken all the same, and the card stays that world's (D214). Without, it is refused: the scenes would be chats on it.
-    if (other && other !== world.id && !each) return { ok: false, reason: 'bound-elsewhere', boundTo: other, world, campaign, card: { avatar: card.avatar, name: card.name } };
-    const narrator = bound ? { avatar: bound.avatar, name: bound.name } : other && other !== world.id ? { avatar: '', name: SCENE_NARRATOR_NAME } : { avatar: card.avatar, name: card.name };
-    return { ok: true, reason: '', world, campaign, card: narrator, sceneCards: each, replaces: !!(entry && entry.memory && entry.memory.takenAt), scenes: entry ? entry.scenes.filter(x => x.id !== ADOPTED_ID).length : 0 };
+    if (other && other !== story.id && !each) return { ok: false, reason: 'bound-elsewhere', boundTo: other, world, campaign, card: { avatar: card.avatar, name: card.name } };
+    const narrator = bound ? { avatar: bound.avatar, name: bound.name } : other && other !== story.id ? { avatar: '', name: SCENE_NARRATOR_NAME } : { avatar: card.avatar, name: card.name };
+    return { ok: true, reason: '', world, story, campaign, card: narrator, sceneCards: each, replaces: !!(entry && entry.memory && entry.memory.takenAt), scenes: entry ? entry.scenes.filter(x => x.id !== ADOPTED_ID).length : 0 };
 }
 
 // ─── The campaign's world (D213) ────────────────────────────────────────
@@ -1983,7 +2021,7 @@ export function worldOfCampaign(campaignId) {
 /** The campaign a world is attached to: { id, name }; null when it is in none. */
 export function campaignOfWorld(worldId) {
     store();
-    const hit = worldsByCampaign(extensionSettings).find(w => w.id === String(worldId || ''));
+    const hit = worldsByCampaign(extensionSettings).find(w => w.id === packOf(worldId));
     return hit && hit.campaign ? { id: hit.campaign, name: hit.campaignName } : null;
 }
 
@@ -2015,7 +2053,7 @@ export async function attachWorld(campaignId, worldId) {
     const was = campaignWorldId(extensionSettings, cid);
     const had = wid && s.worlds[wid] ? String(s.worlds[wid].campaign || '') : '';
     const from = had && had !== cid && all.some(c => c.id === had) ? had : '';
-    const bookOf = (id) => { const e = s.worlds[id]; return e && e.continuity && e.continuity.book ? e.continuity.book.name : ''; };
+    const booksOfWorld = (id) => Object.keys(s.worlds).filter(k => packOf(k) === id).map(k => { const e = s.worlds[k]; return e && e.continuity && e.continuity.book ? e.continuity.book.name : ''; }).filter(Boolean);
     // One campaign, one world: every other world that names the campaign lets it go.
     const let_go = Object.keys(s.worlds).filter(id => id !== wid && s.worlds[id] && s.worlds[id].campaign === cid);
     for (const id of let_go) s.worlds[id] = { ...s.worlds[id], campaign: '' };
@@ -2024,9 +2062,8 @@ export async function attachWorld(campaignId, worldId) {
     // The continuity books follow their worlds (D189): best effort, a book that cannot be filed is still the world's.
     try {
         const api = books();
-        for (const id of let_go) { const b = bookOf(id); if (b && typeof api.unfile === 'function') await bookStep(api.unfile(cid, b)); }
-        const b = wid ? bookOf(wid) : '';
-        if (b && had !== cid) await bookStep(api.file(cid, b));
+        for (const id of let_go) for (const b of booksOfWorld(id)) if (typeof api.unfile === 'function') await bookStep(api.unfile(cid, b));
+        if (wid && had !== cid) for (const b of booksOfWorld(wid)) await bookStep(api.file(cid, b));
     } catch (e) { log('a continuity book could not be filed with its campaign', String(e && e.message || e)); }
     log(`${cid} is attached to ${wid || 'no world'}`, { was, from });
     return { ok: true, reason: '', worldId: wid, was: was && was !== wid ? was : '', from };
@@ -2352,20 +2389,21 @@ export async function commitAdopt({ recap = '', replace = false, continuity = nu
     adopting = true;
     try {
         const token = { meta: meta(), id: chatId() };
-        const worldId = plan.world.id;
+        const packId = plan.world.id;      // the world the chat is carried over to
+        const worldId = plan.story.id;     // the story the chat begins, or began: its own entry (D216)
         // The copy first: the chat as it stands before its world is changed under it.
         await flushChat();
         const kept = await backupChat(chatCard());
         if (!kept.ok) return { ok: false, reason: 'backup', errors: [kept.error] };
         if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
         if (plan.world.made) {
-            const saved = await saveWorld({ id: worldId, name: plan.world.name, version: 1, description: '', places: [], clocks: [], cast: [], blurb: '' });
+            const saved = await saveWorld({ id: packId, name: plan.world.name, version: 1, description: '', places: [], clocks: [], cast: [], blurb: '' });
             if (!saved.ok) return { ok: false, reason: 'world', errors: saved.errors };
         }
         const state = getWorldState();
         if (!state) return { ok: false, reason: 'no-world' };
-        if (state.pack !== worldId) {
-            const moved = await adoptWorld(worldId, { ownName: true });
+        if (state.pack !== packId) {
+            const moved = await adoptWorld(packId, { ownName: true });
             if (!moved.ok) return { ok: false, reason: 'world', errors: [moved.error || 'The chat could not be carried over to the world.'] };
         }
         if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
@@ -2379,14 +2417,15 @@ export async function commitAdopt({ recap = '', replace = false, continuity = nu
         const card = chatCard();
         const base = { ...entryOf(worldId) };
         if (!base.card || !cardOf(worldId)) base.card = plan.card.avatar;    // none yet, or the one it had is gone
-        if (plan.campaign) base.campaign = plan.campaign.id;
+        // The campaign is the world's, kept under the world's own id whichever story this is (D213, D216).
+        if (plan.campaign) { if (worldId === packId) base.campaign = plan.campaign.id; else store().worlds[packId] = { ...entryOf(packId), campaign: plan.campaign.id }; }
         const r = adoptScene({ ...base, memory }, { chat: String(chatId() || ''), card: card ? card.avatar : '', recap, place: { label: facts.location || '' }, endDate: facts.date || '', endedAt: now });
         // Where the chat's people stand now and what it has left open (D188), as the panel has them.
         const cont = continuity ? applyContinuity(r.entry.continuity, continuity, { scene: ADOPTED_ID, at: now }) : r.entry.continuity;
         putEntry(worldId, { ...r.entry, continuity: cont }, { source: 'adopt', world: worldId });
         const mirrored = await mirrorBook(worldId);    // the world's continuity book, made with its first continuity (D189)
         log(`${worldId} is played as scenes from "${chatId()}"`, { made: plan.world.made, replaced: plan.replaces, campaign: plan.campaign ? plan.campaign.id : '', backup: kept.file });
-        return { ok: true, reason: '', worldId, worldName: plan.world.name, made: plan.world.made, card: plan.card.name, sceneCards: !!plan.sceneCards, replaced: plan.replaces, recap: r.scene.recap, backup: kept.file, continuity: continuity ? changeCounts(continuity) : null, book: mirrored.state === 'ok' ? mirrored.name : '' };
+        return { ok: true, reason: '', worldId, packId, story: { id: worldId, made: plan.story.made, others: plan.story.others }, worldName: plan.world.name, made: plan.world.made, card: plan.card.name, sceneCards: !!plan.sceneCards, replaced: plan.replaces, recap: r.scene.recap, backup: kept.file, continuity: continuity ? changeCounts(continuity) : null, book: mirrored.state === 'ok' ? mirrored.name : '' };
     } catch (e) {
         return { ok: false, reason: 'error', errors: [String(e && e.message || e)] };
     } finally {
@@ -3023,7 +3062,7 @@ export function sceneAway() {
         if (campaign && !only) return null;
         let best = null;
         for (const id of Object.keys(worlds)) {
-            if (only && id !== only) continue;
+            if (only && packOf(id) !== only) continue;    // any story of the campaign's world (D216)
             const s = (worlds[id].scenes || []).find(x => x.status === 'open' && !x.gone && x.chat);
             if (!s || !cardOfScene(id, s)) continue;
             if (!best || (Number(s.startedAt) || 0) > (Number(best.scene.startedAt) || 0)) best = { worldId: id, scene: JSON.parse(JSON.stringify(s)) };
@@ -3074,10 +3113,16 @@ export async function refreshScenes(worldId) {
 /** One line per world for Settings and /hub. */
 export async function hubStatusLines() {
     const out = [];
-    for (const id of hubWorldIds()) {
-        const res = await loadPack(id);
-        const card = cardOf(id);
-        out.push({ id, name: res.ok ? res.pack.name : id, card: card ? card.avatar : '', cardName: card ? card.name : '', line: hubStatusLine({ worldName: res.ok ? res.pack.name : id, entry: store().worlds[id] || null, cardName: card ? card.name : '', sceneCards: cfg().sceneCards, campaign: campaignsOf(extensionSettings).length ? (campaignOfWorld(id) || { name: '' }).name : undefined }) });
+    for (const pack of hubWorldIds()) {
+        const res = await loadPack(pack);
+        const worldName = res.ok ? res.pack.name : pack;
+        const stories = worldStories(pack);
+        // A line a story (D216); a world with none yet has one line, under its own id.
+        for (const st of (stories.length ? stories : [{ id: pack, name: '' }])) {
+            const card = cardOf(st.id);
+            const name = stories.length > 1 ? `${worldName}, ${st.name}` : worldName;
+            out.push({ id: st.id, pack, name, card: card ? card.avatar : '', cardName: card ? card.name : '', line: hubStatusLine({ worldName: name, entry: store().worlds[st.id] || null, cardName: card ? card.name : '', sceneCards: cfg().sceneCards, campaign: campaignsOf(extensionSettings).length ? (campaignOfWorld(pack) || { name: '' }).name : undefined }) });
+        }
     }
     return out;
 }
