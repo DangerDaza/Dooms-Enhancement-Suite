@@ -103,16 +103,33 @@ async function migrateUserCharacters(userCharacters, sharedByName) {
         // Track per-character: cropped first, then fullres can reuse.
         let crop = entry.avatar;
         let full = entry.avatarFullRes;
+        // Where an upload's URL goes once it has landed. The card is read
+        // again, as it is stored NOW: a Workshop save during the upload
+        // replaces the card object, a delete removes it, and a campaign
+        // switch can have put another version's portrait on it and banked
+        // this data URL into a version. Whatever still holds the data URL
+        // gets the URL, so the file is never left with nothing pointing at it
+        // while a holder of its bytes exists.
+        const put = (field, dataUrl, url) => {
+            const stored = extensionSettings.userCharacters?.[name];
+            if (stored && typeof stored === 'object' && stored[field] === dataUrl) stored[field] = url;
+            else relocateMigratedValue(dataUrl, url);
+        };
 
         let cropUrl = null;
         if (isDataUrl(crop)) {
             try {
                 cropUrl = await persistPortrait(crop, name, crop);
-                // Compare-and-swap, as for the NPC maps: a campaign switch
-                // during the upload can have put another version's portrait
-                // on the card and banked this data URL into a version.
-                if (entry.avatar === crop) entry.avatar = cropUrl;
-                else relocateMigratedValue(crop, cropUrl);
+                put('avatar', crop, cropUrl);
+                // The Workshop stores one picture as both portrait and
+                // full-size copy. The copy takes the same file in the same
+                // step, not after the pause below: by then the card can have
+                // been deleted, and the file with it.
+                if (full === crop) {
+                    put('avatarFullRes', full, cropUrl);
+                    full = null;
+                    result.migrated++;
+                }
                 // Remembered by its bytes, so a campaign version cloned from
                 // this card reuses the file (migrateProfileBuckets).
                 result.byName.set(`avatar:${name}`, { dataUrl: crop, url: cropUrl });
@@ -125,17 +142,11 @@ async function migrateUserCharacters(userCharacters, sharedByName) {
             }
         }
         if (isDataUrl(full)) {
-            // If fullres is byte-identical to cropped (workshop case), reuse URL.
-            if (cropUrl && full === crop) {
-                if (entry.avatarFullRes === full) entry.avatarFullRes = cropUrl;
-                else relocateMigratedValue(full, cropUrl);
-                result.migrated++;
-                continue;
-            }
+            // Its own bytes (or the same bytes after the portrait's upload
+            // failed): its own upload.
             try {
                 const fullUrl = await persistPortrait(full, `${name}-full`, full);
-                if (entry.avatarFullRes === full) entry.avatarFullRes = fullUrl;
-                else relocateMigratedValue(full, fullUrl);
+                put('avatarFullRes', full, fullUrl);
                 result.byName.set(`full:${name}`, { dataUrl: full, url: fullUrl });
                 result.migrated++;
                 await sleep(THROTTLE_MS);

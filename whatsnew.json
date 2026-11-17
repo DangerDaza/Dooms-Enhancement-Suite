@@ -8,7 +8,7 @@
         },
         {
             "title": "📚 3.2.1: Duplicate a lorebook",
-            "body": "The Lore Library can copy a lorebook: a copy button beside Export and Delete on a book, Duplicate in its right-click menu, and on a phone Duplicate Lorebook under Add Entry inside an opened book. It asks for a name, copies every entry and files the copy in the same campaign folder. Deleting a campaign now also says that its character versions, yours included, go with it."
+            "body": "The Lore Library can copy a lorebook: a copy button beside Export and Delete on a book, Duplicate in its right-click menu, and on a phone Duplicate Lorebook under Add Entry inside an opened book. It asks for a name, copies every entry and files the copy in the same campaign folder. Deleting a campaign that has character versions, yours included, now says that they go with it."
         },
         {
             "title": "📱 3.2: the Workshop from a phone",
