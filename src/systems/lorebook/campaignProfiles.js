@@ -23,6 +23,16 @@
  * A Profile mirrors one character's slice of the flat stores; see
  * PROFILE_FIELDS for the field ↔ store mapping. Absent field = absent key.
  *
+ * The player's own cards (extensionSettings.userCharacters) have versions
+ * too, by the same swap, in a namespace of their own so a persona and an NPC
+ * of one name never meet:
+ *     extensionSettings.campaignUserProfiles   = { [campaignId]: { [name]: UserProfile } }
+ *     extensionSettings.campaignUserBaseShadow = { [name]: UserProfile | null }
+ * A UserProfile is the versioned slice of one card (USER_PROFILE_FIELDS);
+ * the rest of the card (colour, pronouns, the linked SillyTavern persona) is
+ * the same whichever campaign is active. Every function that takes a name
+ * takes `isUser` last (false = an NPC, the default) to say which namespace.
+ *
  * This module imports ONLY state.js so it is unit-testable in plain Node
  * (tools/campaign-profiles-test.mjs) and importable from persistence.js
  * without a cycle. It never persists — callers save.
@@ -48,6 +58,12 @@ export const PROFILE_FIELDS = Object.freeze([
     { field: 'voice',         store: 'characterVoices' },
 ]);
 
+/**
+ * The fields of a player's card (userCharacters[name]) that have campaign
+ * versions. Colour, pronouns and linkedPersona stay on the card itself.
+ */
+export const USER_PROFILE_FIELDS = Object.freeze(['avatar', 'avatarFullRes', 'injection', 'knives', 'voice']);
+
 /** The version id of the flat stores themselves. */
 export const BASE_VERSION = 'base';
 
@@ -67,23 +83,27 @@ function findKey(obj, lowerName) {
     return Object.keys(obj).find(k => k.toLowerCase() === lowerName);
 }
 
-function profilesRoot() {
-    if (!extensionSettings.campaignProfiles || typeof extensionSettings.campaignProfiles !== 'object' || Array.isArray(extensionSettings.campaignProfiles)) {
-        extensionSettings.campaignProfiles = {};
+const profilesKey = (isUser) => (isUser ? 'campaignUserProfiles' : 'campaignProfiles');
+const shadowKey = (isUser) => (isUser ? 'campaignUserBaseShadow' : 'campaignBaseShadow');
+
+function rootOf(key) {
+    if (!extensionSettings[key] || typeof extensionSettings[key] !== 'object' || Array.isArray(extensionSettings[key])) {
+        extensionSettings[key] = {};
     }
-    return extensionSettings.campaignProfiles;
+    return extensionSettings[key];
 }
 
-function shadowRoot() {
-    if (!extensionSettings.campaignBaseShadow || typeof extensionSettings.campaignBaseShadow !== 'object' || Array.isArray(extensionSettings.campaignBaseShadow)) {
-        extensionSettings.campaignBaseShadow = {};
-    }
-    return extensionSettings.campaignBaseShadow;
+function profilesRoot(isUser = false) {
+    return rootOf(profilesKey(isUser));
 }
 
-function bucket(campaignId, create = false) {
+function shadowRoot(isUser = false) {
+    return rootOf(shadowKey(isUser));
+}
+
+function bucket(campaignId, create = false, isUser = false) {
     if (!campaignId) return null;
-    const root = profilesRoot();
+    const root = profilesRoot(isUser);
     if (!root[campaignId] || typeof root[campaignId] !== 'object' || Array.isArray(root[campaignId])) {
         if (!create) return null;
         root[campaignId] = {};
@@ -117,14 +137,14 @@ export function getActiveCampaignId() {
 }
 
 /** Whether `campaignId` holds a saved version of `name`. */
-export function hasProfile(campaignId, name) {
-    const b = bucket(campaignId);
+export function hasProfile(campaignId, name, isUser = false) {
+    const b = bucket(campaignId, false, isUser);
     return !!(b && hasOwn(b, name) && b[name] && typeof b[name] === 'object');
 }
 
 /** A clone of the stored (not live) version, or null. */
-export function getProfile(campaignId, name) {
-    return hasProfile(campaignId, name) ? clone(bucket(campaignId)[name]) : null;
+export function getProfile(campaignId, name, isUser = false) {
+    return hasProfile(campaignId, name, isUser) ? clone(bucket(campaignId, false, isUser)[name]) : null;
 }
 
 /**
@@ -132,28 +152,28 @@ export function getProfile(campaignId, name) {
  * Buckets whose campaign no longer exists are ignored (ensureCampaignSettings
  * removes them on the next load).
  */
-export function listProfileCampaigns(name) {
+export function listProfileCampaigns(name, isUser = false) {
     const campaigns = extensionSettings.lorebook?.campaigns;
-    return Object.keys(profilesRoot()).filter(id => hasProfile(id, name) && (!campaigns || !!campaigns[id]));
+    return Object.keys(profilesRoot(isUser)).filter(id => hasProfile(id, name, isUser) && (!campaigns || !!campaigns[id]));
 }
 
 /** Base + every campaign version. Always ≥ 1. */
-export function countVersions(name) {
-    return 1 + listProfileCampaigns(name).length;
+export function countVersions(name, isUser = false) {
+    return 1 + listProfileCampaigns(name, isUser).length;
 }
 
 /** True when the active campaign overrides `name` (so the base entry is in the shadow). */
-export function isOverridden(name) {
+export function isOverridden(name, isUser = false) {
     const active = getActiveCampaignId();
-    return !!active && hasProfile(active, name);
+    return !!active && hasProfile(active, name, isUser);
 }
 
 /**
  * True when `versionId` for `name` resolves to the flat stores:
  * the active campaign's version, or base when nothing overrides the name.
  */
-export function isLiveVersion(versionId, name) {
-    if (isBase(versionId)) return !isOverridden(name);
+export function isLiveVersion(versionId, name, isUser = false) {
+    if (isBase(versionId)) return !isOverridden(name, isUser);
     return versionId === getActiveCampaignId();
 }
 
@@ -196,6 +216,47 @@ export function removeFromLive(name) {
     applyToLive(name, null);
 }
 
+/** The player's card for `name`, or null when there is none. */
+function userCard(name) {
+    const users = extensionSettings.userCharacters;
+    return hasOwn(users, name) && users[name] && typeof users[name] === 'object' ? users[name] : null;
+}
+
+/**
+ * The versioned slice of a player's card as a UserProfile (deep clone), or
+ * null when there is no such card. A card with none of the fields set is {}.
+ */
+export function snapshotLiveUser(name) {
+    const card = userCard(name);
+    if (!card) return null;
+    const out = {};
+    for (const field of USER_PROFILE_FIELDS) {
+        const value = card[field];
+        if (value === undefined || value === null) continue;
+        out[field] = clone(value);
+    }
+    return out;
+}
+
+/**
+ * Writes a UserProfile into the player's card; absent fields are deleted
+ * from it. The card's own fields (colour, pronouns, linkedPersona) are never
+ * touched, and a card that does not exist is never created: a version
+ * cannot bring back a card the player deleted.
+ */
+export function applyToLiveUser(name, profile) {
+    const card = userCard(name);
+    if (!card) return;
+    for (const field of USER_PROFILE_FIELDS) {
+        const value = profile && typeof profile === 'object' ? profile[field] : undefined;
+        if (value === undefined || value === null) delete card[field];
+        else card[field] = clone(value);
+    }
+}
+
+const snapshotOf = (name, isUser) => (isUser ? snapshotLiveUser(name) : snapshotLive(name));
+const applyOf = (name, profile, isUser) => (isUser ? applyToLiveUser(name, profile) : applyToLive(name, profile));
+
 // ─── Version read / write (what the Workshop shows and saves) ───────────────
 
 /**
@@ -203,26 +264,26 @@ export function removeFromLive(name) {
  * entry, or an inactive campaign's bucket. Returns a clone or null.
  * @param {string} versionId - 'base' or a campaign id
  */
-export function readVersion(versionId, name) {
-    if (isLiveVersion(versionId, name)) return snapshotLive(name);
+export function readVersion(versionId, name, isUser = false) {
+    if (isLiveVersion(versionId, name, isUser)) return snapshotOf(name, isUser);
     if (isBase(versionId)) {
-        const shadow = shadowRoot();
+        const shadow = shadowRoot(isUser);
         return hasOwn(shadow, name) && shadow[name] ? clone(shadow[name]) : null;
     }
-    return getProfile(versionId, name);
+    return getProfile(versionId, name, isUser);
 }
 
 /** Inverse of readVersion. `profile` null clears that version's entry. */
-export function writeVersion(versionId, name, profile) {
-    if (isLiveVersion(versionId, name)) {
-        applyToLive(name, profile);
+export function writeVersion(versionId, name, profile, isUser = false) {
+    if (isLiveVersion(versionId, name, isUser)) {
+        applyOf(name, profile, isUser);
         return;
     }
     if (isBase(versionId)) {
-        shadowRoot()[name] = profile ? clone(profile) : null;
+        shadowRoot(isUser)[name] = profile ? clone(profile) : null;
         return;
     }
-    bucket(versionId, true)[name] = profile ? clone(profile) : {};
+    bucket(versionId, true, isUser)[name] = profile ? clone(profile) : {};
 }
 
 // ─── Profile lifecycle ──────────────────────────────────────────────────────
@@ -232,17 +293,19 @@ export function writeVersion(versionId, name, profile) {
  * (base by default). When the campaign is active the clone immediately
  * becomes the live view and the displaced base entry moves to the shadow.
  * No-op (returns the existing profile) when the version already exists.
+ * A player's card must exist to be given a version.
  */
-export function addProfile(campaignId, name, { from = BASE_VERSION } = {}) {
+export function addProfile(campaignId, name, { from = BASE_VERSION, isUser = false } = {}) {
     if (!campaignId || !name) return null;
-    if (hasProfile(campaignId, name)) return getProfile(campaignId, name);
-    const source = readVersion(from, name) || {};
+    if (isUser && !userCard(name)) return null;
+    if (hasProfile(campaignId, name, isUser)) return getProfile(campaignId, name, isUser);
+    const source = readVersion(from, name, isUser) || {};
     if (campaignId === getActiveCampaignId()) {
-        shadowRoot()[name] = snapshotLive(name);
-        bucket(campaignId, true)[name] = clone(source);
-        applyToLive(name, source);
+        shadowRoot(isUser)[name] = snapshotOf(name, isUser);
+        bucket(campaignId, true, isUser)[name] = clone(source);
+        applyOf(name, source, isUser);
     } else {
-        bucket(campaignId, true)[name] = clone(source);
+        bucket(campaignId, true, isUser)[name] = clone(source);
     }
     return clone(source);
 }
@@ -254,15 +317,20 @@ export function addProfile(campaignId, name, { from = BASE_VERSION } = {}) {
  * which files nothing else still points at.
  * @returns {string[]}
  */
-export function removeProfile(campaignId, name) {
-    const b = bucket(campaignId);
+export function removeProfile(campaignId, name, isUser = false) {
+    const b = bucket(campaignId, false, isUser);
     if (!b || !hasOwn(b, name)) return [];
     const candidates = portraitValuesOf(b[name]);
     delete b[name];
     if (campaignId === getActiveCampaignId()) {
-        candidates.push(...portraitValuesOf(snapshotLive(name)));
-        const shadow = shadowRoot();
-        applyToLive(name, hasOwn(shadow, name) ? shadow[name] : null);
+        const shadow = shadowRoot(isUser);
+        if (isUser && !hasOwn(shadow, name)) {
+            // No parked Base to go back to (it can only be missing after a
+            // crash mid-switch): what is on the card stays, and is Base now.
+            return candidates;
+        }
+        candidates.push(...portraitValuesOf(snapshotOf(name, isUser)));
+        applyOf(name, hasOwn(shadow, name) ? shadow[name] : null, isUser);
         delete shadow[name];
     }
     return candidates;
@@ -275,12 +343,24 @@ export function removeProfile(campaignId, name) {
  */
 export function bankActiveCampaign() {
     const active = getActiveCampaignId();
-    const b = bucket(active);
-    if (!b) return 0;
     let n = 0;
-    for (const name of Object.keys(b)) {
-        b[name] = snapshotLive(name) || {};
-        n++;
+    const b = bucket(active);
+    if (b) {
+        for (const name of Object.keys(b)) {
+            b[name] = snapshotLive(name) || {};
+            n++;
+        }
+    }
+    const users = bucket(active, false, true);
+    if (users) {
+        for (const name of Object.keys(users)) {
+            // A card that is gone has nothing to bank; its version is left
+            // as it was (deleting the card removes its versions).
+            const live = snapshotLiveUser(name);
+            if (!live) continue;
+            users[name] = live;
+            n++;
+        }
     }
     return n;
 }
@@ -310,6 +390,50 @@ export function switchCampaignProfiles(prevId, nextId) {
             applyToLive(name, nextBucket[name]);
         }
     }
+    switchUserProfiles(prevId, nextId);
+}
+
+/**
+ * The same four steps for the player's cards. A card that no longer exists
+ * is skipped throughout: its version is neither banked over nor applied.
+ */
+function switchUserProfiles(prevId, nextId) {
+    const shadow = shadowRoot(true);
+    const prevBucket = bucket(prevId, false, true);
+    if (prevBucket) {
+        for (const name of Object.keys(prevBucket)) {
+            const live = snapshotLiveUser(name);
+            if (live) prevBucket[name] = live;
+        }
+    }
+    for (const name of Object.keys(shadow)) applyToLiveUser(name, shadow[name]);
+    extensionSettings.campaignUserBaseShadow = {};
+    const nextBucket = bucket(nextId, false, true);
+    if (nextBucket) {
+        const nextShadow = extensionSettings.campaignUserBaseShadow;
+        for (const name of Object.keys(nextBucket)) {
+            const base = snapshotLiveUser(name);
+            if (!base) continue;
+            nextShadow[name] = base;
+            applyToLiveUser(name, nextBucket[name]);
+        }
+    }
+}
+
+/**
+ * The player's cards whose live version a switch between these two campaigns
+ * changes: those either campaign has a version of. For the surfaces that
+ * mirror the live card somewhere else (the linked SillyTavern persona's
+ * avatar file).
+ * @returns {string[]}
+ */
+export function userNamesWithVersionIn(...campaignIds) {
+    const names = new Set();
+    for (const id of campaignIds) {
+        const b = bucket(id, false, true);
+        if (b) for (const name of Object.keys(b)) names.add(name);
+    }
+    return [...names];
 }
 
 /**
@@ -318,16 +442,16 @@ export function switchCampaignProfiles(prevId, nextId) {
  * the portrait values those versions referenced.
  * @returns {string[]}
  */
-export function deleteCharacterEverywhere(name) {
+export function deleteCharacterEverywhere(name, isUser = false) {
     const candidates = [];
-    const root = profilesRoot();
+    const root = profilesRoot(isUser);
     for (const id of Object.keys(root)) {
         const b = root[id];
         if (!hasOwn(b, name)) continue;
         candidates.push(...portraitValuesOf(b[name]));
         delete b[name];
     }
-    const shadow = shadowRoot();
+    const shadow = shadowRoot(isUser);
     if (hasOwn(shadow, name)) {
         candidates.push(...portraitValuesOf(shadow[name]));
         delete shadow[name];
@@ -341,11 +465,13 @@ export function deleteCharacterEverywhere(name) {
  * @returns {string[]}
  */
 export function deleteCampaignProfiles(campaignId) {
-    const b = bucket(campaignId);
-    if (!b) return [];
     const candidates = [];
-    for (const profile of Object.values(b)) candidates.push(...portraitValuesOf(profile));
-    delete profilesRoot()[campaignId];
+    for (const isUser of [false, true]) {
+        const b = bucket(campaignId, false, isUser);
+        if (!b) continue;
+        for (const profile of Object.values(b)) candidates.push(...portraitValuesOf(profile));
+        delete profilesRoot(isUser)[campaignId];
+    }
     return candidates;
 }
 
@@ -454,7 +580,8 @@ export function portraitValuesOf(profile) {
 /**
  * Visits every portrait value still referenced anywhere: live stores
  * (current, full-res, history, auto-portrait meta), user characters, the
- * shadow and every INACTIVE campaign bucket. The active campaign's bucket is
+ * shadows and every INACTIVE campaign bucket (NPCs' and the player's cards'
+ * alike). The active campaign's bucket is
  * deliberately skipped — the live stores ARE that bucket, and its banked
  * copy only lags behind live (a value just deleted from live would still
  * show up there and pin its file forever).
@@ -480,8 +607,11 @@ function forEachPortraitRef(visit) {
     const users = extensionSettings.userCharacters;
     if (users && typeof users === 'object') for (const u of Object.values(users)) { add(u?.avatar); add(u?.avatarFullRes); }
     const active = getActiveCampaignId();
-    const root = profilesRoot();
-    const buckets = [shadowRoot(), ...Object.keys(root).filter(id => id !== active).map(id => root[id])];
+    const buckets = [];
+    for (const isUser of [false, true]) {
+        const root = profilesRoot(isUser);
+        buckets.push(shadowRoot(isUser), ...Object.keys(root).filter(id => id !== active).map(id => root[id]));
+    }
     for (const b of buckets) {
         if (!b || typeof b !== 'object') continue;
         for (const profile of Object.values(b)) for (const v of portraitValuesOf(profile)) add(v);
@@ -535,14 +665,15 @@ export function unreferencedPortraits(candidates) {
 
 /**
  * @typedef {{kind: 'character'|'persona'|'narrator', name: string|null, versionId: string|null}} VoiceUse
- *   versionId: BASE_VERSION or a campaign id for characters; null otherwise.
+ *   versionId: BASE_VERSION or a campaign id for characters and personas; null for the Narrator.
  */
 
 /**
  * Visits every place a voice id is used: live characterVoices (as the
  * version it currently is), the shadowed base entries, every INACTIVE
- * campaign bucket, persona voices and the Narrator. As with portraits the
- * active bucket is skipped — live IS that version and its banked copy lags.
+ * campaign bucket, persona voices (the card's, and its other versions the
+ * same way) and the Narrator. As with portraits the active bucket is
+ * skipped — live IS that version and its banked copy lags.
  * @param {(id: string, use: VoiceUse) => void} visit
  */
 export function forEachVoiceRef(visit) {
@@ -563,7 +694,14 @@ export function forEachVoiceRef(visit) {
     }
     const users = extensionSettings.userCharacters;
     if (users && typeof users === 'object') {
-        for (const [name, u] of Object.entries(users)) add(u?.voice, { kind: 'persona', name, versionId: null });
+        for (const [name, u] of Object.entries(users)) {
+            add(u?.voice, { kind: 'persona', name, versionId: active && hasProfile(active, name, true) ? active : BASE_VERSION });
+        }
+    }
+    for (const [name, profile] of Object.entries(shadowRoot(true))) add(profile?.voice, { kind: 'persona', name, versionId: BASE_VERSION });
+    for (const [campaignId, b] of Object.entries(profilesRoot(true))) {
+        if (campaignId === active || !b || typeof b !== 'object') continue;
+        for (const [name, profile] of Object.entries(b)) add(profile?.voice, { kind: 'persona', name, versionId: campaignId });
     }
     add(extensionSettings.voices?.narratorVoice, { kind: 'narrator', name: null, versionId: null });
 }
@@ -614,6 +752,11 @@ export function rewriteVoiceRefs(oldId, newId, patch = {}) {
     }
     const users = extensionSettings.userCharacters;
     if (users && typeof users === 'object') for (const u of Object.values(users)) if (u && typeof u === 'object') fix(u, 'voice');
+    for (const profile of Object.values(shadowRoot(true))) if (profile && typeof profile === 'object') fix(profile, 'voice');
+    for (const b of Object.values(profilesRoot(true))) {
+        if (!b || typeof b !== 'object') continue;
+        for (const profile of Object.values(b)) if (profile && typeof profile === 'object') fix(profile, 'voice');
+    }
     const v = extensionSettings.voices;
     if (v && v.narratorVoice && v.narratorVoice.id === oldId) {
         v.narratorVoice = newId ? { ...v.narratorVoice, ...patch, id: newId } : { source: 'stock', id: 'Charon' };
@@ -672,6 +815,12 @@ export function ensureCampaignSettings() {
         extensionSettings.campaignBaseShadow = {};
         changed = true;
     }
+    for (const key of ['campaignUserProfiles', 'campaignUserBaseShadow']) {
+        if (!extensionSettings[key] || typeof extensionSettings[key] !== 'object' || Array.isArray(extensionSettings[key])) {
+            extensionSettings[key] = {};
+            changed = true;
+        }
+    }
     const lb = extensionSettings.lorebook;
     if (lb && typeof lb === 'object') {
         if (lb.activeCampaignId === undefined) { lb.activeCampaignId = null; changed = true; }
@@ -710,11 +859,13 @@ export function ensureCampaignSettings() {
         // up as versions in the Workshop. Drop them; any portrait files only
         // they referenced are reclaimed by the next ref-counted deletion.
         if (lb.campaigns && typeof lb.campaigns === 'object') {
-            const root = profilesRoot();
-            for (const id of Object.keys(root)) {
-                if (!lb.campaigns[id]) {
-                    delete root[id];
-                    changed = true;
+            for (const isUser of [false, true]) {
+                const root = profilesRoot(isUser);
+                for (const id of Object.keys(root)) {
+                    if (!lb.campaigns[id]) {
+                        delete root[id];
+                        changed = true;
+                    }
                 }
             }
         }

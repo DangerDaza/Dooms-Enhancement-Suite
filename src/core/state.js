@@ -365,6 +365,13 @@ export let extensionSettings = {
     // character had no base entry). Both empty = the pre-campaign behaviour.
     campaignProfiles: {},
     campaignBaseShadow: {},
+    // The same for the player's own cards (userCharacters above), in a
+    // namespace of their own: campaignUserProfiles[campaignId][name] is that
+    // campaign's version of the card's portrait, description, knives and
+    // voice; campaignUserBaseShadow[name] parks the Base ones while the
+    // active campaign's are on the card.
+    campaignUserProfiles: {},
+    campaignUserBaseShadow: {},
     hideDefaultExpressionDisplay: false, // Hide SillyTavern's built-in expression displays
     expressionClassifierApi: 'local', // 'local' (BERT) or 'llm' (Main API)
     expressionBatchMode: true, // Batch all characters in one LLM call (only when llm)

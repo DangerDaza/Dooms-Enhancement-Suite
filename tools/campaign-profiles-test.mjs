@@ -45,6 +45,8 @@ function reset() {
     };
     extensionSettings.campaignProfiles = {};
     extensionSettings.campaignBaseShadow = {};
+    extensionSettings.campaignUserProfiles = {};
+    extensionSettings.campaignUserBaseShadow = {};
     extensionSettings.characterInjection = { Hex: { description: 'base hex', lorebook: '' } };
     extensionSettings.characterAppearance = { Hex: 'silver hair' };
     extensionSettings.npcAvatars = { Hex: '/user/images/des-portraits/hex-aaaaaaaa.png?t=1', Lucy: '/user/images/des-portraits/lucy-bbbbbbbb.png?t=1' };
@@ -485,6 +487,245 @@ test('voice refs: rewrite to null removes the voice (Narrator fallback) everywhe
     assert.equal(cp.readVersion('c1', 'Hex').voice, undefined);
     assert.equal(extensionSettings.userCharacters.Me.voice, undefined);
     assert.deepEqual(extensionSettings.voices.narratorVoice, { source: 'stock', id: 'Charon' });
+});
+
+// ─── The player's own cards (userCharacters) ────────────────────────────────
+
+const U = true; // the isUser argument
+
+/** A player's card as the Workshop saves it. */
+function seedPlayer() {
+    extensionSettings.userCharacters = {
+        Jordan: {
+            color: '#abcdef',
+            pronouns: 'they/them',
+            linkedPersona: 'jordan.png',
+            avatar: '/user/images/des-portraits/jordan-11111111.png?t=1',
+            avatarFullRes: '/user/images/des-portraits/jordan-11111111.png?t=1',
+            injection: { description: 'base jordan', lorebook: '' },
+            knives: [{ id: 'k1', text: 'left home', used: false }],
+            voice: { source: 'stock', id: 'Puck' },
+        },
+    };
+}
+const card = () => extensionSettings.userCharacters.Jordan;
+
+test('player: with no campaign Base is live and holds only the versioned fields', () => {
+    seedPlayer();
+    assert.equal(cp.isLiveVersion('base', 'Jordan', U), true);
+    assert.equal(cp.countVersions('Jordan', U), 1);
+    const base = cp.readVersion('base', 'Jordan', U);
+    assert.deepEqual(Object.keys(base).sort(), ['avatar', 'avatarFullRes', 'injection', 'knives', 'voice']);
+    assert.equal(base.injection.description, 'base jordan');
+    assert.equal(cp.readVersion('base', 'Nobody', U), null);
+});
+
+test('player: a version in an inactive campaign is a clone; activating swaps the card, leaving swaps it back', () => {
+    seedPlayer();
+    cp.addProfile('c1', 'Jordan', { isUser: U });
+    assert.equal(cp.hasProfile('c1', 'Jordan', U), true);
+    assert.equal(cp.hasProfile('c1', 'Jordan'), false, 'not an NPC version');
+    assert.deepEqual(cp.listProfileCampaigns('Jordan', U), ['c1']);
+    assert.equal(cp.countVersions('Jordan', U), 2);
+    assert.equal(card().injection.description, 'base jordan', 'the card is untouched while c1 is inactive');
+
+    const v = cp.readVersion('c1', 'Jordan', U);
+    v.injection.description = 'mecha pilot jordan';
+    v.avatar = '/user/images/des-portraits/jordan-22222222.png?t=1';
+    v.avatarFullRes = v.avatar;
+    v.knives = [];
+    delete v.voice;
+    cp.writeVersion('c1', 'Jordan', v, U);
+    assert.equal(card().injection.description, 'base jordan');
+
+    activate('c1');
+    assert.equal(cp.isLiveVersion('c1', 'Jordan', U), true);
+    assert.equal(cp.isLiveVersion('base', 'Jordan', U), false);
+    assert.equal(card().injection.description, 'mecha pilot jordan');
+    assert.equal(card().avatar, '/user/images/des-portraits/jordan-22222222.png?t=1');
+    assert.deepEqual(card().knives, []);
+    assert.equal(card().voice, undefined, 'a version without a voice has none on the card');
+    // The card's own fields are the same whichever campaign is active.
+    assert.equal(card().color, '#abcdef');
+    assert.equal(card().pronouns, 'they/them');
+    assert.equal(card().linkedPersona, 'jordan.png');
+    assert.equal(cp.readVersion('base', 'Jordan', U).injection.description, 'base jordan', 'Base is parked');
+
+    activate(null);
+    assert.equal(card().injection.description, 'base jordan');
+    assert.equal(card().avatar, '/user/images/des-portraits/jordan-11111111.png?t=1');
+    assert.deepEqual(card().voice, { source: 'stock', id: 'Puck' });
+    assert.deepEqual(extensionSettings.campaignUserBaseShadow, {});
+    assert.equal(cp.readVersion('c1', 'Jordan', U).injection.description, 'mecha pilot jordan');
+});
+
+test('player: edits made while a campaign is active are banked and survive a switch to another campaign', () => {
+    seedPlayer();
+    cp.addProfile('c1', 'Jordan', { isUser: U });
+    cp.addProfile('c2', 'Jordan', { isUser: U });
+    activate('c1');
+    card().injection.description = 'edited in play';
+    card().color = '#111111';
+    assert.equal(cp.bankActiveCampaign(), 1);
+    assert.equal(extensionSettings.campaignUserProfiles.c1.Jordan.injection.description, 'edited in play');
+    assert.equal(extensionSettings.campaignUserProfiles.c1.Jordan.color, undefined, 'colour is not a versioned field');
+    activate('c2');
+    assert.equal(card().injection.description, 'base jordan', 'c2 was cloned from Base');
+    assert.equal(card().color, '#111111', 'the colour edit stays on the card');
+    activate('c1');
+    assert.equal(card().injection.description, 'edited in play');
+    activate(null);
+    assert.equal(card().injection.description, 'base jordan');
+});
+
+test('player: adding a version while its campaign is active parks Base; removing it brings Base back', () => {
+    seedPlayer();
+    activate('c1');
+    cp.addProfile('c1', 'Jordan', { isUser: U });
+    assert.equal(cp.isOverridden('Jordan', U), true);
+    assert.equal(extensionSettings.campaignUserBaseShadow.Jordan.injection.description, 'base jordan');
+    card().injection.description = 'c1 jordan';
+    card().avatar = '/user/images/des-portraits/jordan-33333333.png?t=1';
+    const candidates = cp.removeProfile('c1', 'Jordan', U);
+    assert.equal(card().injection.description, 'base jordan');
+    assert.equal(card().avatar, '/user/images/des-portraits/jordan-11111111.png?t=1');
+    assert.ok(candidates.includes('/user/images/des-portraits/jordan-33333333.png?t=1'), 'the dropped version\'s portrait is a deletion candidate');
+    assert.deepEqual(extensionSettings.campaignUserBaseShadow, {});
+    assert.equal(cp.hasProfile('c1', 'Jordan', U), false);
+    // Base's file is still on the card, so it is not an orphan.
+    assert.deepEqual(cp.unreferencedPortraits(candidates), ['/user/images/des-portraits/jordan-33333333.png?t=1']);
+});
+
+test('player: a persona and an NPC of one name keep separate versions', () => {
+    seedPlayer();
+    extensionSettings.userCharacters.Hex = { color: '#fff', injection: { description: 'player hex', lorebook: '' } };
+    cp.addProfile('c1', 'Hex');
+    cp.addProfile('c1', 'Hex', { isUser: U });
+    const npc = cp.readVersion('c1', 'Hex');
+    npc.injection.description = 'npc hex in mecha';
+    cp.writeVersion('c1', 'Hex', npc);
+    const player = cp.readVersion('c1', 'Hex', U);
+    player.injection.description = 'player hex in mecha';
+    cp.writeVersion('c1', 'Hex', player, U);
+    activate('c1');
+    assert.equal(extensionSettings.characterInjection.Hex.description, 'npc hex in mecha');
+    assert.equal(extensionSettings.userCharacters.Hex.injection.description, 'player hex in mecha');
+    // Deleting the NPC everywhere leaves the player's versions alone, and the other way round.
+    cp.deleteCharacterEverywhere('Hex');
+    assert.equal(cp.hasProfile('c1', 'Hex', U), true);
+    cp.deleteCharacterEverywhere('Hex', U);
+    assert.equal(cp.hasProfile('c1', 'Hex', U), false);
+    assert.equal(extensionSettings.campaignUserBaseShadow.Hex, undefined);
+});
+
+test('player: deleting the card everywhere returns every version\'s portraits', () => {
+    seedPlayer();
+    cp.addProfile('c1', 'Jordan', { isUser: U });
+    const v = cp.readVersion('c1', 'Jordan', U);
+    v.avatar = '/user/images/des-portraits/jordan-22222222.png?t=1';
+    v.avatarFullRes = v.avatar;
+    cp.writeVersion('c1', 'Jordan', v, U);
+    activate('c1');
+    const live = [card().avatar, card().avatarFullRes];
+    delete extensionSettings.userCharacters.Jordan;
+    const candidates = [...live, ...cp.deleteCharacterEverywhere('Jordan', U)];
+    assert.equal(cp.countVersions('Jordan', U), 1);
+    assert.deepEqual(extensionSettings.campaignUserBaseShadow, {});
+    const orphans = cp.unreferencedPortraits(candidates).map(cp.portraitRefKey).sort();
+    assert.deepEqual(orphans, ['/user/images/des-portraits/jordan-11111111.png', '/user/images/des-portraits/jordan-22222222.png']);
+});
+
+test('player: a version never brings back a card the player deleted', () => {
+    seedPlayer();
+    cp.addProfile('c1', 'Jordan', { isUser: U });
+    assert.equal(cp.addProfile('c1', 'Ghost', { isUser: U }), null, 'no card, no version');
+    // The card goes without its versions being cleared (a crash between the two steps).
+    delete extensionSettings.userCharacters.Jordan;
+    activate('c1');
+    assert.equal(extensionSettings.userCharacters.Jordan, undefined);
+    assert.deepEqual(extensionSettings.campaignUserBaseShadow, {});
+    cp.bankActiveCampaign();
+    assert.equal(extensionSettings.campaignUserProfiles.c1.Jordan.injection.description, 'base jordan', 'the saved version is not banked over');
+    activate(null);
+    assert.equal(extensionSettings.userCharacters.Jordan, undefined);
+});
+
+test('player: deleting a campaign drops its player versions and reports their portraits', () => {
+    seedPlayer();
+    cp.addProfile('c1', 'Jordan', { isUser: U });
+    cp.addProfile('c1', 'Hex');
+    const candidates = cp.deleteCampaignProfiles('c1');
+    assert.equal(extensionSettings.campaignUserProfiles.c1, undefined);
+    assert.equal(extensionSettings.campaignProfiles.c1, undefined);
+    assert.ok(candidates.includes('/user/images/des-portraits/jordan-11111111.png?t=1'));
+    assert.deepEqual(cp.unreferencedPortraits(candidates), [], 'Base still uses both files');
+});
+
+test('player: a portrait only an inactive version uses is still referenced', () => {
+    seedPlayer();
+    cp.addProfile('c1', 'Jordan', { isUser: U });
+    // Base gets a new picture; the old file now belongs to c1's version alone.
+    const old = card().avatar;
+    card().avatar = '/user/images/des-portraits/jordan-44444444.png?t=1';
+    card().avatarFullRes = card().avatar;
+    assert.deepEqual(cp.unreferencedPortraits([old]), []);
+    assert.equal(cp.portraitRefCount(old), 2, 'c1\'s avatar and avatarFullRes');
+    cp.removeProfile('c1', 'Jordan', U);
+    assert.deepEqual(cp.unreferencedPortraits([old]), [old]);
+});
+
+test('player: voice uses name the version, and a rewrite reaches every version', () => {
+    seedPlayer();
+    card().voice = { source: 'designed', id: 'voice_A' };
+    cp.addProfile('c1', 'Jordan', { isUser: U });
+    cp.addProfile('c2', 'Jordan', { isUser: U });
+    assert.deepEqual(cp.voiceUses('voice_A').map(u => `${u.kind}:${u.name}:${u.versionId}`).sort(),
+        ['persona:Jordan:base', 'persona:Jordan:c1', 'persona:Jordan:c2']);
+    activate('c1');
+    assert.deepEqual(cp.voiceUses('voice_A').map(u => `${u.kind}:${u.name}:${u.versionId}`).sort(),
+        ['persona:Jordan:base', 'persona:Jordan:c1', 'persona:Jordan:c2'], 'the same three with c1 live');
+    assert.equal(cp.rewriteVoiceRefs('voice_A', 'voice_B'), 4, 'the card, the parked Base and both buckets');
+    assert.equal(cp.voiceRefCount('voice_A'), 0);
+    activate('c2');
+    assert.equal(card().voice.id, 'voice_B');
+    activate(null);
+    assert.equal(card().voice.id, 'voice_B');
+    cp.rewriteVoiceRefs('voice_B', null);
+    assert.equal(card().voice, undefined);
+    assert.equal(cp.readVersion('c1', 'Jordan', U).voice, undefined);
+});
+
+test('player: the load-time guard gives the stores their shape and repairs a dangling active campaign', () => {
+    seedPlayer();
+    delete extensionSettings.campaignUserProfiles;
+    delete extensionSettings.campaignUserBaseShadow;
+    assert.equal(cp.ensureCampaignSettings(), true);
+    assert.deepEqual(extensionSettings.campaignUserProfiles, {});
+    assert.deepEqual(extensionSettings.campaignUserBaseShadow, {});
+
+    cp.addProfile('c1', 'Jordan', { isUser: U });
+    const v = cp.readVersion('c1', 'Jordan', U);
+    v.injection.description = 'c1 jordan';
+    cp.writeVersion('c1', 'Jordan', v, U);
+    activate('c1');
+    assert.equal(card().injection.description, 'c1 jordan');
+    // The campaign is deleted on another device while it was active here.
+    delete extensionSettings.lorebook.campaigns.c1;
+    assert.equal(cp.ensureCampaignSettings(), true);
+    assert.equal(extensionSettings.lorebook.activeCampaignId, null);
+    assert.equal(card().injection.description, 'base jordan', 'Base is back on the card');
+    assert.equal(extensionSettings.campaignUserProfiles.c1, undefined, 'the orphaned bucket is gone');
+    assert.deepEqual(extensionSettings.campaignUserBaseShadow, {});
+});
+
+test('player: the cards a switch changes are those either campaign has a version of', () => {
+    seedPlayer();
+    extensionSettings.userCharacters.Ash = { color: '#000' };
+    cp.addProfile('c1', 'Jordan', { isUser: U });
+    cp.addProfile('c2', 'Ash', { isUser: U });
+    assert.deepEqual(cp.userNamesWithVersionIn('c1', null), ['Jordan']);
+    assert.deepEqual(cp.userNamesWithVersionIn('c1', 'c2').sort(), ['Ash', 'Jordan']);
+    assert.deepEqual(cp.userNamesWithVersionIn(null, null), []);
 });
 
 if (failures) {
