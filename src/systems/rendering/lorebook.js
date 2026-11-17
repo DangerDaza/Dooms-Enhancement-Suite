@@ -351,6 +351,7 @@ function renderMiddlePanel() {
     html += '<div class="rpg-lb-panel-header">';
     html += `<h4 class="rpg-lb-panel-title"><i class="fa-solid fa-book"></i> ${w}</h4>`;
     html += '<div class="rpg-lb-panel-header-actions">';
+    html += `<button class="rpg-lb-spine-duplicate" data-world="${w}" title="Duplicate — a copy of this lorebook with all its entries"><i class="fa-solid fa-copy"></i></button>`;
     html += `<button class="rpg-lb-spine-export" data-world="${w}" title="Export"><i class="fa-solid fa-file-export"></i></button>`;
     html += `<button class="rpg-lb-spine-delete" data-world="${w}" title="Delete"><i class="fa-solid fa-trash"></i></button>`;
     html += '</div></div>';
@@ -764,6 +765,39 @@ async function reconcileIfCampaignActive() {
     await campaignManager.queueReconcile();
 }
 
+/**
+ * Duplicate (the copy button on a book, and the book's right-click menu):
+ * asks for the copy's name, copies the lorebook with every entry, files the
+ * copy in the original's campaign folder and opens it. In the active
+ * campaign's folder the copy is on like the campaign's other books;
+ * anywhere else it starts off.
+ * @param {string} worldName - The lorebook to copy
+ */
+async function duplicateBook(worldName) {
+    if (!worldName) return;
+    const suggested = lorebookAPI.freeCopyName(worldName);
+    const answer = prompt(`Name for the copy of "${worldName}":`, suggested);
+    if (answer === null) return;
+    const newName = answer.trim();
+    if (!newName) return;
+    try {
+        await lorebookAPI.duplicateWorld(worldName, newName);
+        campaignManager.onWorldDuplicated(worldName, newName);
+        saveSettings();
+        await reconcileIfCampaignActive();
+        selectedBook = newName;
+        selectedEntry = null;
+        expandedEditor = false;
+        renderLorebook();
+        try {
+            if (window.toastr) window.toastr.success(`Copied "${worldName}" to "${newName}".`, 'Lore Library', { timeOut: 3000 });
+        } catch (e) {}
+    } catch (err) {
+        console.error('[LoreLibrary] Duplicate failed:', err);
+        alert('Duplicate failed: ' + (err?.message || err));
+    }
+}
+
 function refreshCampaignToggles() {
     const $modal = $('#rpg-lorebook-modal');
     const activeNames = lorebookAPI.getActiveWorldNames();
@@ -996,6 +1030,11 @@ export function initLorebookEventDelegation() {
                         }
                     }
                 },
+            },
+            {
+                icon: 'fa-solid fa-copy',
+                label: 'Duplicate',
+                action: () => duplicateBook(worldName),
             },
             {
                 icon: 'fa-solid fa-arrows-up-down-left-right',
@@ -1423,6 +1462,12 @@ export function initLorebookEventDelegation() {
     });
 
     // ── Book delete ──────────────────────────────────────────────────────────
+    // Book duplicate (the desktop header and the mobile spine share it)
+    $modal.on('click', '.rpg-lb-spine-duplicate', async function (e) {
+        e.stopPropagation();
+        await duplicateBook($(this).data('world'));
+    });
+
     $modal.on('click', '.rpg-lb-spine-delete', async function (e) {
         e.stopPropagation();
         const worldName = $(this).data('world');

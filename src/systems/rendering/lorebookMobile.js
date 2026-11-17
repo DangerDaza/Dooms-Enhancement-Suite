@@ -535,6 +535,7 @@ function buildBookSpineHtml(worldName, campaignId, activeNames) {
     html += '<span class="rpg-lb-spine-tokens">...</span>';
     // Same markup as the desktop tree row — the click handler is shared (registered in lorebook.js)
     html += `<button class="rpg-lb-book-global${isGlobal ? ' active' : ''}" data-world="${w}" title="Global — stays active when the campaign changes"><i class="fa-solid fa-globe"></i></button>`;
+    html += `<button class="rpg-lb-spine-duplicate" data-world="${w}" title="Duplicate — a copy of this lorebook with all its entries"><i class="fa-solid fa-copy"></i></button>`;
     html += `<button class="rpg-lb-spine-export" data-world="${w}" title="Export"><i class="fa-solid fa-file-export"></i></button>`;
     html += `<button class="rpg-lb-spine-delete" data-world="${w}" title="Delete lorebook"><i class="fa-solid fa-trash"></i></button>`;
     html += '<button class="rpg-lb-spine-edit"><i class="fa-solid fa-pen-to-square"></i></button>';
@@ -744,7 +745,7 @@ export function initMobileLorebookEventDelegation() {
     // ── Book spine expand/collapse (lazy-load entries) ──────────────────────
     $modal.on('click', '.rpg-lb-book-spine.expandable', function (e) {
         // Don't trigger when clicking toggles, checkboxes, or edit buttons
-        if ($(e.target).closest('.rpg-lb-toggle, .rpg-lb-book-check, .rpg-lb-spine-edit, .rpg-lb-spine-export, .rpg-lb-spine-delete, .rpg-lb-book-global').length) return;
+        if ($(e.target).closest('.rpg-lb-toggle, .rpg-lb-book-check, .rpg-lb-spine-edit, .rpg-lb-spine-duplicate, .rpg-lb-spine-export, .rpg-lb-spine-delete, .rpg-lb-book-global').length) return;
 
         const $spine = $(this);
         const worldName = $spine.data('world');

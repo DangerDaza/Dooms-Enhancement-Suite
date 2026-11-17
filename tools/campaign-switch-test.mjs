@@ -32,8 +32,13 @@ const original = readFileSync(wiStub, 'utf8');
 const patched = original
     .replace(/export const world_names = anything;/, 'export const world_names = ["A", "B", "C", "D", "G"];')
     .replace(/export const selected_world_info = anything;/, 'export const selected_world_info = ["D", "G", "B"];')
-    .replace(/export const updateWorldInfoList = anything;/, 'export const updateWorldInfoList = async () => { globalThis.__wiUpdates = (globalThis.__wiUpdates || 0) + 1; };');
+    // The list refresh also picks up files saved since (as the server's listing does).
+    .replace(/export const updateWorldInfoList = anything;/, 'export const updateWorldInfoList = async () => { globalThis.__wiUpdates = (globalThis.__wiUpdates || 0) + 1; for (const n of Object.keys(globalThis.__wiFiles || {})) if (!world_names.includes(n)) world_names.push(n); };')
+    // World Info files, in memory: what Duplicate reads and writes.
+    .replace(/export const loadWorldInfo = anything;/, 'export const loadWorldInfo = async (name) => { const f = (globalThis.__wiFiles || {})[name]; return f ? JSON.parse(JSON.stringify(f)) : null; };')
+    .replace(/export const saveWorldInfo = anything;/, 'export const saveWorldInfo = async (name, data) => { (globalThis.__wiFiles = globalThis.__wiFiles || {})[name] = JSON.parse(JSON.stringify(data)); };');
 assert.notEqual(patched, original, 'world-info stub did not contain the expected exports');
+assert.ok(patched.includes('__wiFiles') && patched.includes('loadWorldInfo = async') && patched.includes('saveWorldInfo = async'), 'world-info stub lacks loadWorldInfo/saveWorldInfo');
 writeFileSync(wiStub, patched);
 
 // Browser-ish globals the module graph touches at evaluation time.
@@ -104,6 +109,13 @@ function reset() {
     extensionSettings.userCharacters = {};
     globalThis.__wiUpdates = 0;
     globalThis.__wiChangeTriggers = 0;
+    // The World Info files on "disk", and the list back to its five books.
+    globalThis.__wiFiles = {
+        A: { entries: { 0: { uid: 0, key: ['mecha'], content: 'Mechs are tall.', order: 100 }, 1: { uid: 1, key: ['pilot'], content: 'Pilots are few.', order: 90 } } },
+    };
+    const names = api.getAllWorldNames();
+    names.length = 0;
+    names.push('A', 'B', 'C', 'D', 'G');
 }
 
 let failures = 0;
@@ -327,6 +339,64 @@ await test('auto-link queues behind an in-flight switch instead of interleaving'
     assert.deepEqual(active(), ['A', 'B', 'C', 'D', 'G']);
     assert.deepEqual(extensionSettings.lorebook.campaignActivated, ['A', 'B']);
     assert.deepEqual(extensionSettings.lorebook.autoLinked, ['C']);
+});
+
+// ─── Duplicate a lorebook ───────────────────────────────────────────────────
+
+await test('the name offered for a copy is the first free "(copy)" name, compared without case', async () => {
+    assert.equal(api.freeCopyName('A'), 'A (copy)');
+    assert.equal(api.freeCopyName('A', ['A', 'a (COPY)']), 'A (copy 2)');
+    assert.equal(api.freeCopyName('A', ['A', 'A (copy)', 'A (copy 2)', 'A (copy 3)']), 'A (copy 4)');
+    assert.equal(api.freeCopyName('  A  ', []), 'A (copy)');
+});
+
+await test('duplicating copies every entry into a new book and leaves the original alone', async () => {
+    const before = JSON.stringify(globalThis.__wiFiles.A);
+    assert.equal(await api.duplicateWorld('A', 'A (copy)'), 'A (copy)');
+    assert.ok(api.getAllWorldNames().includes('A (copy)'));
+    assert.equal(JSON.stringify(globalThis.__wiFiles['A (copy)']), before);
+    assert.equal(JSON.stringify(globalThis.__wiFiles.A), before);
+    // The two are separate objects: editing the copy does not reach the original.
+    const copy = await api.loadWorldData('A (copy)');
+    copy.entries[0].content = 'Changed in the copy.';
+    await api.saveWorldData('A (copy)', copy);
+    assert.equal((await api.loadWorldData('A', true)).entries[0].content, 'Mechs are tall.');
+    // Not switched on by the copy itself.
+    assert.equal(api.isWorldActive('A (copy)'), false);
+});
+
+await test('duplicating refuses a taken name, an empty one, one the server would change, and a book that will not load', async () => {
+    await assert.rejects(api.duplicateWorld('A', 'B'), /already a lorebook named "B"/);
+    await assert.rejects(api.duplicateWorld('A', 'b'), /already a lorebook named "b"/, 'case does not make a new file');
+    await assert.rejects(api.duplicateWorld('A', '   '), /needs a name/);
+    await assert.rejects(api.duplicateWorld('A', 'Mecha/Lore'), /cannot contain/);
+    await assert.rejects(api.duplicateWorld('Missing', 'Missing (copy)'), /Could not load/);
+    assert.deepEqual([...api.getAllWorldNames()].sort(), ['A', 'B', 'C', 'D', 'G'], 'nothing was created');
+});
+
+await test('a copy is filed in the original\'s campaign: on when that campaign is active, off otherwise, never global', async () => {
+    // A is in c1 (inactive): the copy joins c1 and stays off.
+    await api.duplicateWorld('A', 'A (copy)');
+    assert.equal(cm.onWorldDuplicated('A', 'A (copy)'), 'c1');
+    assert.deepEqual(extensionSettings.lorebook.campaigns.c1.books, ['A', 'B', 'A (copy)']);
+    await cm.queueReconcile();
+    assert.equal(api.isWorldActive('A (copy)'), false);
+    // With c1 active the campaign's rule applies to it like any of its books.
+    await cm.setActiveCampaign('c1', { silent: true });
+    assert.equal(api.isWorldActive('A (copy)'), true);
+    await api.duplicateWorld('A', 'A (copy 2)');
+    cm.onWorldDuplicated('A', 'A (copy 2)');
+    await cm.queueReconcile();
+    assert.equal(api.isWorldActive('A (copy 2)'), true);
+    await cm.setActiveCampaign(null, { silent: true });
+    assert.equal(api.isWorldActive('A (copy)'), false);
+    assert.equal(api.isWorldActive('A (copy 2)'), false);
+    // An unfiled original gives an unfiled copy; a global original a copy that is not global.
+    globalThis.__wiFiles.G = { entries: {} };
+    await api.duplicateWorld('G', 'G (copy)');
+    assert.equal(cm.onWorldDuplicated('G', 'G (copy)'), null);
+    assert.equal(cm.getCampaignForBook('G (copy)'), null);
+    assert.equal(cm.isGlobalBook('G (copy)'), false);
 });
 
 if (failures) {

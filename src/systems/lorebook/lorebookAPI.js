@@ -238,6 +238,51 @@ export async function deleteWorld(name) {
     await updateWorldInfoList();
 }
 
+/**
+ * The name a copy of `name` is offered: "<name> (copy)", then
+ * "<name> (copy 2)", "(copy 3)"… — the first no existing lorebook has.
+ * Names are compared without case: on Windows and macOS two names that
+ * differ only in case are one file.
+ * @param {string} name - The lorebook being copied
+ * @param {string[]} [existingNames] - Defaults to every lorebook there is
+ * @returns {string}
+ */
+export function freeCopyName(name, existingNames = world_names) {
+    const taken = new Set((Array.isArray(existingNames) ? existingNames : []).map(n => String(n).toLowerCase()));
+    const base = String(name || '').trim();
+    let candidate = `${base} (copy)`;
+    for (let n = 2; taken.has(candidate.toLowerCase()); n++) candidate = `${base} (copy ${n})`;
+    return candidate;
+}
+
+/**
+ * Copies a lorebook, every entry and setting, into a new WI file. The
+ * original is not touched, and the copy is not switched on here: whether it
+ * is active is for the caller's rules (a campaign's books are on while the
+ * campaign is). Refuses a name that is taken (without regard to case) or
+ * that the server would change when it writes the file.
+ * @param {string} name - WI filename to copy
+ * @param {string} newName - Name for the copy
+ * @returns {Promise<string>} The copy's name
+ */
+export async function duplicateWorld(name, newName) {
+    const target = String(newName || '').trim();
+    if (!target) throw new Error('The copy needs a name.');
+    if (/[\\/:*?"<>|]/.test(target)) throw new Error('A lorebook name cannot contain \\ / : * ? " < > |');
+    if (world_names.some(n => String(n).toLowerCase() === target.toLowerCase())) {
+        throw new Error(`There is already a lorebook named "${target}".`);
+    }
+    const data = await loadWorldData(name, true);
+    if (!data) throw new Error(`Could not load world data for "${name}"`);
+    // A deep copy: the two books must not share entry objects through the cache.
+    const copy = JSON.parse(JSON.stringify(data));
+    await saveWorldInfo(target, copy, true);
+    await updateWorldInfoList();
+    if (!world_names.includes(target)) throw new Error(`SillyTavern did not list "${target}" after saving it.`);
+    wiDataCache.set(target, copy);
+    return target;
+}
+
 // ─── Utilities ──────────────────────────────────────────────────────────────
 
 /**

@@ -433,6 +433,22 @@ export function onWorldDeleted(worldName) {
     saveSettings();
 }
 
+/**
+ * Files a copy of a book where the original is: the same campaign folder,
+ * or Unfiled when the original is. The copy is never made global, whatever
+ * the original is. Call alongside lorebookAPI.duplicateWorld; when the
+ * folder is the active campaign's, follow up with a reconcile so the copy
+ * is on like the campaign's other books.
+ * @returns {string|null} The campaign id the copy was filed under, or null
+ */
+export function onWorldDuplicated(originalName, copyName) {
+    ensureLorebook();
+    const home = getCampaignForBook(originalName);
+    if (!home) return null;
+    addBookToCampaign(home.id, copyName);
+    return home.id;
+}
+
 // ─── Book Assignment ────────────────────────────────────────────────────────
 
 /**
