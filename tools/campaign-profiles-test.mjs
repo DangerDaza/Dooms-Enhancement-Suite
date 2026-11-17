@@ -47,6 +47,7 @@ function reset() {
     extensionSettings.campaignBaseShadow = {};
     extensionSettings.campaignUserProfiles = {};
     extensionSettings.campaignUserBaseShadow = {};
+    delete extensionSettings.campaignUserSwappedFor;
     extensionSettings.characterInjection = { Hex: { description: 'base hex', lorebook: '' } };
     extensionSettings.characterAppearance = { Hex: 'silver hair' };
     extensionSettings.npcAvatars = { Hex: '/user/images/des-portraits/hex-aaaaaaaa.png?t=1', Lucy: '/user/images/des-portraits/lucy-bbbbbbbb.png?t=1' };
@@ -728,6 +729,181 @@ test('player: the cards a switch changes are those either campaign has a version
     assert.deepEqual(cp.userNamesWithVersionIn(null, null), []);
 });
 
+// ─── A build without versions of the player's card moved the campaign ───────
+
+/**
+ * What a build from before 3.2.1 does when it activates, deactivates or
+ * deletes a campaign, as far as the player's cards go: it moves the id (and
+ * the NPC stores, which these cases leave empty) and nothing else.
+ */
+function olderBuildActivates(id) {
+    extensionSettings.lorebook.activeCampaignId = id;
+}
+
+/** Jordan with a version of their own in each of the campaigns named. */
+function seedPlayerWithVersions(...ids) {
+    seedPlayer();
+    for (const id of ids) {
+        cp.addProfile(id, 'Jordan', { isUser: U });
+        const v = cp.readVersion(id, 'Jordan', U);
+        v.injection.description = `${id} jordan`;
+        v.avatar = `/user/images/des-portraits/jordan-${id}.png?t=1`;
+        v.avatarFullRes = v.avatar;
+        cp.writeVersion(id, 'Jordan', v, U);
+    }
+}
+const userBucket = (id) => extensionSettings.campaignUserProfiles[id];
+
+test('older build: a switch records which campaign the cards are swapped for', () => {
+    seedPlayerWithVersions('c1');
+    assert.equal(extensionSettings.campaignUserSwappedFor, undefined, 'nothing recorded before the first switch');
+    activate('c1');
+    assert.equal(extensionSettings.campaignUserSwappedFor, 'c1');
+    activate('c2');
+    assert.equal(extensionSettings.campaignUserSwappedFor, 'c2');
+    activate(null);
+    assert.equal(extensionSettings.campaignUserSwappedFor, null);
+});
+
+test('older build: it switched to another campaign that has its own version; neither version is lost', () => {
+    seedPlayerWithVersions('c1', 'c2');
+    activate('c1');
+    olderBuildActivates('c2');
+    // A save that lands before the repair must not write c1's card over c2's version.
+    assert.equal(cp.bankActiveCampaign(), 0);
+    assert.equal(userBucket('c2').Jordan.injection.description, 'c2 jordan');
+    // What was typed on the older build went onto the card, which held c1.
+    card().injection.description = 'c1 jordan, edited on the older build';
+
+    assert.equal(cp.ensureCampaignSettings(), true, 'the repair needs saving');
+    assert.equal(card().injection.description, 'c2 jordan', 'the card shows the active campaign\'s version');
+    assert.equal(card().avatar, '/user/images/des-portraits/jordan-c2.png?t=1');
+    assert.equal(userBucket('c1').Jordan.injection.description, 'c1 jordan, edited on the older build', 'the edit is kept where it belongs');
+    assert.equal(extensionSettings.campaignUserBaseShadow.Jordan.injection.description, 'base jordan', 'Base is still parked');
+    assert.equal(extensionSettings.campaignUserSwappedFor, 'c2');
+    assert.equal(cp.ensureCampaignSettings(), false, 'nothing left to do the second time');
+    assert.equal(cp.bankActiveCampaign(), 1, 'in step again, the card is banked');
+
+    activate(null);
+    assert.equal(card().injection.description, 'base jordan');
+    assert.deepEqual(extensionSettings.campaignUserBaseShadow, {});
+    assert.equal(userBucket('c1').Jordan.injection.description, 'c1 jordan, edited on the older build');
+    assert.equal(userBucket('c2').Jordan.injection.description, 'c2 jordan');
+    for (const tag of ['11111111', 'c1', 'c2']) {
+        assert.ok(cp.collectPortraitRefs().has(`/user/images/des-portraits/jordan-${tag}.png`), `${tag}'s portrait is still referenced`);
+    }
+});
+
+test('older build: it switched to a campaign with no version; Base comes back and "+" there keeps it', () => {
+    seedPlayerWithVersions('c1');
+    activate('c1');
+    olderBuildActivates('c2');
+    assert.equal(cp.ensureCampaignSettings(), true);
+    assert.equal(card().injection.description, 'base jordan');
+    assert.deepEqual(extensionSettings.campaignUserBaseShadow, {});
+    assert.equal(userBucket('c1').Jordan.injection.description, 'c1 jordan');
+    assert.equal(cp.isLiveVersion('base', 'Jordan', U), true);
+
+    cp.addProfile('c2', 'Jordan', { isUser: U });
+    assert.equal(card().injection.description, 'base jordan', 'the new version is a clone of Base');
+    assert.equal(extensionSettings.campaignUserBaseShadow.Jordan.injection.description, 'base jordan');
+    activate(null);
+    assert.equal(card().injection.description, 'base jordan');
+});
+
+test('older build: it turned the campaign off; the card goes back to Base and what was typed stays in the version', () => {
+    seedPlayerWithVersions('c1');
+    activate('c1');
+    olderBuildActivates(null);
+    card().injection.description = 'typed with no campaign showing';
+    assert.equal(cp.bankActiveCampaign(), 0);
+    assert.equal(cp.ensureCampaignSettings(), true);
+    assert.equal(card().injection.description, 'base jordan');
+    assert.equal(card().avatar, '/user/images/des-portraits/jordan-11111111.png?t=1');
+    assert.equal(userBucket('c1').Jordan.injection.description, 'typed with no campaign showing');
+    assert.deepEqual(extensionSettings.campaignUserBaseShadow, {});
+    assert.equal(extensionSettings.campaignUserSwappedFor, null);
+    // Turning it on again shows that version, and off again Base.
+    activate('c1');
+    assert.equal(card().injection.description, 'typed with no campaign showing');
+    activate(null);
+    assert.equal(card().injection.description, 'base jordan');
+});
+
+test('older build: it deleted the active campaign; Base comes back and the version goes with its campaign', () => {
+    seedPlayerWithVersions('c1');
+    activate('c1');
+    olderBuildActivates(null);
+    delete extensionSettings.lorebook.campaigns.c1;
+    assert.equal(cp.ensureCampaignSettings(), true);
+    assert.equal(card().injection.description, 'base jordan');
+    assert.equal(userBucket('c1'), undefined);
+    assert.deepEqual(extensionSettings.campaignUserBaseShadow, {});
+    assert.equal(extensionSettings.campaignUserSwappedFor, null);
+    assert.equal(cp.countVersions('Jordan', U), 1);
+});
+
+test('older build: it left a campaign active that no longer exists; the cards are put in step before the repair', () => {
+    seedPlayerWithVersions('c1', 'c2');
+    activate('c1');
+    card().injection.description = 'c1 jordan, edited';
+    olderBuildActivates('c2');
+    delete extensionSettings.lorebook.campaigns.c2;
+    assert.equal(cp.ensureCampaignSettings(), true);
+    assert.equal(extensionSettings.lorebook.activeCampaignId, null);
+    assert.equal(card().injection.description, 'base jordan');
+    assert.equal(userBucket('c1').Jordan.injection.description, 'c1 jordan, edited');
+    assert.equal(userBucket('c2'), undefined);
+    assert.deepEqual(extensionSettings.campaignUserBaseShadow, {});
+    assert.equal(extensionSettings.campaignUserSwappedFor, null);
+});
+
+test('older build: the first load with nothing recorded records the active campaign and changes nothing else', () => {
+    seedPlayerWithVersions('c1');
+    activate('c1');
+    cp.ensureCampaignSettings(); // the fixture's other keys get their shape
+    delete extensionSettings.campaignUserSwappedFor;
+    const before = JSON.stringify(extensionSettings);
+    assert.equal(cp.ensureCampaignSettings(), false, 'no save is forced on an upgrade');
+    assert.equal(extensionSettings.campaignUserSwappedFor, 'c1');
+    delete extensionSettings.campaignUserSwappedFor;
+    assert.equal(JSON.stringify(extensionSettings), before);
+    assert.equal(cp.bankActiveCampaign(), 1, 'an unrecorded swap is taken to be in step');
+
+    // With no campaign and no versions at all (an install coming from main).
+    reset();
+    seedPlayer();
+    cp.ensureCampaignSettings();
+    delete extensionSettings.campaignUserSwappedFor;
+    assert.equal(cp.ensureCampaignSettings(), false);
+    assert.equal(extensionSettings.campaignUserSwappedFor, null);
+    assert.equal(card().injection.description, 'base jordan');
+});
+
+test('older build: a record that is not a campaign id is read as none, and the cards end in step', () => {
+    seedPlayerWithVersions('c1');
+    activate('c1');
+    extensionSettings.campaignUserSwappedFor = 42;
+    assert.equal(cp.ensureCampaignSettings(), true);
+    assert.equal(card().injection.description, 'c1 jordan');
+    assert.equal(extensionSettings.campaignUserBaseShadow.Jordan.injection.description, 'base jordan');
+    assert.equal(extensionSettings.campaignUserSwappedFor, 'c1');
+});
+
+test('older build: out of step, "+" for the active campaign never writes over the parked Base', () => {
+    seedPlayerWithVersions('c1');
+    activate('c1');
+    olderBuildActivates('c2');
+    cp.addProfile('c2', 'Jordan', { isUser: U });
+    assert.equal(extensionSettings.campaignUserBaseShadow.Jordan.injection.description, 'base jordan');
+    // An NPC's parked entry is replaced as it always was.
+    reset();
+    activate('c1');
+    extensionSettings.campaignBaseShadow.Hex = { injection: { description: 'stale' } };
+    cp.addProfile('c1', 'Hex');
+    assert.equal(extensionSettings.campaignBaseShadow.Hex.injection.description, 'base hex');
+});
+
 // ─── The linked persona's avatar file ───────────────────────────────────────
 
 test('persona file: a portrait value that is the persona\'s own file is recognised in every form it takes', () => {
@@ -751,6 +927,12 @@ test('persona file: a portrait value that is the persona\'s own file is recognis
     assert.equal(is('/User%20Avatars/100%25.png', '100%.png'), true, 'a % in the file name, encoded as the import writes it');
     assert.equal(is('/User%20Avatars/100%.png', '100%.png'), true, 'a stray % does not throw');
     assert.equal(is('/User Avatars/100%.png', '100%.png'), true);
+    // A '#' or '?' in the file name is encoded by the import and is part of the name.
+    assert.equal(is('/User%20Avatars/Unit%20%237%20(Persona).png', 'Unit #7 (Persona).png'), true);
+    assert.equal(is('/User%20Avatars/Unit%20%237%20(Persona).png?t=1700000000', 'Unit #7 (Persona).png'), true);
+    assert.equal(is('/User%20Avatars/who%3F.png', 'who?.png'), true);
+    assert.equal(is('/User%20Avatars/Unit%20%237.png', 'Unit.png'), false);
+    assert.equal(is('/User%20Avatars/Unit%20%238.png', 'Unit #7.png'), false);
 });
 
 test('persona file: the versions with no portrait of their own are named, wherever each version is kept', () => {
@@ -781,6 +963,10 @@ test('persona file: the versions with no portrait of their own are named, wherev
     cp.writeVersion('c2', 'Jordan', w, U);
     assert.deepEqual(cp.userVersionsWithoutOwnPortrait('Jordan'), []);
     assert.deepEqual(cp.userVersionsWithoutOwnPortrait('Nobody'), [], 'no such card');
+    // A persona file with '#' in its name, as the import stores it.
+    card().linkedPersona = 'Unit #7 (Persona).png';
+    card().avatar = '/User%20Avatars/Unit%20%237%20(Persona).png';
+    assert.deepEqual(cp.userVersionsWithoutOwnPortrait('Jordan'), ['base']);
 });
 
 if (failures) {

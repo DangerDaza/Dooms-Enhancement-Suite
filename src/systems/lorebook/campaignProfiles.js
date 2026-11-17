@@ -32,6 +32,11 @@
  * the rest of the card (colour, pronouns, the linked SillyTavern persona) is
  * the same whichever campaign is active. Every function that takes a name
  * takes `isUser` last (false = an NPC, the default) to say which namespace.
+ *     extensionSettings.campaignUserSwappedFor = campaignId | null
+ * is the campaign those cards are swapped for right now. activeCampaignId
+ * cannot stand in for it: a build from before the player's card had versions
+ * still switches campaigns, and moves activeCampaignId and the NPC stores
+ * while leaving the cards exactly as they were (see reconcileUserSwap).
  *
  * This module imports ONLY state.js so it is unit-testable in plain Node
  * (tools/campaign-profiles-test.mjs) and importable from persistence.js
@@ -66,6 +71,9 @@ export const USER_PROFILE_FIELDS = Object.freeze(['avatar', 'avatarFullRes', 'in
 
 /** The version id of the flat stores themselves. */
 export const BASE_VERSION = 'base';
+
+/** Settings key: the campaign the player's cards are swapped for (null = Base is live). */
+const USER_SWAP_KEY = 'campaignUserSwappedFor';
 
 // ─── Internals ──────────────────────────────────────────────────────────────
 
@@ -301,7 +309,11 @@ export function addProfile(campaignId, name, { from = BASE_VERSION, isUser = fal
     if (hasProfile(campaignId, name, isUser)) return getProfile(campaignId, name, isUser);
     const source = readVersion(from, name, isUser) || {};
     if (campaignId === getActiveCampaignId()) {
-        shadowRoot(isUser)[name] = snapshotOf(name, isUser);
+        const shadow = shadowRoot(isUser);
+        // A player's card with a Base already parked and no version here is
+        // out of step (reconcileUserSwap puts that right at load); the
+        // parked entry is the real Base and is never written over.
+        if (!isUser || !hasOwn(shadow, name)) shadow[name] = snapshotOf(name, isUser);
         bucket(campaignId, true, isUser)[name] = clone(source);
         applyOf(name, source, isUser);
     } else {
@@ -351,7 +363,10 @@ export function bankActiveCampaign() {
             n++;
         }
     }
-    const users = bucket(active, false, true);
+    // The player's cards are banked only while they are swapped for this
+    // campaign. Banking them into any other would write one campaign's
+    // version over another's.
+    const users = userSwapInStep(active) ? bucket(active, false, true) : null;
     if (users) {
         for (const name of Object.keys(users)) {
             // A card that is gone has nothing to bank; its version is left
@@ -418,6 +433,49 @@ function switchUserProfiles(prevId, nextId) {
             applyToLiveUser(name, nextBucket[name]);
         }
     }
+    extensionSettings[USER_SWAP_KEY] = typeof nextId === 'string' && nextId ? nextId : null;
+}
+
+/** The campaign the player's cards are swapped for, or null. Undefined when never recorded. */
+function userSwapStamp() {
+    const stamp = extensionSettings[USER_SWAP_KEY];
+    if (stamp === undefined) return undefined;
+    return typeof stamp === 'string' && stamp ? stamp : null;
+}
+
+/** True when the player's cards hold `active`'s versions (or nothing has been recorded yet). */
+function userSwapInStep(active) {
+    const stamp = userSwapStamp();
+    return stamp === undefined || stamp === (active || null);
+}
+
+/**
+ * Brings the player's cards in step with the active campaign when something
+ * that does not know about their versions moved it: a build from before
+ * 3.2.1 (the branch switcher in Settings, or a rollback) activates,
+ * deactivates and deletes campaigns by moving activeCampaignId and the NPC
+ * stores only. The cards then still hold the campaign they were swapped for
+ * and their Base is still parked, while activeCampaignId says otherwise;
+ * the next save would bank one campaign's version over another's.
+ *
+ * The cards are swapped from the campaign they really hold to the one that
+ * is active, which banks what is on them (edits made on the other build
+ * included) where it belongs. The first load that finds nothing recorded
+ * records the active campaign and changes nothing else. The linked
+ * SillyTavern persona's avatar file is not written from here: it follows at
+ * the next Workshop Save, or the next switch that changes the portrait.
+ * @returns {boolean} true when cards were re-swapped
+ */
+function reconcileUserSwap() {
+    const active = getActiveCampaignId();
+    const stamp = userSwapStamp();
+    if (stamp === undefined) {
+        extensionSettings[USER_SWAP_KEY] = active;
+        return false;
+    }
+    if (stamp === active) return false;
+    switchUserProfiles(stamp, active);
+    return true;
 }
 
 /**
@@ -429,16 +487,20 @@ function switchUserProfiles(prevId, nextId) {
 export function isPersonaFileRef(value, personaFilename) {
     if (typeof value !== 'string' || !value || typeof personaFilename !== 'string' || !personaFilename) return false;
     if (value.startsWith('data:')) return false;
-    let decoded = value;
-    try {
-        decoded = decodeURIComponent(value);
-    } catch (e) {
-        // A stray % (a file named "100%.png", written unencoded): decode the
-        // plain-ASCII escapes one by one and leave the rest as written.
-        decoded = value.replace(/%([0-9a-f]{2})/gi, (m, hex) => (parseInt(hex, 16) < 0x80 ? String.fromCharCode(parseInt(hex, 16)) : m));
-    }
-    const whole = decoded.toLowerCase();
+    const decode = (text) => {
+        try {
+            return decodeURIComponent(text);
+        } catch (e) {
+            // A stray % (a file named "100%.png", written unencoded): decode the
+            // plain-ASCII escapes one by one and leave the rest as written.
+            return text.replace(/%([0-9a-f]{2})/gi, (m, hex) => (parseInt(hex, 16) < 0x80 ? String.fromCharCode(parseInt(hex, 16)) : m));
+        }
+    };
     const file = personaFilename.toLowerCase();
+    // The path as written, cut at its query BEFORE decoding: an encoded '#'
+    // or '?' ("Unit%20%237.png") is part of the file's name, not a query.
+    if (decode(value.split(/[?#]/)[0]).toLowerCase().endsWith(`user avatars/${file}`)) return true;
+    const whole = decode(value).toLowerCase();
     if (whole.split(/[?#]/)[0].endsWith(`user avatars/${file}`)) return true;
     return /[?&]type=persona(&|$)/.test(whole) && new RegExp(`[?&]file=${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(&|$)`).test(whole);
 }
@@ -844,10 +906,11 @@ export function forgetBook(name) {
 // ─── Load-time shape guard ──────────────────────────────────────────────────
 
 /**
- * Additive migration: gives every new key its default shape and repairs a
- * dangling activeCampaignId (campaign deleted while active on another
- * device, or a crash mid-switch) by restoring the shadow. Safe to call
- * repeatedly. Returns true when anything changed.
+ * Additive migration: gives every new key its default shape, puts the
+ * player's cards back in step with the active campaign (reconcileUserSwap)
+ * and repairs a dangling activeCampaignId (campaign deleted while active on
+ * another device, or a crash mid-switch) by restoring the shadow. Safe to
+ * call repeatedly. Returns true when anything changed that needs saving.
  */
 export function ensureCampaignSettings() {
     let changed = false;
@@ -865,6 +928,9 @@ export function ensureCampaignSettings() {
             changed = true;
         }
     }
+    // Before the dangling-id repair below: that repair banks the cards into
+    // the active campaign, so they have to be holding it first.
+    if (reconcileUserSwap()) changed = true;
     const lb = extensionSettings.lorebook;
     if (lb && typeof lb === 'object') {
         if (lb.activeCampaignId === undefined) { lb.activeCampaignId = null; changed = true; }
