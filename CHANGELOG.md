@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Your own character has campaign versions.** NPCs have had a **Base** version and one per campaign since 2.6.0; your own card stayed the same whichever campaign was active. Now a card on the Roster's Users tab opens in the Workshop with the same version strip: Base, a tile for each campaign version with its own portrait, and "+" for the campaigns that have none yet. A version carries the portrait, the description, lorebook link and inject prompt, the knives and the voice; your dialogue colour, pronouns, linked SillyTavern persona and attribute sheet are the card's own and the same in every version. Setting a campaign active in the Lore Library switches your card with the rest of the cast, and falls back to Base in a campaign you have no version for. When the switch changes your portrait, the linked persona's avatar in SillyTavern is updated too (the Workshop already did this on Save), so the picture on your messages is the live version's. The Roster's Users tab shows the "⧉ N" badge and the "Viewing <campaign>" chip, My custom voices names which of a persona's versions use a voice, and deleting your card removes every version of it.
+- **Duplicate a lorebook.** The Lore Library has a copy button beside Export and Delete on a lorebook, and **Duplicate** in a book's right-click menu. It asks for a name (offering "<name> (copy)"), copies the lorebook with every entry and files the copy in the same campaign folder. In the active campaign's folder the copy is switched on like the campaign's other books; anywhere else it starts off. A name another lorebook already has is refused.
+
+### Fixed
+- **My custom voices names the campaign a voice is used in.** The "used by" line under Settings → Voices said "a removed campaign" for every campaign version of a character; it names the campaign now ("Mara (Base, Iron Crown)").
+- **Deleting your own card from the Roster removes its portrait files.** The Workshop's Delete did; the Roster's left them on disk. Files another character or version still uses are kept, as before.
+
 ## [3.2.0-beta.1] - 2026-10-24 — Inventory and quests
 
 Cut from `Project-Short-Fuse` as `release/3.2`. Live World and scene pictures, built there, are not in this release.

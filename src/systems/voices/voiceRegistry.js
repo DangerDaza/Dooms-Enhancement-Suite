@@ -93,8 +93,9 @@ export function health(entry) {
 function campaignName(id) {
     if (!id || id === BASE_VERSION) return 'Base';
     try {
+        // getCampaignsInOrder() gives { id, campaign } pairs.
         const c = getCampaignsInOrder().find(x => x && x.id === id);
-        return c?.name || 'a removed campaign';
+        return c?.campaign?.name || 'a removed campaign';
     } catch (e) {
         return id;
     }

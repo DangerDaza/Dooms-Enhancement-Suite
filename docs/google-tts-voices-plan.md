@@ -255,6 +255,10 @@ lazy modules above is reachable (§14.1).
 - Stateless `voicekey_…` keys (7-day TTL [V]) are never stored; DES always creates with `store: true`.
 - Personas: `userCharacters[name].voice`, same shape, **not versioned** (personas have no
   versions: `characterWorkshop.js:575, :1162, :746`) [V].
+  *Since:* the player's cards have campaign versions too
+  (`campaignUserProfiles` / `campaignUserBaseShadow`, `campaignProfiles.js`). The live
+  voice is still `userCharacters[name].voice`; the other versions' voices sit in those
+  two stores, and `forEachVoiceRef` / `rewriteVoiceRefs` cover them.
 - Audio is **never** stored in settings (precedent: the v24 portrait move, `persistence.js:426-443`).
 
 By adding the field to `PROFILE_FIELDS`, these paths handle it with no further code [V map]:
