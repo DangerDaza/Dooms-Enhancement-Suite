@@ -166,14 +166,15 @@ export function refreshRosterIfOpen() {
 
 /**
  * "Viewing <campaign>" chip above the grid: names the campaign whose
- * versions the tiles (and the chat) are using. Hidden when the install has
- * no campaigns, and in user-character mode (personas are not versioned).
+ * versions the tiles (and the chat) are using, on the Characters tab and the
+ * Users tab alike (the player's cards have versions too). Hidden when the
+ * install has no campaigns.
  */
 function renderCampaignChip() {
     const $chip = $modal.find('#cr-campaign-chip');
     if (!$chip.length) return;
     const campaigns = extensionSettings.lorebook?.campaigns || {};
-    if (rosterMode === 'users' || !Object.keys(campaigns).length) {
+    if (!Object.keys(campaigns).length) {
         $chip.prop('hidden', true).empty();
         return;
     }
@@ -735,11 +736,11 @@ function buildTile(name, isActive) {
     const userBadge = isUserMode
         ? `<span class="cr-tile-user-badge">${isActiveUser ? '★ Active' : 'User'}</span>`
         : '';
-    // Campaign versions besides Base.
+    // Campaign versions besides Base (NPCs and the player's cards alike).
     let versionsBadge = '';
-    if (!isUserMode) {
+    {
         let versions = 1;
-        try { versions = countVersions(name); } catch (e) {}
+        try { versions = countVersions(name, isUserMode); } catch (e) {}
         if (versions > 1) {
             versionsBadge = `<span class="cr-tile-versions" title="${versions} versions (Base + ${versions - 1} campaign)" aria-hidden="true">&#x29C9; ${versions}</span>`;
         }
@@ -789,7 +790,7 @@ function hideContextMenu() {
 function confirmAndDelete(name) {
     let versionsNote = '';
     try {
-        const extra = rosterMode === 'users' ? 0 : countVersions(name) - 1;
+        const extra = countVersions(name, rosterMode === 'users') - 1;
         if (extra > 0) versionsNote = `, and its ${extra} campaign version${extra === 1 ? '' : 's'}`;
     } catch (e) {}
     const ok = window.confirm(
@@ -1135,10 +1136,19 @@ function purgeCharacter(name) {
     // User-character mode purges only the userCharacters namespace and
     // clears activeUserCharacter if it was pointing at this entry.
     if (rosterMode === 'users') {
+        // The card's portrait and every campaign version's: collected first,
+        // the settings cleared and saved, and only then the files nothing
+        // else references deleted (the Workshop's delete does the same).
+        const card = s.userCharacters?.[name];
+        const userPortraits = [
+            ...(card ? [card.avatar, card.avatarFullRes] : []),
+            ...deleteCharacterEverywhere(name, true),
+        ];
         if (s.userCharacters) delete s.userCharacters[name];
         deleteSheet(s, name, true);
         if (s.activeUserCharacter === name) s.activeUserCharacter = null;
         saveSettings();
+        deletePortraitsIfUnreferenced(userPortraits).catch(() => {});
         return;
     }
     if (s.characterColors) delete s.characterColors[name];

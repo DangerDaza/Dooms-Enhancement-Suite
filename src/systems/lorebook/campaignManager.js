@@ -23,6 +23,8 @@ import { getAllWorldNames, isWorldActive, applyWorldActivation } from './loreboo
 import {
     switchCampaignProfiles,
     deleteCampaignProfiles,
+    userNamesWithVersionIn,
+    portraitRefKey,
     renameBookEverywhere,
     forgetBook,
     getActiveCampaignId as profilesActiveId,
@@ -203,10 +205,11 @@ export function isSwitching() {
 }
 
 /**
- * Makes a campaign active (or none, with null). Swaps character versions,
- * turns the campaign's books on, turns the previous campaign's books off
- * (ledger-tracked, globals exempt), saves, and repaints every surface that
- * shows character identity.
+ * Makes a campaign active (or none, with null). Swaps character versions
+ * (NPCs' and the player's cards'), turns the campaign's books on, turns the
+ * previous campaign's books off (ledger-tracked, globals exempt), saves,
+ * repaints every surface that shows character identity, and puts a player's
+ * changed portrait into its linked SillyTavern persona's avatar file.
  * @param {string|null} campaignId
  * @param {{silent?: boolean}} [options] - silent: no toast
  * @returns {Promise<boolean>} True if the active campaign changed
@@ -246,6 +249,11 @@ async function doSetActiveCampaign(campaignId, { silent = false } = {}) {
     const prev = getActiveCampaignId();
     if (prev === next) return false;
 
+    // The player's cards either campaign has a version of, with the portrait
+    // each shows now — to tell afterwards whose picture the switch changed.
+    const livePortrait = (name) => portraitRefKey(extensionSettings.userCharacters?.[name]?.avatar);
+    const playerPortraitsBefore = userNamesWithVersionIn(prev, next).map(name => [name, livePortrait(name)]);
+
     // 1 + 2. Character versions: bank the outgoing campaign, restore the base
     //        entries it hid, park the ones the incoming campaign overrides and
     //        apply its versions. Synchronous and pure.
@@ -261,6 +269,18 @@ async function doSetActiveCampaign(campaignId, { silent = false } = {}) {
 
     saveSettings();
     await repaintAfterCampaignSwitch();
+
+    // 4. A player's card that now shows another portrait: its linked
+    //    SillyTavern persona's avatar file follows, so the picture on the
+    //    player's messages is the live version's (the Workshop does this on
+    //    Save). A mirror only: the switch is done whether or not it lands.
+    const repainted = playerPortraitsBefore.filter(([name, before]) => livePortrait(name) !== before).map(([name]) => name);
+    if (repainted.length && extensionSettings.enabled !== false) {
+        try {
+            const workshop = await import('../ui/characterWorkshop.js');
+            if (typeof workshop.mirrorLivePersonaAvatars === 'function') await workshop.mirrorLivePersonaAvatars(repainted);
+        } catch (e) { /* the Workshop may not be loadable here; nothing to undo */ }
+    }
 
     if (!silent) {
         try {

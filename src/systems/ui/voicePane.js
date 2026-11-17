@@ -89,14 +89,17 @@ function statusLines(ctx) {
         lines.push(`Used for your persona's lines while it is shown on the Present Characters panel ("Show me in Present Characters" must be on). Otherwise the Narrator reads them.`);
     } else {
         lines.push(`Heard only while ${who} is on the Present Characters panel. Otherwise the Narrator reads their lines.`);
-        if (!ctx.isLive) {
-            lines.push(`This is ${who}'s voice in the <strong>${escapeHtml(ctx.versionLabel)}</strong> version; it's used while that campaign is active.`);
-        } else if (!ctx.isBase) {
-            lines.push(`This is ${who}'s voice in <strong>${escapeHtml(ctx.versionLabel)}</strong>, the active campaign.`);
-        }
-        if (ctx.isCardCharacter) {
-            lines.push('The card’s own character is only voiced when the tracker lists them as present.');
-        }
+    }
+    // Which version this voice belongs to (NPCs and the player's card alike).
+    if (!ctx.isLive) {
+        lines.push(ctx.isBase
+            ? `This is ${who}'s voice in the <strong>${escapeHtml(ctx.versionLabel)}</strong> version; it's used while no campaign with a version of its own is active.`
+            : `This is ${who}'s voice in the <strong>${escapeHtml(ctx.versionLabel)}</strong> version; it's used while that campaign is active.`);
+    } else if (!ctx.isBase) {
+        lines.push(`This is ${who}'s voice in <strong>${escapeHtml(ctx.versionLabel)}</strong>, the active campaign.`);
+    }
+    if (!ctx.isUser && ctx.isCardCharacter) {
+        lines.push('The card’s own character is only voiced when the tracker lists them as present.');
     }
     if (ctx.sharesColorWith && ctx.sharesColorWith.length) {
         lines.push(`⚠️ ${who} shares a dialogue colour with ${ctx.sharesColorWith.map(escapeHtml).join(', ')}, so some lines may be read in the wrong voice. Give them different colours in Appearance.`);

@@ -3287,7 +3287,7 @@
                 <!-- Which version of the character is on the stage: Base or a
                      campaign. Filled by renderCampaignBadge(); hidden when the
                      install has no campaigns. -->
-                <span class="cw-campaign-badge cw-npc-only" id="cw-campaign-badge" hidden></span>
+                <span class="cw-campaign-badge" id="cw-campaign-badge" hidden></span>
             </h3>
             <button class="rpg-popup-close" id="cw-close" type="button" aria-label="Close">&times;</button>
         </header>
@@ -3324,9 +3324,9 @@
                         <span id="cw-preview-rel"></span>
                     </div>
                     <!-- Version strip: Base + one tile per campaign version + "+".
-                         Built by renderVersionStrip(); hidden (and in user mode)
-                         when the install has no campaigns. -->
-                    <div class="cw-version-strip cw-npc-only" id="cw-version-strip" role="tablist"
+                         Built by renderVersionStrip() for NPCs and the player's
+                         cards alike; hidden when the install has no campaigns. -->
+                    <div class="cw-version-strip" id="cw-version-strip" role="tablist"
                         aria-label="Character versions" hidden></div>
                     <div class="cw-version-add-menu" id="cw-version-add-menu" role="menu" hidden></div>
                 </div>

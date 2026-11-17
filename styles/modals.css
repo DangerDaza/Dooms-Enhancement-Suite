@@ -6657,8 +6657,7 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     #character-workshop-popup .cw-stage-art,
     #character-workshop-popup .cw-stage-name,
     #character-workshop-popup .cw-stage-rel { display: none; }
-    #character-workshop-popup .cw-stage:not(:has(.cw-version-strip:not([hidden]))),
-    #character-workshop-popup[data-mode="user"] .cw-stage { display: none; }
+    #character-workshop-popup .cw-stage:not(:has(.cw-version-strip:not([hidden]))) { display: none; }
     #character-workshop-popup .cw-stage-overlay { padding: 0.45rem 0.8rem 0.4rem; }
     /* Footer: More · Cancel · Save on one row; the rest fly out above. */
     #character-workshop-popup .cw-footer {

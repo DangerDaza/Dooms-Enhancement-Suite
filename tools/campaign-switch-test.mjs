@@ -90,6 +90,8 @@ function reset() {
     };
     extensionSettings.campaignProfiles = {};
     extensionSettings.campaignBaseShadow = {};
+    extensionSettings.campaignUserProfiles = {};
+    extensionSettings.campaignUserBaseShadow = {};
     extensionSettings.characterInjection = { Hex: { description: 'base hex', lorebook: '' } };
     extensionSettings.npcAvatars = {};
     extensionSettings.npcAvatarsFullRes = {};
@@ -191,6 +193,50 @@ await test('deleting the active campaign deactivates it first and drops its vers
     assert.equal(extensionSettings.lorebook.campaigns.c1, undefined);
     assert.equal(extensionSettings.campaignProfiles.c1, undefined);
     assert.equal(extensionSettings.characterInjection.Hex.description, 'base hex');
+});
+
+await test('the switch swaps the player\'s card too, and leaves its colour, pronouns and linked persona alone', async () => {
+    extensionSettings.userCharacters = {
+        Jordan: { color: '#abcdef', pronouns: 'they/them', linkedPersona: 'jordan.png', avatar: '/p/base.png', injection: { description: 'base jordan', lorebook: '' }, knives: [] },
+    };
+    cp.addProfile('c1', 'Jordan', { isUser: true });
+    const v = cp.readVersion('c1', 'Jordan', true);
+    v.injection.description = 'mecha jordan';
+    v.avatar = '/p/mecha.png';
+    cp.writeVersion('c1', 'Jordan', v, true);
+    const card = () => extensionSettings.userCharacters.Jordan;
+
+    await cm.setActiveCampaign('c1', { silent: true });
+    assert.equal(card().injection.description, 'mecha jordan');
+    assert.equal(card().avatar, '/p/mecha.png');
+    assert.equal(card().color, '#abcdef');
+    assert.equal(card().pronouns, 'they/them');
+    assert.equal(card().linkedPersona, 'jordan.png');
+    // An edit in play is banked for the campaign it was made in.
+    card().injection.description = 'mecha jordan, promoted';
+    await cm.setActiveCampaign('c2', { silent: true });
+    assert.equal(card().injection.description, 'base jordan', 'c2 has no version of the card: Base');
+    await cm.setActiveCampaign('c1', { silent: true });
+    assert.equal(card().injection.description, 'mecha jordan, promoted');
+    await cm.setActiveCampaign(null, { silent: true });
+    assert.equal(card().injection.description, 'base jordan');
+    assert.equal(card().avatar, '/p/base.png');
+    assert.deepEqual(extensionSettings.campaignUserBaseShadow, {});
+});
+
+await test('deleting the active campaign brings the player\'s Base back and drops its versions of the card', async () => {
+    extensionSettings.userCharacters = { Jordan: { color: '#abcdef', injection: { description: 'base jordan', lorebook: '' } } };
+    cp.addProfile('c1', 'Jordan', { isUser: true });
+    const v = cp.readVersion('c1', 'Jordan', true);
+    v.injection.description = 'mecha jordan';
+    cp.writeVersion('c1', 'Jordan', v, true);
+    await cm.setActiveCampaign('c1', { silent: true });
+    assert.equal(extensionSettings.userCharacters.Jordan.injection.description, 'mecha jordan');
+    assert.equal(await cm.deleteCampaign('c1'), true);
+    assert.equal(cm.getActiveCampaignId(), null);
+    assert.equal(extensionSettings.userCharacters.Jordan.injection.description, 'base jordan');
+    assert.equal(extensionSettings.campaignUserProfiles.c1, undefined);
+    assert.equal(cp.countVersions('Jordan', true), 1);
 });
 
 await test('reconcile after a book joins or leaves the active campaign', async () => {

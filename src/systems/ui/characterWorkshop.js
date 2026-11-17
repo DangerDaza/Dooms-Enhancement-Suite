@@ -477,9 +477,9 @@ export function closeCharacterWorkshop() {
 // ─── Versions (Base + campaigns) ────────────────────────────────────────────
 
 /** The version the chat currently sees for `name`: the active campaign's if it has one, else Base. */
-function defaultVersionFor(name) {
+function defaultVersionFor(name, isUser = false) {
     const active = getActiveCampaignId();
-    return active && hasProfile(active, name) ? active : BASE_VERSION;
+    return active && hasProfile(active, name, isUser) ? active : BASE_VERSION;
 }
 
 function campaignById(id) {
@@ -512,7 +512,8 @@ function motionDisabled() {
  *   fullReset: also clear the knife/alias inputs, suggestions and jump to
  *   the Identity pane (opening the card). A version switch keeps the pane
  *   and the half-typed inputs. carry: dirty version-independent fields
- *   (colour, aliases) from the previous draft to keep across the switch.
+ *   (colour, aliases; pronouns and the linked persona on the player's card)
+ *   from the previous draft to keep across the switch.
  */
 function loadVersion(name, isUser, versionId, { fullReset = false, carry = null } = {}) {
     draft = buildDraft(name, isUser, versionId);
@@ -526,6 +527,9 @@ function loadVersion(name, isUser, versionId, { fullReset = false, carry = null 
         }
         if (carry.dirty?.aliases) { draft.aliases = [...(carry.aliases || [])]; draft.dirty.aliases = true; }
         if (carry.dirty?.attributes) { draft.attributes = { ...(carry.attributes || {}) }; draft.proficiencies = [...(carry.proficiencies || [])]; draft.dirty.attributes = true; }
+        // The player's card: pronouns and the linked persona are the card's own too.
+        if (carry.dirty?.pronouns) { draft.pronouns = carry.pronouns || ''; draft.dirty.pronouns = true; }
+        if (carry.dirty?.linkedPersona) { draft.linkedPersona = carry.linkedPersona || ''; draft.dirty.linkedPersona = true; }
     }
     // Stamp the modal with a mode attribute so CSS can flip NPC-only vs
     // user-only sections without a JS class-toggle on every section.
@@ -594,13 +598,26 @@ function hasVersionedEdits() {
     return false;
 }
 
+/** The draft's version-independent edits, to hand to the next version's draft (see loadVersion). */
+function carryOf(d) {
+    return {
+        color: d.color, aliases: d.aliases, attributes: d.attributes, proficiencies: d.proficiencies,
+        bubbleFill: d.bubbleFill, bubbleFillColor: d.bubbleFillColor, bubbleInkColor: d.bubbleInkColor,
+        pronouns: d.pronouns, linkedPersona: d.linkedPersona,
+        dirty: {
+            color: d.dirty.color, aliases: d.dirty.aliases, attributes: d.dirty.attributes, bubbleFill: d.dirty.bubbleFill,
+            pronouns: d.dirty.pronouns, linkedPersona: d.dirty.linkedPersona,
+        },
+    };
+}
+
 /**
  * Puts another version of the open character on the stage. Unsaved edits
  * to the current version are saved or discarded on the user's say-so;
  * colour and alias edits (version-independent) travel along either way.
  */
 async function switchVersion(versionId) {
-    if (!draft || draft.isUser) return;
+    if (!draft) return;
     if (versionId === draft.versionId) return;
     if (hasVersionedEdits()) {
         const ok = window.confirm(t(
@@ -617,46 +634,54 @@ async function switchVersion(versionId) {
             $modal.find('#cw-alias-input').val('');
         }
     }
-    const carry = { color: draft.color, aliases: draft.aliases, attributes: draft.attributes, proficiencies: draft.proficiencies, bubbleFill: draft.bubbleFill, bubbleFillColor: draft.bubbleFillColor, bubbleInkColor: draft.bubbleInkColor, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, attributes: draft.dirty.attributes, bubbleFill: draft.dirty.bubbleFill } };
+    const carry = carryOf(draft);
     const name = draft.name;
+    const isUser = draft.isUser;
     const $editor = $modal.find('.cw-editor');
     const animate = !motionDisabled();
     if (animate) {
         $editor.addClass('is-switching');
         await new Promise(resolve => setTimeout(resolve, VERSION_SWITCH_MS / 2));
         // The card may have closed or changed character while we waited.
-        if (!draft || draft.name !== name) { $editor.removeClass('is-switching'); return; }
+        if (!draft || draft.name !== name || draft.isUser !== isUser) { $editor.removeClass('is-switching'); return; }
     }
-    loadVersion(name, false, versionId, { carry });
+    loadVersion(name, isUser, versionId, { carry });
     if (animate) {
         // Let the new content paint before sliding it back in.
         requestAnimationFrame(() => requestAnimationFrame(() => $editor.removeClass('is-switching')));
     }
-    updateRelationshipArrows();
-    scrollSelectedRelationshipIntoView();
+    if (!isUser) {
+        updateRelationshipArrows();
+        scrollSelectedRelationshipIntoView();
+    }
 }
 
 /** Creates a campaign version (a clone of the version on the stage) and switches to it. */
 async function addVersion(campaignId) {
-    if (!draft || draft.isUser || !campaignById(campaignId)) return;
+    if (!draft || !campaignById(campaignId)) return;
     const name = draft.name;
-    if (hasProfile(campaignId, name)) { await switchVersion(campaignId); return; }
-    if (hasVersionedEdits()) {
-        // The clone is taken from the saved version, so save what is on the
-        // stage first — that is what the user is looking at and expects to copy.
+    const isUser = draft.isUser;
+    if (hasProfile(campaignId, name, isUser)) { await switchVersion(campaignId); return; }
+    // The clone is taken from the saved version, so save what is on the
+    // stage first — that is what the user is looking at and expects to copy.
+    // A player's card opened for the first time is not stored until its
+    // first save, and only a stored card can be given a version.
+    const cardMissing = isUser && !extensionSettings.userCharacters?.[name];
+    if (hasVersionedEdits() || cardMissing) {
         pushPendingInputs();
         commitDraft();
     }
-    addProfile(campaignId, name, { from: draft.versionId });
+    addProfile(campaignId, name, { from: draft.versionId, isUser });
+    if (!hasProfile(campaignId, name, isUser)) return;
     // A new campaign version always starts with Base's voice, even when it
     // was cloned from another campaign's version (every other field copies
     // the version on the stage).
     if (draft.versionId !== BASE_VERSION) {
-        const created = readVersion(campaignId, name) || {};
-        const baseVoice = readVersion(BASE_VERSION, name)?.voice;
+        const created = readVersion(campaignId, name, isUser) || {};
+        const baseVoice = readVersion(BASE_VERSION, name, isUser)?.voice;
         if (baseVoice) created.voice = { ...baseVoice };
         else delete created.voice;
-        writeVersion(campaignId, name, created);
+        writeVersion(campaignId, name, created, isUser);
     }
     saveOrWarn(saveSettings, 'settings');
     await switchVersion(campaignId);
@@ -668,28 +693,33 @@ async function addVersion(campaignId) {
 
 /** Drops a campaign version; the character falls back to Base in that campaign. */
 async function removeVersion(campaignId) {
-    if (!draft || draft.isUser || !campaignId || campaignId === BASE_VERSION) return;
+    if (!draft || !campaignId || campaignId === BASE_VERSION) return;
     const name = draft.name;
-    if (!hasProfile(campaignId, name)) return;
+    const isUser = draft.isUser;
+    if (!hasProfile(campaignId, name, isUser)) return;
     const ok = window.confirm(t(
         'characterWorkshop.confirmRemoveVersion',
         'Remove the {version} version of {name}?\n\nThe character falls back to Base in that campaign. Portrait files still used by another version are kept.',
         { version: versionLabel(campaignId), name },
     ));
     if (!ok) return;
-    const candidates = removeProfile(campaignId, name);
+    const wasActive = campaignId === getActiveCampaignId();
+    const candidates = removeProfile(campaignId, name, isUser);
     saveOrWarn(saveSettings, 'settings');
     deletePortraitsIfUnreferenced(candidates).catch(() => {});
     try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
     try { refreshRosterBadges(); } catch (e) {}
+    // The card's live portrait went back to Base's: the linked persona's
+    // avatar file follows.
+    if (isUser && wasActive) mirrorLivePersonaAvatars([name]).catch(() => {});
     if (draft.versionId === campaignId) {
-        loadVersion(name, false, null, {});
+        loadVersion(name, isUser, null, {});
     } else {
         // Removing the active campaign's version while Base is on the stage
         // makes Base live again: refresh the badge and the Render button
         // without rebuilding the draft (unsaved edits stay untouched).
-        draft.isLive = isLiveVersion(draft.versionId, name);
-        $modal.toggleClass('cw-version-readonly-portrait', !draft.isLive);
+        draft.isLive = isLiveVersion(draft.versionId, name, isUser);
+        $modal.toggleClass('cw-version-readonly-portrait', !draft.isLive && !isUser);
         renderCampaignBadge();
         renderAppearance();
         renderVoice();
@@ -706,7 +736,7 @@ async function removeVersion(campaignId) {
  * land in the version they were made on), then reloads the live version.
  */
 export function refreshWorkshopIfOpen() {
-    if (!$modal || !$modal.hasClass('is-open') || !draft || draft.isUser) return;
+    if (!$modal || !$modal.hasClass('is-open') || !draft) return;
     const name = draft.name;
     if (hasVersionedEdits()) {
         const ok = window.confirm(t(
@@ -721,8 +751,7 @@ export function refreshWorkshopIfOpen() {
         $modal.find('#cw-knife-input').val('');
         $modal.find('#cw-alias-input').val('');
     }
-    const carry = { color: draft.color, aliases: draft.aliases, attributes: draft.attributes, proficiencies: draft.proficiencies, bubbleFill: draft.bubbleFill, bubbleFillColor: draft.bubbleFillColor, bubbleInkColor: draft.bubbleInkColor, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, attributes: draft.dirty.attributes, bubbleFill: draft.dirty.bubbleFill } };
-    loadVersion(name, false, null, { carry });
+    loadVersion(name, draft.isUser, null, { carry: carryOf(draft) });
 }
 
 /** Repaints the Roster's version badges if it is open (dynamic — the roster imports nothing from here). */
@@ -753,7 +782,7 @@ function renderCampaignBadge() {
     const $badge = $modal.find('#cw-campaign-badge');
     if (!$badge.length) return;
     const campaigns = getCampaignsInOrder();
-    if (!draft || draft.isUser || !campaigns.length) {
+    if (!draft || !campaigns.length) {
         $badge.prop('hidden', true).empty();
         applyVersionAccent();
         return;
@@ -782,23 +811,24 @@ function renderVersionStrip() {
     const hadFocus = typeof document !== 'undefined' && $strip[0].contains(document.activeElement);
     closeVersionAddMenu();
     const campaigns = getCampaignsInOrder();
-    if (!draft || draft.isUser || !campaigns.length) {
+    if (!draft || !campaigns.length) {
         $strip.prop('hidden', true).empty();
         return;
     }
     const name = draft.name;
+    const isUser = draft.isUser;
     const active = getActiveCampaignId();
     const versions = [{ id: BASE_VERSION, label: versionLabel(BASE_VERSION), icon: 'fa-layer-group', color: '' }];
     const missing = [];
     for (const { id, campaign } of campaigns) {
-        if (hasProfile(id, name)) versions.push({ id, label: campaign.name, icon: campaign.icon || 'fa-folder', color: campaign.color || '' });
+        if (hasProfile(id, name, isUser)) versions.push({ id, label: campaign.name, icon: campaign.icon || 'fa-folder', color: campaign.color || '' });
         else missing.push({ id, label: campaign.name, icon: campaign.icon || 'fa-folder' });
     }
     const html = versions.map(v => {
-        const profile = readVersion(v.id, name);
+        const profile = readVersion(v.id, name, isUser);
         const avatar = typeof profile?.avatar === 'string' ? profile.avatar : '';
         const isCurrent = v.id === draft.versionId;
-        const isLive = isLiveVersion(v.id, name);
+        const isLive = isLiveVersion(v.id, name, isUser);
         const isActive = v.id !== BASE_VERSION && v.id === active;
         const classes = ['cw-version-tile', isCurrent ? 'is-current' : '', isLive ? 'is-live' : '', isActive ? 'is-active-campaign' : ''].filter(Boolean).join(' ');
         const style = v.color && /^#[0-9a-f]{3,8}$/i.test(v.color) ? ` style="--cw-tile-accent: ${escapeHtml(v.color)};"` : '';
@@ -1268,15 +1298,23 @@ function ensureModal() {
 function buildDraft(name, isUser = false, versionId = null) {
     if (isUser) {
         const u = extensionSettings?.userCharacters?.[name] || {};
-        const inj = u.injection || {};
+        // The portrait, description, knives and voice belong to the version
+        // on the stage: the card itself when that version is live, else its
+        // saved copy (the parked Base or an inactive campaign's). Colour,
+        // pronouns and the linked persona are the card's own, the same
+        // whichever version is on the stage.
+        const version = versionId || defaultVersionFor(name, true);
+        const live = isLiveVersion(version, name, true);
+        const p = live ? u : (readVersion(version, name, true) || {});
+        const inj = p.injection && typeof p.injection === 'object' ? p.injection : {};
         return {
             name,
             isUser: true,
-            versionId: BASE_VERSION,
-            isLive: true,
+            versionId: version,
+            isLive: live,
             color: typeof u.color === 'string' ? u.color : '',
-            avatar: typeof u.avatar === 'string' ? u.avatar : '',
-            avatarFullRes: typeof u.avatarFullRes === 'string' ? u.avatarFullRes : '',
+            avatar: typeof p.avatar === 'string' ? p.avatar : '',
+            avatarFullRes: typeof p.avatarFullRes === 'string' ? p.avatarFullRes : '',
             pronouns: typeof u.pronouns === 'string' ? u.pronouns : '',
             linkedPersona: typeof u.linkedPersona === 'string' ? u.linkedPersona : '',
             // Reuse same field names as NPC draft so render code can be shared
@@ -1286,12 +1324,10 @@ function buildDraft(name, isUser = false, versionId = null) {
                 lorebook: typeof inj.lorebook === 'string' ? inj.lorebook : '',
                 promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
             },
-            knives: Array.isArray(u.knives) ? u.knives.map(k => ({ ...k })) : [],
+            knives: Array.isArray(p.knives) ? p.knives.map(k => ({ ...k })) : [],
             attributes: getSheet(extensionSettings, name, true, attributeDefs(extensionSettings, { all: true })),
             proficiencies: getProficiencies(extensionSettings, name, true),
-            // Personas have no campaign versions, so their voice is stored
-            // on the userCharacters entry itself.
-            voice: cloneVoice(u.voice),
+            voice: cloneVoice(p.voice),
             // Aliases are NPC-only (a persona's name is the player's own);
             // kept on the draft so shared render code can no-op safely.
             aliases: [],
@@ -1550,7 +1586,7 @@ function renderVoice() {
         name: draft.name,
         isUser: draft.isUser,
         isLive: draft.isLive,
-        versionLabel: draft.isUser ? '' : versionLabel(draft.versionId),
+        versionLabel: versionLabel(draft.versionId),
         isBase: draft.versionId === BASE_VERSION,
         voice: draft.voice,
         isCardCharacter,
@@ -2720,7 +2756,7 @@ function bindStaticListeners() {
     $modal.on('click.cw', '#cw-delete', () => {
         if (!draft) return;
         const name = draft.name;
-        const versions = draft.isUser ? [] : listProfileCampaigns(name);
+        const versions = listProfileCampaigns(name, draft.isUser);
         const ok = window.confirm(versions.length
             ? t(
                 'characterWorkshop.confirmDeleteVersions',
@@ -2760,9 +2796,12 @@ function bindStaticListeners() {
  *
  * @param {string} personaFilename - exact ST persona filename (the key
  *   in power_user.personas, e.g. "Yashiro.png")
- * @param {string} dataUrl - PNG data URL produced by upscaleImage
+ * @param {string} dataUrl - PNG data URL produced by upscaleImage, or the
+ *   URL of a portrait already on disk
+ * @param {{quiet?: boolean}} [options] - quiet: no success toast (a campaign
+ *   switch has its own; a failure is still shown)
  */
-async function mirrorAvatarToPersonaFile(personaFilename, dataUrl) {
+async function mirrorAvatarToPersonaFile(personaFilename, dataUrl, { quiet = false } = {}) {
     if (!personaFilename || !dataUrl) return;
     // Refuse to write if the user's linkedPersona points at a filename
     // that ST doesn't actually have registered. Otherwise we'd create
@@ -2829,7 +2868,7 @@ async function mirrorAvatarToPersonaFile(personaFilename, dataUrl) {
         } catch (e) {}
         console.log(`[Dooms Tracker] Workshop: mirrored portrait to ST persona "${personaFilename}"`);
         try {
-            if (window.toastr) window.toastr.success(
+            if (!quiet && window.toastr) window.toastr.success(
                 `Saved and synced "${personaFilename}" in the Persona Manager.`,
                 'Persona avatar sync',
                 { timeOut: 2500 },
@@ -2847,6 +2886,23 @@ async function mirrorAvatarToPersonaFile(personaFilename, dataUrl) {
     }
 }
 
+/**
+ * After the live version of a player's card changed without a Workshop save
+ * (a campaign switch, or the active campaign's version being removed): puts
+ * the portrait now on each card into its linked SillyTavern persona's avatar
+ * file, so the picture on the player's messages is the live version's. A
+ * card with no linked persona or no portrait is left alone, as on Save.
+ * @param {string[]} names - player's cards whose live version changed
+ */
+export async function mirrorLivePersonaAvatars(names) {
+    for (const name of Array.isArray(names) ? names : []) {
+        const card = extensionSettings.userCharacters?.[name];
+        if (!card || typeof card !== 'object') continue;
+        if (!card.linkedPersona || !card.avatar) continue;
+        await mirrorAvatarToPersonaFile(card.linkedPersona, card.avatar, { quiet: true });
+    }
+}
+
 function commitDraft() {
     if (!draft) return;
     const name = draft.name;
@@ -2860,23 +2916,31 @@ function commitDraft() {
         const tpl = (tplRaw && tplRaw !== DEFAULT_INJECT_PROMPT.trim()) ? tplRaw : '';
         const desc = (draft.injection.description || '').trim();
         const book = (draft.injection.lorebook || '').trim();
-        const next = {
+        // The card's own fields, the same whichever campaign is active.
+        extensionSettings.userCharacters[name] = {
             ...existing,
             color: draft.color || '',
-            avatar: draft.avatar || '',
-            avatarFullRes: draft.avatarFullRes || draft.avatar || '',
             pronouns: draft.pronouns || '',
             linkedPersona: draft.linkedPersona || '',
-            injection: { description: desc, lorebook: book, ...(tpl ? { promptTemplate: tpl } : {}) },
-            knives: Array.isArray(draft.knives) ? draft.knives.map(k => ({ ...k })) : [],
         };
-        if (draft.voice) next.voice = { ...draft.voice };
-        else delete next.voice;
-        extensionSettings.userCharacters[name] = next;
+        // The portrait, description, knives and voice go to the version on
+        // the stage. Where that version lives is decided NOW, not when the
+        // draft was built: the active campaign can change while the card is
+        // open. Live = the card itself; otherwise its saved copy.
+        const live = isLiveVersion(draft.versionId, name, true);
+        const profile = readVersion(draft.versionId, name, true) || {};
+        profile.avatar = draft.avatar || '';
+        profile.avatarFullRes = draft.avatarFullRes || draft.avatar || '';
+        profile.injection = { description: desc, lorebook: book, ...(tpl ? { promptTemplate: tpl } : {}) };
+        profile.knives = Array.isArray(draft.knives) ? draft.knives.map(k => ({ ...k })) : [];
+        if (draft.voice) profile.voice = { ...draft.voice };
+        else delete profile.voice;
+        writeVersion(draft.versionId, name, profile, true);
         if (draft.dirty.attributes) setSheet(extensionSettings, name, true, draft.attributes, null, draft.proficiencies || []);
         invalidateVoices();
         saveOrWarn(saveSettings, 'settings');
         try { updatePortraitBar(); } catch (e) {}
+        try { renderVersionStrip(); } catch (e) {}
         // Pass-2 perf: catch a just-saved data:URL avatar and migrate it to
         // the on-disk URL in the background. Idempotent + locked.
         Promise.resolve()
@@ -2897,7 +2961,12 @@ function commitDraft() {
         // was ever written by anything other than DES. Mirror is idempotent
         // (writes the same bytes), so just always run it. If the network
         // call fails, mirrorAvatarToPersonaFile already toasts a warning.
-        if (draft.linkedPersona && draft.avatar) {
+        // Only the version the chat is using reaches the persona file: a
+        // saved copy's portrait gets there when its campaign becomes active
+        // (mirrorLivePersonaAvatars, after the switch).
+        if (!live) {
+            console.log(`[Dooms Tracker] Workshop: persona mirror skipped (${versionLabel(draft.versionId)} is not the live version)`);
+        } else if (draft.linkedPersona && draft.avatar) {
             mirrorAvatarToPersonaFile(draft.linkedPersona, draft.avatar).catch(() => {});
         } else {
             // Surface why the mirror skipped so the user knows whether to
@@ -3242,7 +3311,14 @@ function copyUserToNpcCharacter(name) {
         } catch (e) {}
         return;
     }
-    const u = extensionSettings.userCharacters?.[trimmed] || {};
+    const card = extensionSettings.userCharacters?.[trimmed] || {};
+    // Copy the version on the stage (the draft was just committed), not
+    // whatever happens to be on the card — they differ when a saved-copy
+    // version is open. The same rule copyNpcToUserCharacter follows.
+    const fromDraft = draft && draft.isUser && draft.name === trimmed ? draft : null;
+    const u = fromDraft
+        ? { ...card, avatar: fromDraft.avatar, avatarFullRes: fromDraft.avatarFullRes, injection: fromDraft.injection, voice: fromDraft.voice }
+        : card;
     // Resolve the canonical avatar URL — u.avatar comes from a Workshop
     // upload OR persona-import; if those are blank, derive it from the
     // linkedPersona's avatar filename; if THAT's blank, ask resolvePortrait
@@ -3270,7 +3346,7 @@ function copyUserToNpcCharacter(name) {
     if (avatarFullRes) extensionSettings.npcAvatarsFullRes[trimmed] = avatarFullRes;
     const desc = typeof u.injection?.description === 'string' ? u.injection.description : '';
     if (desc) extensionSettings.characterInjection[trimmed] = { description: desc, lorebook: '' };
-    if (u.voice && typeof u.voice.id === 'string' && u.voice.id) {
+    if (u.voice && typeof u.voice === 'object' && typeof u.voice.id === 'string' && u.voice.id) {
         if (!extensionSettings.characterVoices) extensionSettings.characterVoices = {};
         extensionSettings.characterVoices[trimmed] = { ...u.voice };
     }
@@ -3291,7 +3367,13 @@ function deleteCharacter(name) {
     // and clears activeUserCharacter if it was pointing at this entry.
     if (draft?.isUser) {
         const userEntry = extensionSettings.userCharacters?.[name];
-        const candidates = userEntry ? [userEntry.avatar, userEntry.avatarFullRes] : [];
+        // The card's portrait and every campaign version's (and the parked
+        // Base's): collected first, the settings cleared, and only the
+        // files nothing else references deleted after the save.
+        const candidates = [
+            ...(userEntry ? [userEntry.avatar, userEntry.avatarFullRes] : []),
+            ...deleteCharacterEverywhere(name, true),
+        ];
         if (extensionSettings.userCharacters) delete extensionSettings.userCharacters[name];
         deleteSheet(extensionSettings, name, true);
         if (extensionSettings.activeUserCharacter === name) {
@@ -3775,7 +3857,7 @@ function exportDraft() {
         name: draft.name,
         // Which version was on the stage when exported (Base or a campaign
         // name). Informational; import ignores it.
-        version: draft.isUser ? undefined : versionLabel(draft.versionId),
+        version: versionLabel(draft.versionId),
         color: draft.color || '',
         bubbleFill: !!draft.bubbleFill,
         bubbleFillColor: draft.bubbleFillColor || '',

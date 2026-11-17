@@ -107,7 +107,11 @@ async function migrateUserCharacters(userCharacters, sharedByName) {
         if (isDataUrl(crop)) {
             try {
                 cropUrl = await persistPortrait(crop, name, crop);
-                entry.avatar = cropUrl;
+                // Compare-and-swap, as for the NPC maps: a campaign switch
+                // during the upload can have put another version's portrait
+                // on the card and banked this data URL into a version.
+                if (entry.avatar === crop) entry.avatar = cropUrl;
+                else relocateMigratedValue(crop, cropUrl);
                 result.migrated++;
                 await sleep(THROTTLE_MS);
             } catch (err) {
@@ -119,13 +123,15 @@ async function migrateUserCharacters(userCharacters, sharedByName) {
         if (isDataUrl(full)) {
             // If fullres is byte-identical to cropped (workshop case), reuse URL.
             if (cropUrl && full === crop) {
-                entry.avatarFullRes = cropUrl;
+                if (entry.avatarFullRes === full) entry.avatarFullRes = cropUrl;
+                else relocateMigratedValue(full, cropUrl);
                 result.migrated++;
                 continue;
             }
             try {
                 const fullUrl = await persistPortrait(full, `${name}-full`, full);
-                entry.avatarFullRes = fullUrl;
+                if (entry.avatarFullRes === full) entry.avatarFullRes = fullUrl;
+                else relocateMigratedValue(full, fullUrl);
                 result.migrated++;
                 await sleep(THROTTLE_MS);
             } catch (err) {
@@ -139,14 +145,22 @@ async function migrateUserCharacters(userCharacters, sharedByName) {
 }
 
 // Every campaign-version bucket that can hold a portrait: the shadowed base
-// entries plus each campaign's saved versions. Shape: { [name]: Profile|null }.
-function profileBuckets() {
+// entries plus each campaign's saved versions, for NPCs and for the player's
+// cards (campaignUserProfiles / campaignUserBaseShadow). Shape:
+// { [name]: Profile|null }. skipActive leaves out the active campaign's
+// buckets, which mirror the live stores.
+function profileBuckets({ skipActive = false } = {}) {
     const out = [];
-    const shadow = extensionSettings.campaignBaseShadow;
-    if (shadow && typeof shadow === 'object') out.push(shadow);
-    const profiles = extensionSettings.campaignProfiles;
-    if (profiles && typeof profiles === 'object') {
-        for (const b of Object.values(profiles)) if (b && typeof b === 'object') out.push(b);
+    const active = skipActive ? (extensionSettings.lorebook?.activeCampaignId || null) : null;
+    for (const [shadowKey, profilesKey] of [['campaignBaseShadow', 'campaignProfiles'], ['campaignUserBaseShadow', 'campaignUserProfiles']]) {
+        const shadow = extensionSettings[shadowKey];
+        if (shadow && typeof shadow === 'object') out.push(shadow);
+        const profiles = extensionSettings[profilesKey];
+        if (profiles && typeof profiles === 'object') {
+            for (const id of Object.keys(profiles)) {
+                if (id !== active && profiles[id] && typeof profiles[id] === 'object') out.push(profiles[id]);
+            }
+        }
     }
     return out;
 }
@@ -159,6 +173,14 @@ function relocateMigratedValue(dataUrl, url) {
     for (const store of ['npcAvatars', 'npcAvatarsFullRes']) {
         const map = extensionSettings[store];
         if (map && typeof map === 'object') for (const name of Object.keys(map)) swapIn(map, name);
+    }
+    const users = extensionSettings.userCharacters;
+    if (users && typeof users === 'object') {
+        for (const card of Object.values(users)) {
+            if (!card || typeof card !== 'object') continue;
+            swapIn(card, 'avatar');
+            swapIn(card, 'avatarFullRes');
+        }
     }
     for (const bucket of profileBuckets()) {
         for (const profile of Object.values(bucket)) {
@@ -177,16 +199,7 @@ function relocateMigratedValue(dataUrl, url) {
 // file. Byte-identical data URLs upload once (uploadedByBytes).
 async function migrateProfileBuckets(uploadedByBytes) {
     const result = { migrated: 0, failed: 0 };
-    const active = extensionSettings.lorebook?.activeCampaignId || null;
-    const buckets = [];
-    const shadow = extensionSettings.campaignBaseShadow;
-    if (shadow && typeof shadow === 'object') buckets.push(shadow);
-    const profiles = extensionSettings.campaignProfiles;
-    if (profiles && typeof profiles === 'object') {
-        for (const id of Object.keys(profiles)) {
-            if (id !== active && profiles[id] && typeof profiles[id] === 'object') buckets.push(profiles[id]);
-        }
-    }
+    const buckets = profileBuckets({ skipActive: true });
     const upload = async (bucket, name, field, label) => {
         const value = bucket[name]?.[field];
         if (!isDataUrl(value)) return;
@@ -248,17 +261,7 @@ function countRemainingDataUrls() {
     // The active campaign's bucket mirrors the live maps (already counted
     // above) and is re-banked from them on the next save; counting it too
     // would keep settingsVersion below 24 for one extra session.
-    const active = extensionSettings.lorebook?.activeCampaignId || null;
-    const shadow = extensionSettings.campaignBaseShadow;
-    const profiles = extensionSettings.campaignProfiles;
-    const buckets = [];
-    if (shadow && typeof shadow === 'object') buckets.push(shadow);
-    if (profiles && typeof profiles === 'object') {
-        for (const id of Object.keys(profiles)) {
-            if (id !== active && profiles[id] && typeof profiles[id] === 'object') buckets.push(profiles[id]);
-        }
-    }
-    for (const bucket of buckets) {
+    for (const bucket of profileBuckets({ skipActive: true })) {
         for (const p of Object.values(bucket)) {
             if (isDataUrl(p?.avatar)) n++;
             if (isDataUrl(p?.avatarFullRes)) n++;

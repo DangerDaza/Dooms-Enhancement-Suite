@@ -30,7 +30,7 @@
 import { generateRaw } from '../../../../../../../script.js';
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
-import { voiceUses, rewriteVoiceRefs, BASE_VERSION } from '../lorebook/campaignProfiles.js';
+import { voiceUses, rewriteVoiceRefs, countVersions, BASE_VERSION } from '../lorebook/campaignProfiles.js';
 import { getCampaignsInOrder } from '../lorebook/campaignManager.js';
 import { DEFAULT_VOICE_DESIGN_PROMPT, DEFAULT_VOICE_REFERENCE_PROMPT } from '../generation/defaultPrompts.js';
 import { cleanDraft, interpretReferenceDraft } from './drafts.js';
@@ -100,24 +100,34 @@ function campaignName(id) {
     }
 }
 
-/** "Mara (Base, Iron Crown), your persona Jordan, the Narrator" — or '' when unused. */
+/**
+ * "Mara (Base, Iron Crown), your persona Jordan, the Narrator" — or '' when
+ * unused. A persona with campaign versions names the ones that use the voice
+ * ("your persona Jordan (Base, Iron Crown)"); one with Base alone is just named.
+ */
 export function usedByText(id) {
     const uses = voiceUses(id);
     const byName = new Map();
+    const personas = new Map();
     const extra = [];
     for (const use of uses) {
         if (use.kind === 'narrator') extra.push('the Narrator');
-        else if (use.kind === 'persona') extra.push(`your persona ${use.name}`);
         else {
-            if (!byName.has(use.name)) byName.set(use.name, []);
-            byName.get(use.name).push(campaignName(use.versionId));
+            const group = use.kind === 'persona' ? personas : byName;
+            if (!group.has(use.name)) group.set(use.name, []);
+            group.get(use.name).push(campaignName(use.versionId));
         }
     }
     const chars = [...byName.entries()].map(([name, versions]) => {
         const hasCampaigns = (extensionSettings.lorebook?.campaignOrder || []).length > 0;
         return hasCampaigns ? `${name} (${[...new Set(versions)].join(', ')})` : name;
     });
-    return [...chars, ...extra].join(', ');
+    const mine = [...personas.entries()].map(([name, versions]) => {
+        let versioned = false;
+        try { versioned = countVersions(name, true) > 1; } catch (e) {}
+        return versioned ? `your persona ${name} (${[...new Set(versions)].join(', ')})` : `your persona ${name}`;
+    });
+    return [...chars, ...mine, ...extra].join(', ');
 }
 
 /**
