@@ -6288,6 +6288,14 @@
 
 #character-workshop-popup .cw-campaign-badge[hidden] { display: none !important; }
 
+/* The player's card below desktop width: its header already carries the
+   name and the USER pill, and the version badge beside them squeezed both
+   into breaking mid-word. The strip on the stage still marks the version on
+   show and which one is LIVE. */
+@media (max-width: 1000px) {
+    #character-workshop-popup[data-mode="user"] .cw-campaign-badge { display: none !important; }
+}
+
 /* text-overflow only works on a block container: truncate the name in its
    own span, keep the icon and the Live pill whole. */
 #character-workshop-popup .cw-campaign-badge > i,

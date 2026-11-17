@@ -67,6 +67,8 @@ import {
     listProfileCampaigns,
     countVersions,
     userVersionsWithoutOwnPortrait,
+    isPersonaFileRef,
+    portraitRefKey,
 } from '../lorebook/campaignProfiles.js';
 import { getCampaignsInOrder } from '../lorebook/campaignManager.js';
 import {
@@ -476,6 +478,20 @@ export function closeCharacterWorkshop() {
     try { voicePaneModule?.onWorkshopClosed?.(); } catch (e) {}
 }
 
+/**
+ * The card on the stage was deleted from somewhere else (the Roster, which
+ * can sit on top of an open Workshop). Closes the Workshop, so a later Save
+ * cannot bring the card back from the draft, pointing at portrait files the
+ * delete removed.
+ * @returns {boolean} true when it was showing that card
+ */
+export function closeWorkshopIfShowing(name, isUser = false) {
+    if (!$modal || !draft) return false;
+    if (draft.name !== name || !!draft.isUser !== !!isUser) return false;
+    closeCharacterWorkshop();
+    return true;
+}
+
 // ─── Versions (Base + campaigns) ────────────────────────────────────────────
 
 /** The version the chat currently sees for `name`: the active campaign's if it has one, else Base. */
@@ -673,6 +689,8 @@ async function addVersion(campaignId) {
         pushPendingInputs();
         commitDraft();
     }
+    const livePortrait = () => (isUser ? portraitRefKey(extensionSettings.userCharacters?.[name]?.avatar) : '');
+    const livePortraitBefore = livePortrait();
     addProfile(campaignId, name, { from: draft.versionId, isUser });
     if (!hasProfile(campaignId, name, isUser)) return;
     // A new campaign version always starts with Base's voice, even when it
@@ -686,6 +704,10 @@ async function addVersion(campaignId) {
         writeVersion(campaignId, name, created, isUser);
     }
     saveOrWarn(saveSettings, 'settings');
+    // A version of the ACTIVE campaign is live the moment it exists. Cloned
+    // from another campaign's saved copy it puts that copy's portrait on the
+    // card: the linked persona's avatar file follows, as after a switch.
+    if (isUser && livePortrait() !== livePortraitBefore) mirrorLivePersonaAvatars([name]).catch(() => {});
     await switchVersion(campaignId);
     try { refreshRosterBadges(); } catch (e) {}
     try {
@@ -706,16 +728,22 @@ async function removeVersion(campaignId) {
     ));
     if (!ok) return;
     const wasActive = campaignId === getActiveCampaignId();
+    const heldBefore = isUser ? personaFileHeldBy(name) : [];
     const candidates = removeProfile(campaignId, name, isUser);
     saveOrWarn(saveSettings, 'settings');
     deletePortraitsIfUnreferenced(candidates).catch(() => {});
     try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
     try { refreshRosterBadges(); } catch (e) {}
-    // The card's live portrait went back to Base's: the linked persona's
-    // avatar file follows.
-    if (isUser && wasActive) mirrorLivePersonaAvatars([name]).catch(() => {});
+    // The linked persona's avatar file follows when the card's live portrait
+    // went back to Base's, and when the version removed was the last one
+    // keeping the file from following at all (it had no portrait of its own).
+    if (isUser && (wasActive || (heldBefore.length && !personaFileHeldBy(name).length))) {
+        mirrorLivePersonaAvatars([name]).catch(() => {});
+    }
     if (draft.versionId === campaignId) {
-        loadVersion(name, isUser, null, {});
+        // Unsaved edits to the card's own fields (colour, pronouns, the
+        // linked persona, attributes) are not the removed version's to lose.
+        loadVersion(name, isUser, null, { carry: carryOf(draft) });
     } else {
         // Removing the active campaign's version while Base is on the stage
         // makes Base live again: refresh the badge and the Render button
@@ -740,6 +768,15 @@ async function removeVersion(campaignId) {
 export function refreshWorkshopIfOpen() {
     if (!$modal || !$modal.hasClass('is-open') || !draft) return;
     const name = draft.name;
+    // The player's card, and a switch that did not touch it: the version on
+    // the stage was live and still is (the card has no version in either
+    // campaign). The draft still matches the card, so it stays as it is,
+    // unsaved edits included; there is nothing to ask about.
+    if (draft.isUser && draft.isLive && defaultVersionFor(name, true) === draft.versionId && isLiveVersion(draft.versionId, name, true)) {
+        renderCampaignBadge();
+        renderVersionStrip();
+        return;
+    }
     if (hasVersionedEdits()) {
         const ok = window.confirm(t(
             'characterWorkshop.confirmSwitch',
@@ -754,6 +791,29 @@ export function refreshWorkshopIfOpen() {
         $modal.find('#cw-alias-input').val('');
     }
     loadVersion(name, draft.isUser, null, { carry: carryOf(draft) });
+}
+
+/**
+ * Called by campaignManager after a campaign was deleted (the Lore Library
+ * can sit on top of an open Workshop). Its version of the open character
+ * went with it: a version on the stage is replaced by the live one, with
+ * nothing offered to save (there is nowhere left to save it), and the
+ * strip loses the campaign's tile either way.
+ */
+export function onCampaignDeleted(campaignId) {
+    if (!$modal || !$modal.hasClass('is-open') || !draft || !campaignId) return;
+    if (draft.versionId !== campaignId) {
+        renderCampaignBadge();
+        renderVersionStrip();
+        return;
+    }
+    const name = draft.name;
+    $modal.find('#cw-knife-input').val('');
+    $modal.find('#cw-alias-input').val('');
+    loadVersion(name, draft.isUser, null, { carry: carryOf(draft) });
+    try {
+        if (window.toastr) window.toastr.info(`The version of "${name}" you had open was deleted with its campaign.`, 'Character Workshop', { timeOut: 5000 });
+    } catch (e) {}
 }
 
 /** Repaints the Roster's version badges if it is open (dynamic — the roster imports nothing from here). */
@@ -2209,6 +2269,12 @@ function bindStaticListeners() {
                 count: 5,
                 existingKnives: (draft.knives || []).map(k => k.text),
                 theme,
+                // A saved copy on the stage is written for from its own
+                // description, not the live version's.
+                ...(draft.isLive ? {} : {
+                    description: draft.injection?.description || '',
+                    ...(draft.isUser ? {} : { relationship: draft.relationship || '' }),
+                }),
             });
             // Modal may have closed or switched character/version during the API call
             if (draft !== startDraft) return;
@@ -2776,6 +2842,12 @@ function bindStaticListeners() {
     });
 }
 
+/** The last write queued for each persona file (see mirrorAvatarToPersonaFile). */
+const personaFileWrites = new Map();
+
+/** One write may take this long before it is given up on, so a request that never answers cannot hold the queue. */
+const PERSONA_WRITE_TIMEOUT_MS = 120000;
+
 /**
  * Mirror a freshly-uploaded user-character portrait into ST's persona
  * avatar file so the persona panel and {{user}} avatars in chat stay in
@@ -2802,9 +2874,24 @@ function bindStaticListeners() {
  *   URL of a portrait already on disk
  * @param {{quiet?: boolean}} [options] - quiet: no success toast (a campaign
  *   switch has its own; a failure is still shown)
+ * @returns {Promise<void>} settles when this write is done; never rejects
  */
-async function mirrorAvatarToPersonaFile(personaFilename, dataUrl, { quiet = false } = {}) {
-    if (!personaFilename || !dataUrl) return;
+function mirrorAvatarToPersonaFile(personaFilename, dataUrl, options = {}) {
+    if (!personaFilename || !dataUrl) return Promise.resolve();
+    // A persona has one avatar file and several things write it (Save, a
+    // campaign switch, a version being removed). They run one at a time in
+    // the order they were asked for, so the file ends up holding the last
+    // portrait asked for however long an earlier upload takes.
+    const previous = personaFileWrites.get(personaFilename) || Promise.resolve();
+    const tail = previous
+        .then(() => writePersonaFile(personaFilename, dataUrl, options))
+        .catch(() => {});
+    personaFileWrites.set(personaFilename, tail);
+    tail.then(() => { if (personaFileWrites.get(personaFilename) === tail) personaFileWrites.delete(personaFilename); });
+    return tail;
+}
+
+async function writePersonaFile(personaFilename, dataUrl, { quiet = false } = {}) {
     // Refuse to write if the user's linkedPersona points at a filename
     // that ST doesn't actually have registered. Otherwise we'd create
     // an orphaned avatar file with no corresponding persona entry.
@@ -2813,8 +2900,15 @@ async function mirrorAvatarToPersonaFile(personaFilename, dataUrl, { quiet = fal
         console.warn(`[Dooms Tracker] Workshop: linkedPersona "${personaFilename}" not in power_user.personas — skipping mirror`);
         return;
     }
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const signal = controller ? controller.signal : undefined;
+    const timer = controller ? setTimeout(() => controller.abort(), PERSONA_WRITE_TIMEOUT_MS) : null;
     try {
-        const blob = await (await fetch(dataUrl)).blob();
+        const source = await fetch(dataUrl, { signal });
+        // A portrait file that is gone answers 404 with a text body; sending
+        // that on would only be refused as "not a valid image".
+        if (!source.ok) throw new Error(`the portrait could not be read (HTTP ${source.status})`);
+        const blob = await source.blob();
         const file = new File([blob], personaFilename, { type: blob.type || 'image/png' });
         const fd = new FormData();
         // ST's persona client uses field name `avatar` (not `file`).
@@ -2824,6 +2918,7 @@ async function mirrorAvatarToPersonaFile(personaFilename, dataUrl, { quiet = fal
             method: 'POST',
             headers: getRequestHeaders({ omitContentType: true }),
             body: fd,
+            signal,
         });
         if (!resp.ok) {
             const text = await resp.text().catch(() => '');
@@ -2862,11 +2957,11 @@ async function mirrorAvatarToPersonaFile(personaFilename, dataUrl, { quiet = fal
         // Best-effort HTTP cache reload too, so any future render reads
         // the new bytes.
         try {
-            await fetch(`/User Avatars/${encodeURIComponent(personaFilename)}`, { cache: 'reload' });
+            await fetch(`/User Avatars/${encodeURIComponent(personaFilename)}`, { cache: 'reload', signal });
         } catch (e) {}
         try {
             const thumbUrl = getSafeThumbnailUrl('persona', personaFilename);
-            if (thumbUrl) await fetch(thumbUrl, { cache: 'reload' });
+            if (thumbUrl) await fetch(thumbUrl, { cache: 'reload', signal });
         } catch (e) {}
         console.log(`[Dooms Tracker] Workshop: mirrored portrait to ST persona "${personaFilename}"`);
         try {
@@ -2878,13 +2973,22 @@ async function mirrorAvatarToPersonaFile(personaFilename, dataUrl, { quiet = fal
         } catch (e) {}
     } catch (err) {
         console.warn(`[Dooms Tracker] Workshop: failed to mirror portrait to ST persona "${personaFilename}":`, err);
+        const reason = err?.name === 'AbortError'
+            ? `no answer after ${Math.round(PERSONA_WRITE_TIMEOUT_MS / 1000)} seconds`
+            : String(err?.message || err);
         try {
+            // A quiet write follows a campaign switch or a version being
+            // removed, not a Save: nothing was "saved locally" just now.
             if (window.toastr) window.toastr.warning(
-                `Saved locally but couldn't update the linked SillyTavern persona avatar: ${String(err?.message || err)}`,
+                quiet
+                    ? `Couldn't update the SillyTavern persona avatar "${personaFilename}": ${reason}`
+                    : `Saved locally but couldn't update the linked SillyTavern persona avatar: ${reason}`,
                 'Persona avatar sync',
                 { timeOut: 4000 },
             );
         } catch (e) {}
+    } finally {
+        if (timer) clearTimeout(timer);
     }
 }
 
@@ -2914,32 +3018,54 @@ function personaFileHeldBy(name) {
 
 /**
  * After the live version of a player's card changed without a Workshop save
- * (a campaign switch, or the active campaign's version being removed): puts
- * the portrait now on each card into its linked SillyTavern persona's avatar
- * file, so the picture on the player's messages is the live version's. A
- * card with no linked persona or no portrait is left alone, as on Save, and
- * so is one with a version that has no portrait of its own
- * (personaFileHeldBy).
+ * (a campaign switch, the active campaign's version being added from
+ * another version or removed), or after the last version that kept the file
+ * from following got a portrait of its own or went away: puts the portrait
+ * now on each card into its linked SillyTavern persona's avatar file, so the
+ * picture on the player's messages is the live version's. A card with no
+ * linked persona or no portrait is left alone, as on Save; so is one with a
+ * version that has no portrait of its own (personaFileHeldBy), and one whose
+ * live portrait IS the persona's file (there is nothing to write).
+ *
+ * Every card is read now, when this is called, and its write queued behind
+ * any other for the same file: what the file ends up holding is what the
+ * card showed at the latest call.
  * @param {string[]} names - player's cards whose live version changed
+ * @returns {Promise<void>} settles when the writes are done; never rejects
  */
 export async function mirrorLivePersonaAvatars(names) {
+    // No await before the loop: the cards are read as this is called.
+    const writes = [];
     for (const name of Array.isArray(names) ? names : []) {
         const card = extensionSettings.userCharacters?.[name];
         if (!card || typeof card !== 'object') continue;
         if (!card.linkedPersona || !card.avatar) continue;
+        if (isPersonaFileRef(card.avatar, card.linkedPersona)) continue;
         const heldBy = personaFileHeldBy(name);
         if (heldBy.length) {
             console.log(`[Dooms Tracker] Workshop: persona avatar of "${name}" left alone (no portrait of its own: ${heldBy.join(', ')})`);
             continue;
         }
-        await mirrorAvatarToPersonaFile(card.linkedPersona, card.avatar, { quiet: true });
+        writes.push(mirrorAvatarToPersonaFile(card.linkedPersona, card.avatar, { quiet: true }));
     }
+    await Promise.all(writes);
 }
 
 function commitDraft() {
     if (!draft) return;
     const name = draft.name;
     let changed = false;
+
+    // A safety net: the version on the stage belongs to a campaign that no
+    // longer exists (onCampaignDeleted reloads the card when that happens).
+    // There is nowhere to save it; writing it would leave a version no list
+    // shows, dropped at the next load.
+    if (draft.versionId !== BASE_VERSION && !campaignById(draft.versionId)) {
+        try {
+            if (window.toastr) window.toastr.warning(`Not saved: this version of "${name}" was deleted with its campaign.`, 'Character Workshop', { timeOut: 6000 });
+        } catch (e) {}
+        return;
+    }
 
     // User-character mode: write the whole entry into a single namespace.
     if (draft.isUser) {
@@ -2949,6 +3075,15 @@ function commitDraft() {
         const tpl = (tplRaw && tplRaw !== DEFAULT_INJECT_PROMPT.trim()) ? tplRaw : '';
         const desc = (draft.injection.description || '').trim();
         const book = (draft.injection.lorebook || '').trim();
+        // The portrait, description, knives and voice go to the version on
+        // the stage. Where that version lives is decided NOW, not when the
+        // draft was built: the active campaign can change while the card is
+        // open. Live = the card itself; otherwise its saved copy.
+        const live = isLiveVersion(draft.versionId, name, true);
+        // For a saved copy: what kept the persona's file from following
+        // before this save, and whether the save changes the link (below).
+        const heldBefore = live ? [] : personaFileHeldBy(name);
+        const linkChanged = !!draft.dirty.linkedPersona;
         // The card's own fields, the same whichever campaign is active.
         extensionSettings.userCharacters[name] = {
             ...existing,
@@ -2956,14 +3091,17 @@ function commitDraft() {
             pronouns: draft.pronouns || '',
             linkedPersona: draft.linkedPersona || '',
         };
-        // The portrait, description, knives and voice go to the version on
-        // the stage. Where that version lives is decided NOW, not when the
-        // draft was built: the active campaign can change while the card is
-        // open. Live = the card itself; otherwise its saved copy.
-        const live = isLiveVersion(draft.versionId, name, true);
         const profile = readVersion(draft.versionId, name, true) || {};
-        profile.avatar = draft.avatar || '';
-        profile.avatarFullRes = draft.avatarFullRes || draft.avatar || '';
+        // The portrait is the draft's, unless it was not edited here and the
+        // stored one has changed since the draft was built. That happens to
+        // a fresh upload: the background migration swaps its data URL for a
+        // file, and writing the draft's copy back would upload the picture
+        // again and leave the first file with nothing pointing at it.
+        const storedMovedOn = (key) => typeof profile[key] === 'string' && profile[key] !== (draft[key] || '');
+        if (draft.dirty.avatar || !(storedMovedOn('avatar') || storedMovedOn('avatarFullRes'))) {
+            profile.avatar = draft.avatar || '';
+            profile.avatarFullRes = draft.avatarFullRes || draft.avatar || '';
+        }
         profile.injection = { description: desc, lorebook: book, ...(tpl ? { promptTemplate: tpl } : {}) };
         profile.knives = Array.isArray(draft.knives) ? draft.knives.map(k => ({ ...k })) : [];
         if (draft.voice) profile.voice = { ...draft.voice };
@@ -3000,10 +3138,21 @@ function commitDraft() {
         const heldBy = live && draft.linkedPersona && draft.avatar ? personaFileHeldBy(name) : [];
         if (!live) {
             console.log(`[Dooms Tracker] Workshop: persona mirror skipped (${versionLabel(draft.versionId)} is not the live version)`);
+            // This version's portrait never goes to the file from here. But
+            // the save may have given the last version in the file's way a
+            // portrait of its own, or changed which persona the card is
+            // linked to: then the card's LIVE portrait goes to the file.
+            if ((heldBefore.length && !personaFileHeldBy(name).length) || linkChanged) {
+                mirrorLivePersonaAvatars([name]).catch(() => {});
+            }
+        } else if (heldBy.length && isPersonaFileRef(draft.avatar, draft.linkedPersona)) {
+            // The portrait being saved is the persona's own picture: there
+            // is nothing to put in the file, and nothing to tell anyone.
+            console.log('[Dooms Tracker] Workshop: persona mirror skipped (this version shows the persona\'s own picture)');
         } else if (heldBy.length) {
-            // Another version of this card (or this one) has no portrait of
-            // its own and shows the persona's picture: writing this portrait
-            // into the persona's file would change that version too.
+            // Another version of this card has no portrait of its own and
+            // shows the persona's picture: writing this portrait into the
+            // persona's file would change that version too.
             console.log(`[Dooms Tracker] Workshop: persona mirror skipped (no portrait of its own: ${heldBy.join(', ')})`);
             try {
                 if (window.toastr) window.toastr.info(
@@ -3390,7 +3539,7 @@ function copyUserToNpcCharacter(name) {
     }
     if (avatar) extensionSettings.npcAvatars[trimmed] = avatar;
     if (avatarFullRes) extensionSettings.npcAvatarsFullRes[trimmed] = avatarFullRes;
-    const desc = typeof u.injection?.description === 'string' ? u.injection.description : '';
+    const desc = typeof u.injection?.description === 'string' ? u.injection.description.trim() : '';
     if (desc) extensionSettings.characterInjection[trimmed] = { description: desc, lorebook: '' };
     if (u.voice && typeof u.voice === 'object' && typeof u.voice.id === 'string' && u.voice.id) {
         if (!extensionSettings.characterVoices) extensionSettings.characterVoices = {};

@@ -298,9 +298,12 @@ export function markCharacterKnifeUsed(characterName, knifeId, isUser) {
  * @param {number} [options.count=5] - Number of suggestions to generate
  * @param {Array<string>} [options.existingKnives=[]] - Knife texts to avoid duplicating
  * @param {{label: string, guidance: string}|null} [options.theme=null] - Style/theme steering the batch
+ * @param {string} [options.description] - The character's description to write from, in place of the
+ *   stored (live) one: the Workshop passes it for a campaign version that is not the live one
+ * @param {string} [options.relationship] - Likewise for an NPC's relationship
  * @returns {Promise<Array<string>>} Suggested knife texts
  */
-export async function generateKnifeSuggestions(characterName, { isUser = false, count = 5, existingKnives = [], theme = null } = {}) {
+export async function generateKnifeSuggestions(characterName, { isUser = false, count = 5, existingKnives = [], theme = null, description: givenDescription, relationship: givenRelationship } = {}) {
     const context = getContext();
     const playerName = context.name1 || 'the player';
 
@@ -313,6 +316,8 @@ export async function generateKnifeSuggestions(characterName, { isUser = false, 
         description = extensionSettings.characterInjection?.[characterName]?.description || '';
         relationship = extensionSettings.characterRelationships?.[characterName] || '';
     }
+    if (typeof givenDescription === 'string') description = givenDescription;
+    if (typeof givenRelationship === 'string') relationship = givenRelationship;
 
     // Recent conversation for tone/setting (same budget as the twist generator)
     const dc = extensionSettings.doomCounter || {};

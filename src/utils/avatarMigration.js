@@ -112,6 +112,9 @@ async function migrateUserCharacters(userCharacters, sharedByName) {
                 // on the card and banked this data URL into a version.
                 if (entry.avatar === crop) entry.avatar = cropUrl;
                 else relocateMigratedValue(crop, cropUrl);
+                // Remembered by its bytes, so a campaign version cloned from
+                // this card reuses the file (migrateProfileBuckets).
+                result.byName.set(`avatar:${name}`, { dataUrl: crop, url: cropUrl });
                 result.migrated++;
                 await sleep(THROTTLE_MS);
             } catch (err) {
@@ -132,6 +135,7 @@ async function migrateUserCharacters(userCharacters, sharedByName) {
                 const fullUrl = await persistPortrait(full, `${name}-full`, full);
                 if (entry.avatarFullRes === full) entry.avatarFullRes = fullUrl;
                 else relocateMigratedValue(full, fullUrl);
+                result.byName.set(`full:${name}`, { dataUrl: full, url: fullUrl });
                 result.migrated++;
                 await sleep(THROTTLE_MS);
             } catch (err) {
@@ -325,6 +329,7 @@ export async function migrateAvatarsToFiles(saveSettings) {
         const uploadedByBytes = new Map();
         for (const { dataUrl, url } of npcCrop.byName.values()) uploadedByBytes.set(dataUrl, url);
         for (const { dataUrl, url } of npcFull.byName.values()) uploadedByBytes.set(dataUrl, url);
+        for (const { dataUrl, url } of users.byName.values()) uploadedByBytes.set(dataUrl, url);
         const buckets = await migrateProfileBuckets(uploadedByBytes);
         out.migrated += buckets.migrated;
         out.failed += buckets.failed;

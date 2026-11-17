@@ -729,6 +729,20 @@ test('player: the cards a switch changes are those either campaign has a version
     assert.deepEqual(cp.userNamesWithVersionIn(null, null), []);
 });
 
+test('player: a campaign\'s versions are counted apart, the cast\'s and the player\'s own', () => {
+    seedPlayer();
+    assert.deepEqual(cp.countCampaignVersions('c1'), { characters: 0, own: 0 });
+    cp.addProfile('c1', 'Hex');
+    cp.addProfile('c1', 'Jordan', { isUser: U });
+    cp.addProfile('c2', 'Jordan', { isUser: U });
+    assert.deepEqual(cp.countCampaignVersions('c1'), { characters: 1, own: 1 });
+    assert.deepEqual(cp.countCampaignVersions('c2'), { characters: 0, own: 1 });
+    activate('c1');
+    assert.deepEqual(cp.countCampaignVersions('c1'), { characters: 1, own: 1 }, 'the active campaign counts the same');
+    assert.deepEqual(cp.countCampaignVersions('nope'), { characters: 0, own: 0 });
+    assert.deepEqual(cp.countCampaignVersions(null), { characters: 0, own: 0 });
+});
+
 // ─── A build without versions of the player's card moved the campaign ───────
 
 /**

@@ -1284,9 +1284,19 @@ export function initLorebookEventDelegation() {
         const campaign = (extensionSettings.lorebook?.campaigns || {})[campaignId];
         if (!campaign) return;
         const isActiveCampaign = campaignManager.getActiveCampaignId() === campaignId;
+        // The campaign's versions of characters go with it, for good: say so,
+        // and say when one of them is the player's own card's.
+        let versionsNote = '';
+        try {
+            const { characters, own } = campaignManager.getCampaignVersionCounts(campaignId);
+            const total = characters + own;
+            if (total) {
+                versionsNote = ` This also permanently deletes the campaign's ${total} character version${total === 1 ? '' : 's'}${own ? ', your own card\'s included,' : ''} and the portraits only ${total === 1 ? 'it uses' : 'they use'}.`;
+            }
+        } catch (err) { /* the count is only for the wording */ }
         const message = isActiveCampaign
-            ? `"${campaign.name}" is the active campaign. It will be deactivated first (its books switched off, its character versions parked back to base), then deleted. Books inside will become unfiled. Continue?`
-            : `Delete library "${campaign.name}"? Books inside will become unfiled.`;
+            ? `"${campaign.name}" is the active campaign. It will be deactivated first (its books switched off, characters back on their Base versions), then deleted. Books inside will become unfiled.${versionsNote} Continue?`
+            : `Delete library "${campaign.name}"? Books inside will become unfiled.${versionsNote}`;
         if (!confirm(message)) return;
         await campaignManager.deleteCampaign(campaignId);
         renderLorebook();

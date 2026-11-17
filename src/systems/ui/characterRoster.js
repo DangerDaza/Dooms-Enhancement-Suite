@@ -37,7 +37,7 @@ import { deletePortraitsIfUnreferenced, takePortraitHistoryValues } from '../../
 // removes every version.
 import { countVersions, deleteCharacterEverywhere, removeFromLive, getActiveCampaignId } from '../lorebook/campaignProfiles.js';
 import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portraitBar.js';
-import { refreshBanPrompt } from './characterWorkshop.js';
+import { refreshBanPrompt, closeWorkshopIfShowing } from './characterWorkshop.js';
 import { power_user } from '../../../../../../power-user.js';
 import { characters } from '../../../../../../../script.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
@@ -1133,6 +1133,10 @@ function importCharacterPayload(payload) {
 function purgeCharacter(name) {
     const s = extensionSettings;
     if (!s) return;
+    // The Roster can sit on top of a Workshop that has this card open. Its
+    // draft would bring the card back on Save, pointing at the portrait
+    // files removed below.
+    try { closeWorkshopIfShowing(name, rosterMode === 'users'); } catch (e) {}
     // User-character mode purges only the userCharacters namespace and
     // clears activeUserCharacter if it was pointing at this entry.
     if (rosterMode === 'users') {

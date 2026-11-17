@@ -543,6 +543,16 @@ export function userNamesWithVersionIn(...campaignIds) {
 }
 
 /**
+ * How many character versions a campaign holds: NPCs' (`characters`) and the
+ * player's own cards' (`own`). For the wording of a delete confirmation.
+ * @returns {{characters: number, own: number}}
+ */
+export function countCampaignVersions(campaignId) {
+    const count = (isUser) => Object.keys(bucket(campaignId, false, isUser) || {}).length;
+    return { characters: count(false), own: count(true) };
+}
+
+/**
  * Removes every campaign version of `name` and its shadow entry. The live
  * stores are the caller's job (it owns the chat-scoped stores too). Returns
  * the portrait values those versions referenced.

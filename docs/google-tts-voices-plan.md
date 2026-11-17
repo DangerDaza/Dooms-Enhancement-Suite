@@ -530,6 +530,8 @@ shorten labels to one word each and let the tab row's label font step down one s
 changed voice. **Personas** get the same pane in `data-mode="user"` (`modals.css:5706-5712`), no
 version strip; helper: "Used for your persona's lines while it is shown on the Present Characters
 panel ('Show me in Present Characters' must be on)."
+*Since:* the player's cards have campaign versions too, so a persona's pane follows the version
+strip as an NPC's does.
 
 **Mobile (<640 px).** Stock cards become a one-column list with ≥44 px ▶ targets; the segmented
 control scrolls horizontally; the record button is a full-width sticky footer; one shared audition
@@ -1102,7 +1104,7 @@ Node, and `load-check.mjs`'s "DOM" is a stub Proxy (`:64-80`). (Review claim 5.)
 - Change `:40` "the five section tabs … (icons only between 641–860px …)" → "the six section tabs (… Knives, Voice) run horizontally (icons only at ≤1000px, scrollable strip on a phone)".
 - New section **Voices**:
   - [ ] **Voices off costs nothing**: only `voiceBoot.js` loads; bullhorns use SillyTavern's `/speak` with escaped text.
-  - [ ] **Workshop Voice tab**: standard grid with preview; Library locked without a key; Design and Clone open the studio; voice is per campaign version and "+" copies Base's voice; personas get the tab without versions.
+  - [ ] **Workshop Voice tab**: standard grid with preview; Library locked without a key; Design and Clone open the studio; voice is per campaign version and "+" copies Base's voice; personas get the tab without versions (*since:* with them, the player's cards have campaign versions too).
   - [ ] **Narrator voice** picker in settings accepts any source.
   - [ ] **Scene rule**: a voice plays only while the character is present for that message; removed/hidden characters, unattributed lines, characters with no voice and unplayable voices use the Narrator.
   - [ ] **Bullhorns** (bubble, DES message button, thought, reasoning) use DES voices; highlight clears when the line ends.

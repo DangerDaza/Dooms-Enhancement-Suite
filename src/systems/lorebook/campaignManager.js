@@ -23,7 +23,9 @@ import { getAllWorldNames, isWorldActive, applyWorldActivation } from './loreboo
 import {
     switchCampaignProfiles,
     deleteCampaignProfiles,
+    countCampaignVersions,
     userNamesWithVersionIn,
+    userVersionsWithoutOwnPortrait,
     portraitRefKey,
     renameBookEverywhere,
     forgetBook,
@@ -92,10 +94,22 @@ export function createCampaign(name, icon = 'fa-folder', color = '') {
 }
 
 /**
+ * What deleting a campaign takes with it besides the folder: its character
+ * versions, NPCs' and the player's own cards'. For the confirmation.
+ * @returns {{characters: number, own: number}}
+ */
+export function getCampaignVersionCounts(id) {
+    return countCampaignVersions(id);
+}
+
+/**
  * Deletes a campaign. Books inside become unfiled. If it was the active
- * campaign it is deactivated first (its books turned off, its character
- * versions parked back to base); its saved character versions are dropped
- * and any portrait files only they referenced are removed from disk.
+ * campaign it is deactivated first (its books turned off, characters back
+ * on their Base versions); its saved character versions (NPCs' and the
+ * player's own cards') are dropped and any portrait files only they
+ * referenced are removed from disk. An open Workshop is told, and a
+ * player's card whose version here was all that kept its persona's avatar
+ * file from following gets the file brought in step.
  * @param {string} id - Campaign ID to delete
  * @returns {Promise<boolean>} True if deleted
  */
@@ -103,8 +117,21 @@ export async function deleteCampaign(id) {
     ensureLorebook();
     if (!extensionSettings.lorebook.campaigns[id]) return false;
 
+    // The player's cards with a version here, and the portrait each shows
+    // now. Their linked personas' avatar files are brought in step once, at
+    // the end, judged against the versions that are left: the deactivation
+    // below would still see this campaign's.
+    const livePortrait = (name) => portraitRefKey(extensionSettings.userCharacters?.[name]?.avatar);
+    const playerCards = userNamesWithVersionIn(id).map(name => [name, livePortrait(name)]);
+    // Those whose version here has no portrait of its own. Such a version
+    // keeps the file from being written at all (it shows whatever the file
+    // holds); with it gone the file can follow the card again.
+    const released = new Set(playerCards.map(([name]) => name).filter(name => {
+        try { return userVersionsWithoutOwnPortrait(name).includes(id); } catch (e) { return false; }
+    }));
+
     if (getActiveCampaignId() === id) {
-        await setActiveCampaign(null, { silent: true });
+        await setActiveCampaign(null, { silent: true, mirrorPersonas: false });
     }
     const orphanCandidates = deleteCampaignProfiles(id);
 
@@ -123,6 +150,15 @@ export async function deleteCampaign(id) {
     }
 
     saveSettings();
+    try {
+        // The Lore Library can sit on top of an open Workshop: the
+        // campaign's tile goes, and its version if that is on the stage.
+        const workshop = await import('../ui/characterWorkshop.js');
+        if (typeof workshop.onCampaignDeleted === 'function') workshop.onCampaignDeleted(id);
+    } catch (e) { /* the Workshop may not be loadable here */ }
+    mirrorPersonasInBackground(playerCards
+        .filter(([name, before]) => released.has(name) || livePortrait(name) !== before)
+        .map(([name]) => name));
     if (orphanCandidates.length) {
         try {
             const { deletePortraitsIfUnreferenced } = await import('../../utils/avatars.js');
@@ -130,6 +166,23 @@ export async function deleteCampaign(id) {
         } catch (e) { /* disk cleanup is best-effort */ }
     }
     return true;
+}
+
+/**
+ * Puts the portrait now on these player's cards into their linked
+ * SillyTavern personas' avatar files (the Workshop decides which may be
+ * written, and does the same on Save). A mirror only, and not waited for:
+ * the caller's work is done whether or not it lands, and an upload on a
+ * slow link must not hold the Lore Library. Writes to one file are queued in
+ * the order they are asked for, so an earlier upload never lands on top of
+ * a later one.
+ * @param {string[]} names
+ */
+function mirrorPersonasInBackground(names) {
+    if (!Array.isArray(names) || !names.length || extensionSettings.enabled === false) return;
+    import('../ui/characterWorkshop.js')
+        .then(workshop => (typeof workshop.mirrorLivePersonaAvatars === 'function' ? workshop.mirrorLivePersonaAvatars(names) : null))
+        .catch(() => { /* the Workshop may not be loadable here; nothing to undo */ });
 }
 
 /**
@@ -208,10 +261,13 @@ export function isSwitching() {
  * Makes a campaign active (or none, with null). Swaps character versions
  * (NPCs' and the player's cards'), turns the campaign's books on, turns the
  * previous campaign's books off (ledger-tracked, globals exempt), saves,
- * repaints every surface that shows character identity, and puts a player's
- * changed portrait into its linked SillyTavern persona's avatar file.
+ * repaints every surface that shows character identity, and starts putting
+ * a player's changed portrait into its linked SillyTavern persona's avatar
+ * file (in the background: the switch does not wait for the upload).
  * @param {string|null} campaignId
- * @param {{silent?: boolean}} [options] - silent: no toast
+ * @param {{silent?: boolean, mirrorPersonas?: boolean}} [options] - silent: no
+ *   toast; mirrorPersonas false: leave the persona avatar files to the caller
+ *   (deleteCampaign does them once the campaign's versions are gone)
  * @returns {Promise<boolean>} True if the active campaign changed
  */
 export function setActiveCampaign(campaignId, options = {}) {
@@ -242,7 +298,7 @@ export function queueReconcile() {
     return queueBookTask(() => reconcileActiveCampaignBooks());
 }
 
-async function doSetActiveCampaign(campaignId, { silent = false } = {}) {
+async function doSetActiveCampaign(campaignId, { silent = false, mirrorPersonas = true } = {}) {
     ensureLorebook();
     const lb = extensionSettings.lorebook;
     const next = campaignId && lb.campaigns[campaignId] ? campaignId : null;
@@ -274,12 +330,8 @@ async function doSetActiveCampaign(campaignId, { silent = false } = {}) {
     //    SillyTavern persona's avatar file follows, so the picture on the
     //    player's messages is the live version's (the Workshop does this on
     //    Save). A mirror only: the switch is done whether or not it lands.
-    const repainted = playerPortraitsBefore.filter(([name, before]) => livePortrait(name) !== before).map(([name]) => name);
-    if (repainted.length && extensionSettings.enabled !== false) {
-        try {
-            const workshop = await import('../ui/characterWorkshop.js');
-            if (typeof workshop.mirrorLivePersonaAvatars === 'function') await workshop.mirrorLivePersonaAvatars(repainted);
-        } catch (e) { /* the Workshop may not be loadable here; nothing to undo */ }
+    if (mirrorPersonas) {
+        mirrorPersonasInBackground(playerPortraitsBefore.filter(([name, before]) => livePortrait(name) !== before).map(([name]) => name));
     }
 
     if (!silent) {
