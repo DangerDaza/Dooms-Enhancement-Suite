@@ -894,6 +894,36 @@ test('older build: the first load with nothing recorded records the active campa
     assert.equal(card().injection.description, 'base jordan');
 });
 
+test('older build: a fresh install records the swap at its first save, so a version made in that session survives the trip', () => {
+    // No saved settings were loaded: ensureCampaignSettings never ran and nothing is recorded.
+    seedPlayer();
+    assert.equal(extensionSettings.campaignUserSwappedFor, undefined);
+    assert.equal(cp.bankActiveCampaign(), 0, 'the first save');
+    assert.equal(extensionSettings.campaignUserSwappedFor, null, 'recorded: Base is live');
+    // "+" for a campaign that was never active on this build, then saved.
+    cp.addProfile('c1', 'Jordan', { isUser: U });
+    const v = cp.readVersion('c1', 'Jordan', U);
+    v.injection.description = 'c1 jordan';
+    cp.writeVersion('c1', 'Jordan', v, U);
+    cp.bankActiveCampaign();
+    // The older build activates c1: the card stays on Base.
+    olderBuildActivates('c1');
+    assert.equal(cp.ensureCampaignSettings(), true);
+    assert.equal(card().injection.description, 'c1 jordan', 'the card shows the active campaign\'s version');
+    assert.equal(extensionSettings.campaignUserBaseShadow.Jordan.injection.description, 'base jordan', 'Base is parked, not banked over the version');
+    cp.bankActiveCampaign();
+    assert.equal(userBucket('c1').Jordan.injection.description, 'c1 jordan');
+    activate(null);
+    assert.equal(card().injection.description, 'base jordan');
+    // A save while a campaign is active and nothing is recorded takes the cards to be in step.
+    reset();
+    seedPlayerWithVersions('c1');
+    activate('c1');
+    delete extensionSettings.campaignUserSwappedFor;
+    assert.equal(cp.bankActiveCampaign(), 1);
+    assert.equal(extensionSettings.campaignUserSwappedFor, 'c1');
+});
+
 test('older build: a record that is not a campaign id is read as none, and the cards end in step', () => {
     seedPlayerWithVersions('c1');
     activate('c1');

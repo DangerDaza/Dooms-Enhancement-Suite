@@ -798,7 +798,9 @@ export function refreshWorkshopIfOpen() {
  * can sit on top of an open Workshop). Its version of the open character
  * went with it: a version on the stage is replaced by the live one, with
  * nothing offered to save (there is nowhere left to save it), and the
- * strip loses the campaign's tile either way.
+ * strip loses the campaign's tile either way. When the campaign was the
+ * active one its deactivation has already put the live version on the
+ * stage, asking first like any switch, and only the tile is left to go.
  */
 export function onCampaignDeleted(campaignId) {
     if (!$modal || !$modal.hasClass('is-open') || !draft || !campaignId) return;
@@ -2881,10 +2883,15 @@ function mirrorAvatarToPersonaFile(personaFilename, dataUrl, options = {}) {
     // A persona has one avatar file and several things write it (Save, a
     // campaign switch, a version being removed). They run one at a time in
     // the order they were asked for, so the file ends up holding the last
-    // portrait asked for however long an earlier upload takes.
+    // portrait asked for however long an earlier upload takes. A write that
+    // is no longer the last one waiting when its turn comes is not run: the
+    // one behind it decides what the file holds, and its own portrait may
+    // be gone by then (a version removed in between takes its file along).
     const previous = personaFileWrites.get(personaFilename) || Promise.resolve();
     const tail = previous
-        .then(() => writePersonaFile(personaFilename, dataUrl, options))
+        .then(() => (personaFileWrites.get(personaFilename) === tail
+            ? writePersonaFile(personaFilename, dataUrl, options)
+            : undefined))
         .catch(() => {});
     personaFileWrites.set(personaFilename, tail);
     tail.then(() => { if (personaFileWrites.get(personaFilename) === tail) personaFileWrites.delete(personaFilename); });

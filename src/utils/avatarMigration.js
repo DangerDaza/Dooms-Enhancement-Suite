@@ -20,6 +20,7 @@
  */
 import { extensionSettings } from '../core/state.js';
 import { isDataUrl, persistPortrait } from './avatars.js';
+import { portraitRefCount } from '../systems/lorebook/campaignProfiles.js';
 
 let migrationInFlight = false;
 
@@ -208,6 +209,10 @@ async function migrateProfileBuckets(uploadedByBytes) {
         const value = bucket[name]?.[field];
         if (!isDataUrl(value)) return;
         let url = uploadedByBytes.get(value);
+        // A file uploaded earlier in this run is shared only while something
+        // still points at it. Its holder can have been deleted since (and
+        // the file with it): then this version gets a file of its own.
+        if (url && portraitRefCount(url) === 0) url = null;
         if (!url) {
             try {
                 url = await persistPortrait(value, label, value);

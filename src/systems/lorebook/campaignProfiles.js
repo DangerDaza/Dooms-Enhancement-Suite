@@ -363,6 +363,11 @@ export function bankActiveCampaign() {
             n++;
         }
     }
+    // A session that loaded no saved settings (a fresh install) has recorded
+    // nothing yet, and its cards are in step by definition. Recorded here,
+    // no blob this build saves is without the record, and a later load can
+    // tell when an older build moved the campaign in between.
+    if (extensionSettings[USER_SWAP_KEY] === undefined) extensionSettings[USER_SWAP_KEY] = active;
     // The player's cards are banked only while they are swapped for this
     // campaign. Banking them into any other would write one campaign's
     // version over another's.

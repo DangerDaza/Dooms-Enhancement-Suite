@@ -1558,10 +1558,22 @@ export function initLorebookEventDelegation() {
         await lorebookAPI.importWorld(file);
         e.target.value = '';
         const namesAfter = lorebookAPI.getAllWorldNames();
+        let added = false;
         for (const name of namesAfter) {
-            if (!namesBefore.has(name) && !lorebookAPI.isWorldActive(name)) {
+            if (namesBefore.has(name)) continue;
+            added = true;
+            if (!lorebookAPI.isWorldActive(name)) {
                 await lorebookAPI.activateWorld(name);
             }
+        }
+        if (!added) {
+            // No new book: the file replaced one that was already here. What
+            // the Library had loaded of it is the old content, and it would
+            // go on listing it, save it back over the import on the next
+            // edit, and hand it to Duplicate. Everything is read again.
+            lorebookAPI.clearWICache();
+            selectedEntry = null;
+            expandedEditor = false;
         }
         renderLorebook();
     });
