@@ -97,6 +97,7 @@ function reset() {
     extensionSettings.campaignBaseShadow = {};
     extensionSettings.campaignUserProfiles = {};
     extensionSettings.campaignUserBaseShadow = {};
+    delete extensionSettings.campaignUserSwappedFor;
     extensionSettings.characterInjection = { Hex: { description: 'base hex', lorebook: '' } };
     extensionSettings.npcAvatars = {};
     extensionSettings.npcAvatarsFullRes = {};
@@ -116,6 +117,8 @@ function reset() {
     const names = api.getAllWorldNames();
     names.length = 0;
     names.push('A', 'B', 'C', 'D', 'G');
+    // The Lore Library's working copies go with the files they were read from.
+    api.clearWICache();
 }
 
 let failures = 0;
@@ -372,6 +375,27 @@ await test('duplicating refuses a taken name, an empty one, one the server would
     await assert.rejects(api.duplicateWorld('A', 'Mecha/Lore'), /cannot contain/);
     await assert.rejects(api.duplicateWorld('Missing', 'Missing (copy)'), /Could not load/);
     assert.deepEqual([...api.getAllWorldNames()].sort(), ['A', 'B', 'C', 'D', 'G'], 'nothing was created');
+});
+
+await test('duplicating copies the working copy, so an edit not saved yet is in the copy', async () => {
+    const working = await api.loadWorldData('A');
+    working.entries[0].content = 'Typed a moment ago, the save still pending.';
+    await api.duplicateWorld('A', 'A (copy)');
+    assert.equal(globalThis.__wiFiles['A (copy)'].entries[0].content, 'Typed a moment ago, the save still pending.');
+    assert.equal(globalThis.__wiFiles.A.entries[0].content, 'Mechs are tall.', 'the original\'s file is not written by a duplicate');
+    // Separate objects: the copy does not follow the original's later edits.
+    working.entries[0].content = 'Edited again.';
+    assert.equal((await api.loadWorldData('A (copy)')).entries[0].content, 'Typed a moment ago, the save still pending.');
+});
+
+await test('duplicating reads the list of lorebooks afresh: one made elsewhere since is refused, not written over', async () => {
+    // Another tab made "A (copy)"; this one's list has not heard of it.
+    globalThis.__wiFiles['A (copy)'] = { entries: { 0: { uid: 0, content: 'Made in the other tab.' } } };
+    assert.equal(api.getAllWorldNames().includes('A (copy)'), false);
+    await assert.rejects(api.duplicateWorld('A', 'A (copy)'), /already a lorebook named "A \(copy\)"/);
+    assert.equal(globalThis.__wiFiles['A (copy)'].entries[0].content, 'Made in the other tab.');
+    // The refusal leaves the list up to date, so the next name offered is free.
+    assert.equal(api.freeCopyName('A'), 'A (copy 2)');
 });
 
 await test('a copy is filed in the original\'s campaign: on when that campaign is active, off otherwise, never global', async () => {

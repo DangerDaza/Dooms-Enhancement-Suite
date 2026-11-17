@@ -261,6 +261,11 @@ export function freeCopyName(name, existingNames = world_names) {
  * is active is for the caller's rules (a campaign's books are on while the
  * campaign is). Refuses a name that is taken (without regard to case) or
  * that the server would change when it writes the file.
+ *
+ * What is copied is the Lore Library's working copy when it has one: an
+ * edit still waiting on its debounced save is in the copy. The list of
+ * names is read afresh first, so a lorebook made in another tab or on
+ * another device since this one last looked is refused, not written over.
  * @param {string} name - WI filename to copy
  * @param {string} newName - Name for the copy
  * @returns {Promise<string>} The copy's name
@@ -269,10 +274,11 @@ export async function duplicateWorld(name, newName) {
     const target = String(newName || '').trim();
     if (!target) throw new Error('The copy needs a name.');
     if (/[\\/:*?"<>|]/.test(target)) throw new Error('A lorebook name cannot contain \\ / : * ? " < > |');
+    await updateWorldInfoList();
     if (world_names.some(n => String(n).toLowerCase() === target.toLowerCase())) {
         throw new Error(`There is already a lorebook named "${target}".`);
     }
-    const data = await loadWorldData(name, true);
+    const data = await loadWorldData(name);
     if (!data) throw new Error(`Could not load world data for "${name}"`);
     // A deep copy: the two books must not share entry objects through the cache.
     const copy = JSON.parse(JSON.stringify(data));

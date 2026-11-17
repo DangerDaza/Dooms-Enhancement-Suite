@@ -766,11 +766,12 @@ async function reconcileIfCampaignActive() {
 }
 
 /**
- * Duplicate (the copy button on a book, and the book's right-click menu):
- * asks for the copy's name, copies the lorebook with every entry, files the
- * copy in the original's campaign folder and opens it. In the active
- * campaign's folder the copy is on like the campaign's other books;
- * anywhere else it starts off.
+ * Duplicate (the copy button in a book's header, "Duplicate Lorebook" inside
+ * an opened book on a phone, and the book's right-click menu): asks for the
+ * copy's name, copies the lorebook with every entry, files the copy in the
+ * original's campaign folder and opens it. In the active campaign's folder
+ * the copy is on like the campaign's other books; anywhere else it starts
+ * off. An empty name, like Cancel, does nothing.
  * @param {string} worldName - The lorebook to copy
  */
 async function duplicateBook(worldName) {
@@ -789,6 +790,7 @@ async function duplicateBook(worldName) {
         selectedEntry = null;
         expandedEditor = false;
         renderLorebook();
+        if (isMobileView()) openBookOnPhone(newName);
         try {
             if (window.toastr) window.toastr.success(`Copied "${worldName}" to "${newName}".`, 'Lore Library', { timeOut: 3000 });
         } catch (e) {}
@@ -796,6 +798,22 @@ async function duplicateBook(worldName) {
         console.error('[LoreLibrary] Duplicate failed:', err);
         alert('Duplicate failed: ' + (err?.message || err));
     }
+}
+
+/**
+ * The phone list is rebuilt with every book closed. Opens `worldName` where
+ * it is listed and brings it into view; a book the current filter hides is
+ * left alone.
+ */
+function openBookOnPhone(worldName) {
+    try {
+        const $spine = $('#rpg-lorebook-modal .rpg-lb-book-spine.expandable')
+            .filter(function () { return this.getAttribute('data-world') === worldName; })
+            .first();
+        if (!$spine.length || !$spine.is(':visible') || $spine.hasClass('expanded')) return;
+        $spine.trigger('click');
+        if (typeof $spine[0].scrollIntoView === 'function') $spine[0].scrollIntoView({ block: 'nearest' });
+    } catch (e) { /* the copy is made and listed either way */ }
 }
 
 function refreshCampaignToggles() {
@@ -1462,8 +1480,9 @@ export function initLorebookEventDelegation() {
     });
 
     // ── Book delete ──────────────────────────────────────────────────────────
-    // Book duplicate (the desktop header and the mobile spine share it)
-    $modal.on('click', '.rpg-lb-spine-duplicate', async function (e) {
+    // Book duplicate (the desktop header's button and the one inside an
+    // opened book on a phone share it)
+    $modal.on('click', '.rpg-lb-spine-duplicate, .rpg-lb-btn-duplicate-book', async function (e) {
         e.stopPropagation();
         await duplicateBook($(this).data('world'));
     });

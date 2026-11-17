@@ -2638,8 +2638,6 @@
     opacity: 0;
 }
 
-.rpg-lb-book-spine:hover .rpg-lb-spine-duplicate { opacity: 1; }
-
 .rpg-lb-spine-duplicate:hover { color: #4a7ba7; background: rgba(74,123,167,0.1); }
 
 .rpg-lb-spine-delete {
@@ -3359,7 +3357,8 @@
 
 
 /* ── Add entry button (inside lore-entries) ── */
-.rpg-lb-btn-add-entry {
+.rpg-lb-btn-add-entry,
+.rpg-lb-btn-duplicate-book {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3376,7 +3375,8 @@
     width: calc(100% - 50px);
 }
 
-.rpg-lb-btn-add-entry:hover { border-color: var(--rpg-highlight, #e94560); color: var(--rpg-highlight, #e94560); background: rgba(233,69,96,0.04); }
+.rpg-lb-btn-add-entry:hover,
+.rpg-lb-btn-duplicate-book:hover { border-color: var(--rpg-highlight, #e94560); color: var(--rpg-highlight, #e94560); background: rgba(233,69,96,0.04); }
 
 
 /* ── Move dropdown menu ── */
@@ -4853,7 +4853,8 @@
 /* ── Buttons ──────────────────────────────────────────────────────────── */
 .rpg-lb-btn-new-book,
 .rpg-lb-btn-import,
-.rpg-lb-btn-add-entry {
+.rpg-lb-btn-add-entry,
+.rpg-lb-btn-duplicate-book {
     background: rgba(74, 123, 167, 0.15);
     border: 1px solid rgba(74, 123, 167, 0.2);
     color: var(--rpg-text, #ccc);
@@ -4870,7 +4871,8 @@
 
 .rpg-lb-btn-new-book:hover,
 .rpg-lb-btn-import:hover,
-.rpg-lb-btn-add-entry:hover {
+.rpg-lb-btn-add-entry:hover,
+.rpg-lb-btn-duplicate-book:hover {
     background: rgba(74, 123, 167, 0.25);
 }
 

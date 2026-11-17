@@ -119,6 +119,10 @@ async function renderEntriesForBook(worldName, container, preloadedData = null) 
 
     // "Add Entry" button at the bottom
     html += `<button class="rpg-lb-btn-add-entry" data-world="${escapeHtml(worldName)}"><i class="fa-solid fa-plus"></i> Add Entry</button>`;
+    // Duplicate lives here on a phone, not on the book's row: the row is
+    // full, and one more button pushed Delete and Edit off its edge. The
+    // click handler is shared (registered in lorebook.js).
+    html += `<button class="rpg-lb-btn-duplicate-book" data-world="${escapeHtml(worldName)}" title="Duplicate — a copy of this lorebook with all its entries"><i class="fa-solid fa-copy"></i> Duplicate Lorebook</button>`;
 
     container.innerHTML = html;
 
@@ -535,7 +539,6 @@ function buildBookSpineHtml(worldName, campaignId, activeNames) {
     html += '<span class="rpg-lb-spine-tokens">...</span>';
     // Same markup as the desktop tree row — the click handler is shared (registered in lorebook.js)
     html += `<button class="rpg-lb-book-global${isGlobal ? ' active' : ''}" data-world="${w}" title="Global — stays active when the campaign changes"><i class="fa-solid fa-globe"></i></button>`;
-    html += `<button class="rpg-lb-spine-duplicate" data-world="${w}" title="Duplicate — a copy of this lorebook with all its entries"><i class="fa-solid fa-copy"></i></button>`;
     html += `<button class="rpg-lb-spine-export" data-world="${w}" title="Export"><i class="fa-solid fa-file-export"></i></button>`;
     html += `<button class="rpg-lb-spine-delete" data-world="${w}" title="Delete lorebook"><i class="fa-solid fa-trash"></i></button>`;
     html += '<button class="rpg-lb-spine-edit"><i class="fa-solid fa-pen-to-square"></i></button>';
@@ -745,7 +748,7 @@ export function initMobileLorebookEventDelegation() {
     // ── Book spine expand/collapse (lazy-load entries) ──────────────────────
     $modal.on('click', '.rpg-lb-book-spine.expandable', function (e) {
         // Don't trigger when clicking toggles, checkboxes, or edit buttons
-        if ($(e.target).closest('.rpg-lb-toggle, .rpg-lb-book-check, .rpg-lb-spine-edit, .rpg-lb-spine-duplicate, .rpg-lb-spine-export, .rpg-lb-spine-delete, .rpg-lb-book-global').length) return;
+        if ($(e.target).closest('.rpg-lb-toggle, .rpg-lb-book-check, .rpg-lb-spine-edit, .rpg-lb-spine-export, .rpg-lb-spine-delete, .rpg-lb-book-global').length) return;
 
         const $spine = $(this);
         const worldName = $spine.data('world');
