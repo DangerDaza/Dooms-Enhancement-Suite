@@ -1,7 +1,15 @@
 {
-    "version": "3.2.0-beta.1",
-    "title": "Inventory and quests (beta)",
+    "version": "3.2.1-beta.1",
+    "title": "Inventory and quests (beta), and your own campaign versions",
     "items": [
+        {
+            "title": "🎭 3.2.1: your own character has campaign versions",
+            "body": "Characters have had a Base version and one per campaign for a while; your own card stayed the same whichever campaign was active. Now a card on the Roster's Users tab opens in the Workshop with the same strip of versions: Base, a tile for each campaign, and + to add one. A version has its own portrait, description, knives and voice; your colour, pronouns and linked persona are the same in all of them. Set a campaign active in the Lore Library and your card switches with the rest of the cast, back to Base in a campaign you made no version for. The picture on your messages follows the live version once every version has a portrait of its own; until then your persona's picture is left as it is."
+        },
+        {
+            "title": "📚 3.2.1: Duplicate a lorebook",
+            "body": "The Lore Library can copy a lorebook: a copy button beside Export and Delete on a book, Duplicate in its right-click menu, and on a phone Duplicate Lorebook under Add Entry inside an opened book. It asks for a name, copies every entry and files the copy in the same campaign folder. Deleting a campaign now also says that its character versions, yours included, go with it."
+        },
         {
             "title": "📱 3.2: the Workshop from a phone",
             "body": "On an iPhone the Present Characters panel had no way into the Workshop: a long press on a card showed Apple's image sheet instead of the menu, and the little roster button in the panel's header was too small for a finger, so the tap folded the shelf instead. Now a long press on a card (half a second, finger still) opens the card menu where your finger is, and on any touch screen the roster button is a proper button. With a mouse nothing changed. And if the Workshop ever fails to load, a message says so and how to fix it, instead of a tap that does nothing."

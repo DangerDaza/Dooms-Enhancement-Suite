@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [3.2.1-beta.1] - 2026-11-17 — Your own character's campaign versions, and Duplicate
 
 ### Added
 - **Your own character has campaign versions.** NPCs have had a **Base** version and one per campaign since 2.6.0; your own card stayed the same whichever campaign was active. Now a card on the Roster's Users tab opens in the Workshop with the same version strip: Base, a tile for each campaign version with its own portrait, and "+" for the campaigns that have none yet. A version carries the portrait, the description, the knives and the voice; your dialogue colour, pronouns, linked SillyTavern persona and attribute sheet are the card's own and the same in every version. Setting a campaign active in the Lore Library switches your card with the rest of the cast, and falls back to Base in a campaign you have no version for. The Roster's Users tab shows the "⧉ N" badge and the "Viewing <campaign>" chip, My custom voices names which of a persona's versions use a voice, and deleting your card removes every version of it.
