@@ -728,6 +728,61 @@ test('player: the cards a switch changes are those either campaign has a version
     assert.deepEqual(cp.userNamesWithVersionIn(null, null), []);
 });
 
+// ─── The linked persona's avatar file ───────────────────────────────────────
+
+test('persona file: a portrait value that is the persona\'s own file is recognised in every form it takes', () => {
+    const is = cp.isPersonaFileRef;
+    assert.equal(is('/User%20Avatars/jordan.png', 'jordan.png'), true, 'as the persona import stores it');
+    assert.equal(is('/User Avatars/jordan.png', 'jordan.png'), true);
+    assert.equal(is('/User%20Avatars/jordan.png?t=1700000000', 'jordan.png'), true, 'with a cache-bust');
+    assert.equal(is('User Avatars/Jordan.PNG', 'jordan.png'), true, 'case does not make another file');
+    assert.equal(is('/User%20Avatars/my%20hero%20(1).png', 'my hero (1).png'), true, 'spaces and brackets in the file name');
+    assert.equal(is('/thumbnail?type=persona&file=jordan.png', 'jordan.png'), true, 'its thumbnail');
+    assert.equal(is('/thumbnail?type=persona&file=my%20hero%20(1).png', 'my hero (1).png'), true);
+    // Not the persona's file:
+    assert.equal(is('/User%20Avatars/other.png', 'jordan.png'), false, 'another persona\'s file');
+    assert.equal(is('/User%20Avatars/notjordan.png', 'jordan.png'), false);
+    assert.equal(is('/thumbnail?type=avatar&file=jordan.png', 'jordan.png'), false, 'a character card\'s thumbnail');
+    assert.equal(is('/thumbnail?type=persona&file=jordan.png.bak', 'jordan.png'), false);
+    assert.equal(is('/user/images/des-portraits/jordan-11111111.png?t=1', 'jordan.png'), false, 'a portrait DES keeps');
+    assert.equal(is('data:image/png;base64,AAAA', 'jordan.png'), false, 'a fresh upload');
+    assert.equal(is('', 'jordan.png'), false);
+    assert.equal(is('/User%20Avatars/jordan.png', ''), false, 'no linked persona');
+    assert.equal(is('/User%20Avatars/100%25.png', '100%.png'), true, 'a % in the file name, encoded as the import writes it');
+    assert.equal(is('/User%20Avatars/100%.png', '100%.png'), true, 'a stray % does not throw');
+    assert.equal(is('/User Avatars/100%.png', '100%.png'), true);
+});
+
+test('persona file: the versions with no portrait of their own are named, wherever each version is kept', () => {
+    seedPlayer();
+    // Every version has its own portrait (a clone shares Base's file: still its own).
+    cp.addProfile('c1', 'Jordan', { isUser: U });
+    assert.deepEqual(cp.userVersionsWithoutOwnPortrait('Jordan'), []);
+    // An imported persona: Base holds the persona's file itself.
+    card().avatar = '/User%20Avatars/jordan.png';
+    card().avatarFullRes = card().avatar;
+    assert.deepEqual(cp.userVersionsWithoutOwnPortrait('Jordan'), ['base']);
+    // The same answer with c1 live, when Base sits in the shadow.
+    activate('c1');
+    assert.deepEqual(cp.userVersionsWithoutOwnPortrait('Jordan'), ['base']);
+    // A version with no portrait at all counts too; so does one that is not active.
+    cp.addProfile('c2', 'Jordan', { isUser: U });
+    const v = cp.readVersion('c2', 'Jordan', U);
+    delete v.avatar; delete v.avatarFullRes;
+    cp.writeVersion('c2', 'Jordan', v, U);
+    assert.deepEqual(cp.userVersionsWithoutOwnPortrait('Jordan'), ['base', 'c2']);
+    activate(null);
+    // Base gets a portrait of its own: only c2 is left.
+    card().avatar = '/user/images/des-portraits/jordan-55555555.png?t=1';
+    assert.deepEqual(cp.userVersionsWithoutOwnPortrait('Jordan'), ['c2']);
+    // Another persona's file is a picture this card's persona file cannot change.
+    const w = cp.readVersion('c2', 'Jordan', U);
+    w.avatar = '/User%20Avatars/someone-else.png';
+    cp.writeVersion('c2', 'Jordan', w, U);
+    assert.deepEqual(cp.userVersionsWithoutOwnPortrait('Jordan'), []);
+    assert.deepEqual(cp.userVersionsWithoutOwnPortrait('Nobody'), [], 'no such card');
+});
+
 if (failures) {
     console.error(`\n${failures} failed, ${passes} passed`);
     process.exit(1);

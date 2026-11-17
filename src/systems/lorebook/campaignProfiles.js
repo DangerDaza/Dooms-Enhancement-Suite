@@ -421,6 +421,50 @@ function switchUserProfiles(prevId, nextId) {
 }
 
 /**
+ * True when `value` (a portrait on a player's card) is not a picture of the
+ * card's own but SillyTavern's file for the persona `personaFilename`:
+ * "/User Avatars/<file>", as the persona import stores it (encoded or not,
+ * with or without a cache-bust query), or that persona's thumbnail URL.
+ */
+export function isPersonaFileRef(value, personaFilename) {
+    if (typeof value !== 'string' || !value || typeof personaFilename !== 'string' || !personaFilename) return false;
+    if (value.startsWith('data:')) return false;
+    let decoded = value;
+    try {
+        decoded = decodeURIComponent(value);
+    } catch (e) {
+        // A stray % (a file named "100%.png", written unencoded): decode the
+        // plain-ASCII escapes one by one and leave the rest as written.
+        decoded = value.replace(/%([0-9a-f]{2})/gi, (m, hex) => (parseInt(hex, 16) < 0x80 ? String.fromCharCode(parseInt(hex, 16)) : m));
+    }
+    const whole = decoded.toLowerCase();
+    const file = personaFilename.toLowerCase();
+    if (whole.split(/[?#]/)[0].endsWith(`user avatars/${file}`)) return true;
+    return /[?&]type=persona(&|$)/.test(whole) && new RegExp(`[?&]file=${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(&|$)`).test(whole);
+}
+
+/**
+ * The versions of a player's card (BASE_VERSION and campaign ids, in that
+ * order) that have no portrait of their own: none at all, or SillyTavern's
+ * own file for the card's linked persona. Such a version shows whatever is
+ * in that file, so writing another version's portrait into the file would
+ * change its picture too. Empty when every version has its own portrait,
+ * or when there is no such card.
+ * @returns {string[]}
+ */
+export function userVersionsWithoutOwnPortrait(name) {
+    const card = userCard(name);
+    if (!card) return [];
+    const persona = typeof card.linkedPersona === 'string' ? card.linkedPersona : '';
+    const out = [];
+    for (const versionId of [BASE_VERSION, ...listProfileCampaigns(name, true)]) {
+        const avatar = readVersion(versionId, name, true)?.avatar;
+        if (typeof avatar !== 'string' || !avatar || isPersonaFileRef(avatar, persona)) out.push(versionId);
+    }
+    return out;
+}
+
+/**
  * The player's cards whose live version a switch between these two campaigns
  * changes: those either campaign has a version of. For the surfaces that
  * mirror the live card somewhere else (the linked SillyTavern persona's

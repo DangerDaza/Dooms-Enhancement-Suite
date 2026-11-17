@@ -65,6 +65,8 @@ import {
     deleteCharacterEverywhere,
     removeFromLive,
     listProfileCampaigns,
+    countVersions,
+    userVersionsWithoutOwnPortrait,
 } from '../lorebook/campaignProfiles.js';
 import { getCampaignsInOrder } from '../lorebook/campaignManager.js';
 import {
@@ -2887,11 +2889,37 @@ async function mirrorAvatarToPersonaFile(personaFilename, dataUrl, { quiet = fal
 }
 
 /**
+ * The versions of a player's card that stand in the way of writing a
+ * portrait into its linked persona's avatar file, by their labels ("Base",
+ * a campaign's name); empty = go ahead.
+ *
+ * The persona has ONE avatar file and every version of the card shares it.
+ * A version with no portrait of its own (none, or the persona's file itself,
+ * which is what an imported persona's card holds) shows whatever that file
+ * contains, so putting another version's portrait there would change that
+ * version's picture too, and the persona's original picture would be gone.
+ * The file is therefore written only when every version has its own
+ * portrait. A card with Base alone keeps the rule Save has always had.
+ * @returns {string[]}
+ */
+function personaFileHeldBy(name) {
+    try {
+        if (countVersions(name, true) <= 1) return [];
+        return userVersionsWithoutOwnPortrait(name).map(versionLabel);
+    } catch (e) {
+        // Not being able to tell is a reason to leave the file alone.
+        return ['?'];
+    }
+}
+
+/**
  * After the live version of a player's card changed without a Workshop save
  * (a campaign switch, or the active campaign's version being removed): puts
  * the portrait now on each card into its linked SillyTavern persona's avatar
  * file, so the picture on the player's messages is the live version's. A
- * card with no linked persona or no portrait is left alone, as on Save.
+ * card with no linked persona or no portrait is left alone, as on Save, and
+ * so is one with a version that has no portrait of its own
+ * (personaFileHeldBy).
  * @param {string[]} names - player's cards whose live version changed
  */
 export async function mirrorLivePersonaAvatars(names) {
@@ -2899,6 +2927,11 @@ export async function mirrorLivePersonaAvatars(names) {
         const card = extensionSettings.userCharacters?.[name];
         if (!card || typeof card !== 'object') continue;
         if (!card.linkedPersona || !card.avatar) continue;
+        const heldBy = personaFileHeldBy(name);
+        if (heldBy.length) {
+            console.log(`[Dooms Tracker] Workshop: persona avatar of "${name}" left alone (no portrait of its own: ${heldBy.join(', ')})`);
+            continue;
+        }
         await mirrorAvatarToPersonaFile(card.linkedPersona, card.avatar, { quiet: true });
     }
 }
@@ -2964,8 +2997,21 @@ function commitDraft() {
         // Only the version the chat is using reaches the persona file: a
         // saved copy's portrait gets there when its campaign becomes active
         // (mirrorLivePersonaAvatars, after the switch).
+        const heldBy = live && draft.linkedPersona && draft.avatar ? personaFileHeldBy(name) : [];
         if (!live) {
             console.log(`[Dooms Tracker] Workshop: persona mirror skipped (${versionLabel(draft.versionId)} is not the live version)`);
+        } else if (heldBy.length) {
+            // Another version of this card (or this one) has no portrait of
+            // its own and shows the persona's picture: writing this portrait
+            // into the persona's file would change that version too.
+            console.log(`[Dooms Tracker] Workshop: persona mirror skipped (no portrait of its own: ${heldBy.join(', ')})`);
+            try {
+                if (window.toastr) window.toastr.info(
+                    `Saved locally. Persona file not updated: ${heldBy.join(', ')} ${heldBy.length === 1 ? 'has' : 'have'} no portrait of ${heldBy.length === 1 ? 'its' : 'their'} own and ${heldBy.length === 1 ? 'uses' : 'use'} the persona's picture, which this would replace. Give every version its own portrait to keep the persona in step.`,
+                    'Persona avatar sync',
+                    { timeOut: 7000 },
+                );
+            } catch (e) {}
         } else if (draft.linkedPersona && draft.avatar) {
             mirrorAvatarToPersonaFile(draft.linkedPersona, draft.avatar).catch(() => {});
         } else {
