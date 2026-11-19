@@ -3014,6 +3014,23 @@ console.log('\n§36 a Start that does not wait for good, as many openings as cho
     check('…four', four.ok && four.count === 4 && four.openers.length === 4);
     hub.cancelStart();
     hub.setOpenersWanted(3);
+    // How long each is (D224).
+    const asNarrator = await start({});
+    check('unless a length is chosen, the openings are as long as the narrator writes, as before', asNarrator.ok && asNarrator.length === 'narrator' && hub.pendingStart().length === 'narrator' && /about as long as one of the narrator's own messages there/.test(asked.system) && !/words long/.test(asked.system));
+    hub.cancelStart();
+    const longOnes = await start({ length: 'long' });
+    check('a length chosen: the request is told it outright', longOnes.ok && longOnes.length === 'long' && /each opener four to six paragraphs, about 450 to 650 words long/.test(asked.system) && hub.pendingStart().length === 'long');
+    const shortAgain = await hub.askOpenersAgain(longOnes.token, { length: 'short' });
+    check('asked again for another length: that length, and the Start holds it', shortAgain.ok && /each opener one paragraph, about 60 to 120 words long/.test(asked.system) && hub.pendingStart().length === 'short');
+    const sameAgain = await hub.askOpenersAgain(longOnes.token);
+    check('asked again with no length: as long as last time', sameAgain.ok && /each opener one paragraph, about 60 to 120 words long/.test(asked.system));
+    hub.cancelStart();
+    check('the length last chosen on the sheet is the one a Start with none asks for', hub.setOpenerLengthWanted('medium') === 'medium' && hub.openerLengthWanted() === 'medium' && extensionSettings.hub.openerLength === 'medium' && hub.setOpenerLengthWanted('nonsense') === 'narrator');
+    hub.setOpenerLengthWanted('medium');
+    const medium = await start({});
+    check('…medium', medium.ok && medium.length === 'medium' && /each opener two or three paragraphs, about 180 to 320 words long/.test(asked.system));
+    hub.cancelStart();
+    hub.setOpenerLengthWanted('narrator');
     // An answer that ran out before its end.
     answer = async () => JSON.stringify(five(5)).replace(/\{"title":"T4".*$/, '{"title":"T4","text":"Opening num');
     const cut = await start({ count: 5 });
@@ -3146,6 +3163,7 @@ console.log('\n§36 a Start that does not wait for good, as many openings as cho
     extensionSettings.liveWorld.pack = packWas;
     extensionSettings.hub.sceneCards = cardsWas;
     extensionSettings.hub.openers = openersWas;
+    extensionSettings.hub.openerLength = 'narrator';
     hub.__setOpenersTransport(null);
     hub.__setGapTransport(null);
     hub.__setRecapTransport(null);

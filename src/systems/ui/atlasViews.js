@@ -12,7 +12,7 @@ import { escapeHtml } from '../../utils/html.js';
 import { kindOf, kindCounts, filterMarkers, ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { draftRows, draftChain, FILL_COUNTS } from '../../utils/atlasSetup.js';
-import { GAPS, MAX_NOTE, MAX_WRAP, OPENERS, MAX_OPENERS, openersCount, countWord, startStepWords, elapsedWords } from '../../utils/hub.js';
+import { GAPS, MAX_NOTE, MAX_WRAP, OPENERS, MAX_OPENERS, OPENER_LENGTHS, openerLength, openersCount, countWord, startStepWords, elapsedWords } from '../../utils/hub.js';
 import { WORLD_SHAPES, WORLD_SIZES, WORLD_REGIONS } from '../../utils/worldGen.js';
 
 export const ATLAS_ID = 'dooms-atlas';
@@ -215,7 +215,7 @@ export function atlasSetupHtml({ step = 'notes', notes = '', reach = 'recent', c
  * @param {string} o.whereNew        a place typed in that is not on any map yet
  * @param {{ kind: string, label?: string }|null} o.from   what the scene is started from, said under the title
  */
-export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: '' }, sceneNo = 0, people = [], cast = [], extra = '', gap = { id: 'now', words: '' }, journey = '', seedText = '', note = '', error = '', pending = null, card = '', places = null, whereNew = '', from = null, chosen = 0, voices = false, listening = -1, newCard = false, readLine = '', detailsOpen = false, count = OPENERS, busy = null, kept = false } = {}) {
+export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: '' }, sceneNo = 0, people = [], cast = [], extra = '', gap = { id: 'now', words: '' }, journey = '', seedText = '', note = '', error = '', pending = null, card = '', places = null, whereNew = '', from = null, chosen = 0, voices = false, listening = -1, newCard = false, readLine = '', detailsOpen = false, count = OPENERS, length = 'narrator', busy = null, kept = false } = {}) {
     const known = !!(place && place.label);
     const where = known ? place.label : (pending && pending.place && pending.place.label) || 'here';
     const title = `${sceneNo ? `Scene ${sceneNo}` : 'A scene'}${known ? ` at ${e(where)}` : ''}`;
@@ -261,11 +261,11 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
             <ul class="dooms-atlas-openers">${openers || '<li class="dooms-atlas-none">No opening was written. Write your own below, or ask again.</li>'}</ul>
             <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">Or write the opening yourself</span>
                 <textarea class="dooms-atlas-input dooms-atlas-scene-own" maxlength="4000" placeholder="The first message of the scene, in the narrator's voice."></textarea></label>
+            ${openersRow({ count: p.count || list.length || count, length: p.length || length, again: true })}
             <div class="dooms-atlas-setup-actions">
                 ${list.length ? `<button type="button" class="dooms-atlas-btn is-primary" data-act="scene-pick"><i class="fa-solid fa-play" aria-hidden="true"></i> <span>Start ${sceneNo ? `scene ${sceneNo}` : 'the scene'}</span></button>` : ''}
                 <button type="button" class="dooms-atlas-btn" data-act="scene-own"><i class="fa-solid fa-pen" aria-hidden="true"></i> <span>Open with mine</span></button>
                 <button type="button" class="dooms-atlas-btn" data-act="scene-again"><i class="fa-solid fa-rotate" aria-hidden="true"></i> <span>Ask again</span></button>
-                ${openersPick(p.count || list.length || count, 'dooms-atlas-again-count', 'How many openings to ask for again')}
                 <button type="button" class="dooms-atlas-btn" data-act="scene-back">Back</button>
             </div>
         </div>`;
@@ -315,9 +315,9 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
             </fieldset>
         </details>
         ${err}
+        ${openersRow({ count, length })}
         <div class="dooms-atlas-setup-actions">
             <button type="button" class="dooms-atlas-btn is-primary" data-act="scene-write"><i class="fa-solid fa-feather" aria-hidden="true"></i> <span class="dooms-atlas-scene-write-label">${e(openersLabel(count))}</span></button>
-            ${openersPick(count, 'dooms-atlas-scene-openers', 'How many openings to write')}
             <button type="button" class="dooms-atlas-btn" data-act="setup-close">Not now</button>
         </div>
         <p class="dooms-atlas-start-note dooms-atlas-scene-howmany">${e(openersNote(count))}</p>
@@ -327,11 +327,21 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
 /** How long the sheet waits before it says a slow model can take minutes (D220). */
 export const BUSY_HINT_MS = 45000;
 
-/** The number of openings to write (D221), chosen beside the button: one to six, the last choice kept. */
-function openersPick(count, cls, label) {
+/**
+ * How many openings are written (D221) and how long each is (D224), on a
+ * row of their own above the buttons: one to six, and a size or as the
+ * narrator writes. The last choice of each is kept. On the openings'
+ * sheet (`again`) they are what Ask again asks for.
+ */
+function openersRow({ count = OPENERS, length = 'narrator', again = false } = {}) {
     const n = openersCount(count);
-    return `<label class="dooms-atlas-openers-pick"><span class="dooms-atlas-card-label">Openings</span>
-                <select class="dooms-atlas-input ${cls}" aria-label="${attr(label)}">${Array.from({ length: MAX_OPENERS }, (_, i) => `<option value="${i + 1}"${i + 1 === n ? ' selected' : ''}>${i + 1}</option>`).join('')}</select></label>`;
+    const len = openerLength(length);
+    return `<div class="dooms-atlas-openers-row">${again ? '<span class="dooms-atlas-card-label dooms-atlas-openers-for">Ask again for</span>' : ''}
+            <label class="dooms-atlas-openers-pick"><span class="dooms-atlas-card-label">Openings</span>
+                <select class="dooms-atlas-input ${again ? 'dooms-atlas-again-count' : 'dooms-atlas-scene-openers'}" aria-label="${again ? 'How many openings to ask for again' : 'How many openings to write'}">${Array.from({ length: MAX_OPENERS }, (_, i) => `<option value="${i + 1}"${i + 1 === n ? ' selected' : ''}>${i + 1}</option>`).join('')}</select></label>
+            <label class="dooms-atlas-openers-pick"><span class="dooms-atlas-card-label">Length</span>
+                <select class="dooms-atlas-input ${again ? 'dooms-atlas-again-length' : 'dooms-atlas-scene-length'}" aria-label="${again ? 'How long each opening is when asked again' : 'How long each opening is'}">${OPENER_LENGTHS.map(x => `<option value="${x.id}"${x.id === len ? ' selected' : ''}${x.words ? ` title="${attr(x.words)}"` : ''}>${e(x.label)}</option>`).join('')}</select></label>
+        </div>`;
 }
 
 /** The Write button's words for a number of openings. */

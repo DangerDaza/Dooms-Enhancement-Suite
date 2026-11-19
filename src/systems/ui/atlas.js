@@ -30,8 +30,8 @@ import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFac
 import { ATLAS_ID, ATLAS_TABS, openersLabel, openersNote, BUSY_HINT_MS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml, atlasCampaignGateHtml, atlasWorldChoiceHtml, sceneSummaryText } from './atlasViews.js';
 import { isCanonOn } from '../features/canon.js';
 import { isVoicesEnabled, getEngine, getEngineIfLoaded, unlockVoicesAudio } from '../voices/voiceBoot.js';
-import { lastScenePresent, sceneAway, deletePlan, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, stopStartWait, openersWanted, setOpenersWanted, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, campaignNow, campaignsDecide, campaignList, worldOfCampaign, worldsWithCampaigns, worldStories, lastStory, storyInFront, worldMap, setWorldMap, attachWorld, makeCampaignWorld, switchCampaign, makeCampaign, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
-import { describeStartResult, describeEndResult, describeDeleteResult, gapOf, hubConfig, packOf, readDirection, describeDirection, openersCount, startStepWords, elapsedWords, MAX_NOTE } from '../../utils/hub.js';
+import { lastScenePresent, sceneAway, deletePlan, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, stopStartWait, openersWanted, setOpenersWanted, openerLengthWanted, setOpenerLengthWanted, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, campaignNow, campaignsDecide, campaignList, worldOfCampaign, worldsWithCampaigns, worldStories, lastStory, storyInFront, worldMap, setWorldMap, attachWorld, makeCampaignWorld, switchCampaign, makeCampaign, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
+import { describeStartResult, describeEndResult, describeDeleteResult, gapOf, hubConfig, packOf, readDirection, describeDirection, openersCount, openerLength, startStepWords, elapsedWords, MAX_NOTE } from '../../utils/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
 
@@ -1070,7 +1070,7 @@ function openSceneStart({ id = '', seed = null, place = null, cast = null, note 
         // What was typed before and never started with is still here (D220): a sheet that had to be left, or a page
         // loaded again, does not cost the player their words. Words handed in (the End sheet's) take their place.
         note: String(note || '') || draftOf(startPlan.worldId), kept: !String(note || '') && !!draftOf(startPlan.worldId),
-        error: '', pending: null, world: worldKey(), detailsOpen: false, count: openersWanted(), busy: null,
+        error: '', pending: null, world: worldKey(), detailsOpen: false, count: openersWanted(), length: openerLengthWanted(), busy: null,
     };
     if (String(note || '')) keepDraft(startPlan.worldId, String(note));
     setup = { ...setup, readLine: describeDirection(directionOf(setup.note)) };
@@ -1170,7 +1170,7 @@ function readSceneForm() {
     }
     const note = String($p.find('.dooms-atlas-scene-note').val() || '').trim();
     // What brings the party there is the sheet's own (a rumour, the news, a way on the map): it has no box (D218).
-    return { cast, extra, gap, place, whereNew, seedText: setup && setup.seedText ? String(setup.seedText) : '', note, readLine: describeDirection(directionOf(note)), detailsOpen: !!$p.find('.dooms-atlas-scene-details').prop('open'), count: openersCount($p.find('.dooms-atlas-scene-openers').val() || (setup && setup.count)) };
+    return { cast, extra, gap, place, whereNew, seedText: setup && setup.seedText ? String(setup.seedText) : '', note, readLine: describeDirection(directionOf(note)), detailsOpen: !!$p.find('.dooms-atlas-scene-details').prop('open'), count: openersCount($p.find('.dooms-atlas-scene-openers').val() || (setup && setup.count)), length: openerLength($p.find('.dooms-atlas-scene-length').val() || (setup && setup.length)) };
 }
 
 /** Another place chosen in the sheet's Where: who was last seen there is ticked, and the way there is the map's when it can tell. What was typed stays. */
@@ -1236,7 +1236,8 @@ async function writeOpenings() {
     if (!setup || !setup.start || setup.step !== 'form') return;
     const f = readSceneForm();
     const run = ++startRun;
-    setOpenersWanted(f.count);    // the number chosen is the one offered next time
+    setOpenersWanted(f.count);    // the number chosen is the one offered next time, and the length (D224)
+    setOpenerLengthWanted(f.length);
     // The people ticked and the ones typed in are kept apart on the sheet, so a step back shows them as they were entered.
     setup = { ...setup, ...f, cast: f.cast.filter(n => setup.people.some(p => p.name === n)), step: 'busy', error: '', kept: false, busy: { step: 'world', words: '', count: f.count, since: Date.now(), again: false } };
     renderSetup();
@@ -1251,7 +1252,7 @@ async function writeOpenings() {
     const seed = setup.seed ? { ...setup.seed, text: f.seedText } : place.id ? { kind: 'place', id: place.id, label: place.label, text: f.seedText } : { kind: 'anywhere', label: '', text: f.seedText };
     let p;
     try {
-        p = await prepareScene({ worldId: setup.worldId, seed, place: place.id || place.label ? place : null, cast, gap, note: f.note, count: f.count, onStep: (at) => busyStep(run, at) });
+        p = await prepareScene({ worldId: setup.worldId, seed, place: place.id || place.label ? place : null, cast, gap, note: f.note, count: f.count, length: f.length, onStep: (at) => busyStep(run, at) });
     } catch (e) {
         p = { ok: false, reason: 'error', error: String(e && e.message || e) };    // the engine answers and does not throw; whatever else goes wrong lands here
     }
@@ -1343,12 +1344,13 @@ async function askOpeningsAgain() {
     const own = String($(`${root()} .dooms-atlas-scene-own`).val() || '');
     // As many as before, or the number chosen beside the button (D221); kept as the number offered next time.
     const count = setOpenersWanted(openersCount($(`${root()} .dooms-atlas-again-count`).val() || pending.count));
+    const length = setOpenerLengthWanted(openerLength($(`${root()} .dooms-atlas-again-length`).val() || pending.length));    // and as long (D224)
     const run = ++startRun;
-    setup = { ...setup, step: 'busy', error: '', count, own, busy: { step: 'openers', words: '', count, since: Date.now(), again: true } };
+    setup = { ...setup, step: 'busy', error: '', count, length, own, busy: { step: 'openers', words: '', count, since: Date.now(), again: true } };
     renderSetup();
     startBusyClock();
     let r;
-    try { r = await askOpenersAgain(pending.token, { count, onStep: (at) => busyStep(run, at) }); } catch (e) { r = { ok: false, reason: 'error', error: String(e && e.message || e) }; }
+    try { r = await askOpenersAgain(pending.token, { count, length, onStep: (at) => busyStep(run, at) }); } catch (e) { r = { ok: false, reason: 'error', error: String(e && e.message || e) }; }
     if (run !== startRun) { if (own) $(`${root()} .dooms-atlas-scene-own`).val(own); return; }    // stopped meanwhile: the openings from before are shown
     if (!setup || !setup.start) return;
     const why = r.ok ? ((r.errors || []).join(' ')) : r.reason === 'timeout' ? `${r.error || 'The request did not answer in time'}. The openings from before are still here.` : (r.errors ? r.errors.join(' ') : describeStartResult(r));
@@ -2367,6 +2369,11 @@ function build() {
         setup = { ...setup, count: n };
         $(`${root()} .dooms-atlas-scene-write-label`).text(openersLabel(n));
         $(`${root()} .dooms-atlas-scene-howmany`).text(openersNote(n));
+    });
+    // How long each opening is (D224): kept as it is chosen, for the next Start.
+    $(document).on('change', `${root()} .dooms-atlas-scene-length`, function () {
+        if (!setup || !setup.start || setup.step !== 'form') return;
+        setup = { ...setup, length: setOpenerLengthWanted(openerLength($(this).val())) };
     });
     $(document).on('change input', `${root()} .dooms-atlas-scene-details input, ${root()} .dooms-atlas-scene-details select`, function () { if (!$(this).hasClass('dooms-atlas-scene-where')) sceneDetailsChanged(); });
     // How it ended (D219) and what happens next, on the End sheet: kept as they are typed, the sheet not drawn again.

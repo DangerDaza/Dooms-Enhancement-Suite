@@ -38,7 +38,7 @@ import {
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
     readConflicts, mergeConflicts, normalizeConflicts, MAX_WRAP, MAX_NOTE, MAX_CAST, MAX_LINE,
-    openersCount, untouchedLore, loreSample, freshCount, asksForLore,
+    openersCount, untouchedLore, loreSample, freshCount, asksForLore, openerLength,
     ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, worldsByCampaign, loreLibraryOn,
     packOf, entryUntouched, storyIdsOf, nextStoryId, storyOfChat, lastStoryOf, storiesOf, storyPlayedAt,
 } from '../../utils/hub.js';
@@ -1134,7 +1134,8 @@ let startWait = null;      // the wait of the Start being prepared or asked agai
  * meanwhile is 'cancelled'. `onStep` is told what is being done
  * ({ step: 'world'|'gap'|'lore'|'book'|'lines'|'line'|'openers', words?, count? }),
  * for the sheet to say while it waits. `count` is how many openings are
- * asked for (D221); the number last chosen where none is given.
+ * asked for (D221) and `length` how long each is (D224); what was last
+ * chosen where none is given.
  */
 export async function prepareScene(args = {}) {
     try {
@@ -1147,7 +1148,7 @@ export async function prepareScene(args = {}) {
     }
 }
 
-async function prepareSceneRun({ worldId, seed = null, place = null, cast = [], gap = null, note = '', hookId = '', count = 0, onStep = null } = {}) {
+async function prepareSceneRun({ worldId, seed = null, place = null, cast = [], gap = null, note = '', hookId = '', count = 0, length = '', onStep = null } = {}) {
     const say = (step, more = {}) => { if (typeof onStep === 'function') { try { onStep({ step, ...more }); } catch (e) { /* the sheet's own */ } } };
     const g = guardStart(worldId);
     if (!g.ok) return g;
@@ -1160,6 +1161,7 @@ async function prepareSceneRun({ worldId, seed = null, place = null, cast = [], 
     // the line the sheet says so, and says the step again once the line is free.
     const lim = (step, more = {}) => ({ maxMs: timing.startMaxMs, stop: wait.stopped, onWait: (holder) => say(holder ? 'line' : step, holder ? {} : more) });
     const n = openersCount(count || cfg().openers);
+    const len = openerLength(length || cfg().openerLength);    // how long each opening is (D224): as chosen, else as last chosen
     say('world');
     const res = await limited(loadPack(packOf(g.id)), { ms: timing.readMaxMs, stop: wait.stopped, what: 'The world' });
     if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
@@ -1251,7 +1253,7 @@ async function prepareSceneRun({ worldId, seed = null, place = null, cast = [], 
     }
     const fresh = loreSample(pool, { from: 0, count: freshCount(n) });
     const ask = { wrap: wrapBefore, then, thenPeople, voices, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads };
-    const prompt = buildOpenersPrompt({ ...ask, count: n, fresh });
+    const prompt = buildOpenersPrompt({ ...ask, count: n, fresh, length: len });
     let openers = [];
     let when = null;
     let said = '';    // the place the scene opens in by the player's own words, as the request answered (D218)
@@ -1281,13 +1283,13 @@ async function prepareSceneRun({ worldId, seed = null, place = null, cast = [], 
     pending = {
         token, worldId: g.id, pack, card: g.card, memory, seed: seed && typeof seed === 'object' ? seed : { kind: 'anywhere', text: seedText }, given: { id: placeId, label, region }, place: placeBy(pack, { id: placeId, label, region }, note ? said : ''), cast: names, lines, gap: theGap, note: String(note || ''),
         weather, since, recaps, player: players, openers, when, errors, notes, prompt, movedMemory,
-        count: n, ask, pool, poolAt: 0, fresh,    // how many were asked for (D221); the lorebooks' untouched entries, kept in turn (D223)
+        count: n, length: len, ask, pool, poolAt: 0, fresh,    // how many were asked for (D221) and how long (D224); the lorebooks' untouched entries, kept in turn (D223)
         heldWhen: rightAfter && !then.back && (then.date || then.time) ? { date: then.date, time: then.time } : null,
         lore: { found: notesOf.found, missing: notesOf.missing, standing: !!notesOf.standing, books: notesOf.books, ...(voices.length ? { voices: voices.map(x => x.name) } : {}), ...(asksForLore(note) ? { fresh: fresh.map(f => f.name), unmet: pool.length } : {}) },
         stand, threads, continuity: { stand: stand.map(x => x.name), threads: threads.length },
         tail: { messages: lastLines.messages, scene: lastLines.scene, right: theGap.id === 'now', ...(then.date || then.time || then.weather || thenPeople.length ? { then: { date: then.date, time: then.time, weather: [then.weather, then.temperature].filter(Boolean).join(', '), fromTracker: !!lf, ...(thenPeople.length ? { people: thenPeople.map(x => x.name) } : {}) } } : {}) },
     };
-    return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes, lore: pending.lore, continuity: pending.continuity, tail: pending.tail, count: n };
+    return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes, lore: pending.lore, continuity: pending.continuity, tail: pending.tail, count: n, length: len };
 }
 
 /** What the sheet is told when an answer ran out before its end (D221): the openings that came whole are kept. */
@@ -1385,22 +1387,23 @@ export function setHubHookAside(worldId, hookId) {
 export function pendingStart() {
     return pending ? { token: pending.token, world: { id: pending.worldId, name: pending.pack.name }, place: pending.place, cast: pending.cast, gap: pending.gap, openers: pending.openers, when: pending.when, errors: pending.errors, notes: pending.notes, lore: pending.lore || null,
         // What the openings were written with, for the sheet to say (D178, D205), and the card that will speak them (D207).
-        continuity: pending.continuity || null, tail: pending.tail || null, card: { name: (pending.card && pending.card.name) || '' }, count: pending.count || pending.openers.length } : null;
+        continuity: pending.continuity || null, tail: pending.tail || null, card: { name: (pending.card && pending.card.name) || '' }, count: pending.count || pending.openers.length, length: pending.length || 'narrator' } : null;
 }
 
 /** Ask again (D119): three more; the old ones stay until the new land. */
-export async function askOpenersAgain(token, { count = 0, onStep = null } = {}) {
+export async function askOpenersAgain(token, { count = 0, length = '', onStep = null } = {}) {
     if (!pending || pending.token !== token) return { ok: false, reason: 'cancelled' };
     const p = pending;
     const say = (step, more = {}) => { if (typeof onStep === 'function') { try { onStep({ step, ...more }); } catch (e) { /* the sheet's own */ } } };
     const n = openersCount(count || p.count || cfg().openers);    // as many as before, or the number chosen beside the button (D221)
+    const len = openerLength(length || p.length || cfg().openerLength);    // as long as before, or the length chosen there (D224)
     if (startWait) startWait.stop();
     const wait = stopper();
     startWait = wait;
     // Asking again is asking for other faces too (D223): the next of the lorebooks' untouched entries, round again past the last.
     const at = p.pool && p.pool.length ? ((p.poolAt || 0) + freshCount(p.count)) % p.pool.length : 0;
     const fresh = p.pool && p.pool.length ? loreSample(p.pool, { from: at, count: freshCount(n) }) : [];
-    const prompt = p.ask ? buildOpenersPrompt({ ...p.ask, count: n, fresh }) : p.prompt;
+    const prompt = p.ask ? buildOpenersPrompt({ ...p.ask, count: n, fresh, length: len }) : p.prompt;
     say('openers', { count: n });
     try {
         const r = await request(prompt, { transport: openersTransport, label: 'openers', maxMs: timing.startMaxMs, stop: wait.stopped, onWait: (holder) => say(holder ? 'line' : 'openers', holder ? {} : { count: n }) });
@@ -1410,6 +1413,7 @@ export async function askOpenersAgain(token, { count = 0, onStep = null } = {}) 
         if (!v.ok) return { ok: false, reason: 'openers', errors: v.errors, openers: p.openers };
         p.openers = v.clean.openers;
         p.count = n;
+        p.length = len;
         p.prompt = prompt;
         p.poolAt = at;
         p.fresh = fresh;
@@ -1439,6 +1443,19 @@ export function cancelStart() {
 /** How many openings a Start asks for (D221): as last chosen on the Start sheet, three until one is. */
 export function openersWanted() {
     return cfg().openers;
+}
+
+/** How long an opening is (D224): as last chosen on the Start sheet, as the narrator writes until one is. */
+export function openerLengthWanted() {
+    return cfg().openerLength;
+}
+
+/** The length chosen, kept for the next Start. Nothing is drawn again for it. */
+export function setOpenerLengthWanted(id) {
+    const s = store();
+    const v = openerLength(id);
+    if (s.openerLength !== v) { s.openerLength = v; try { saveSettings(); } catch (e) { log('settings save failed', String(e && e.message || e)); } }
+    return v;
 }
 
 /** The number chosen, kept for the next Start. Nothing is drawn again for it. */

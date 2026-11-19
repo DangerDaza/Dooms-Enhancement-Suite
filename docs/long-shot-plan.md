@@ -2104,3 +2104,37 @@ who the Start says it gave; started with one shown first, and with one
 not; not offered again once in the story; none to give);
 `tools/atlas-browser-test.mjs` §5h (the sheet's line, with and without
 anyone to give).
+
+## 63. How long an opening is (2026-11-19, D224)
+
+The owner, after D221: "We should also add a way to change how long
+the opening will be". Until now the length was not the player's to
+say: an opening was written about as long as one of the narrator's own
+messages in the scene before, a paragraph or two where there was none,
+and cut at 4,000 characters. Asked how it should be chosen, what it
+should be until it is changed, and how long the longest should get:
+named sizes; as the narrator writes; about 700 words, which is the
+4,000 characters there were.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D224 | The length of an opening is chosen beside their number: as the narrator writes, or short, medium or long; the last choice is the one offered next time | **Held.** **The Start sheet** has Length beside Openings, the two on a row of their own above the buttons (it was one chooser between them): As the narrator writes (how it was, and what it is until another is chosen), Short (one paragraph, about 60 to 120 words), Medium (two or three paragraphs, about 180 to 320 words), Long (four to six paragraphs, about 450 to 650 words). **The openings' sheet** has the same row, said to be what Ask again asks for: asked again longer or shorter, or for more or fewer. **The request** is told a size outright, in place of "about as long as one of the narrator's own messages there" (and "whatever the length of the narrator's messages there": the rest of how the narrator wrote, the person, the tense, how speech is set out, still holds), or in place of "a paragraph or two" where there is no scene before. As the narrator writes, the request is word for word what it was. The length chosen is kept with the hub's settings (`openerLength`) and is what a Start with no sheet asks for (End and start the next scene, End and continue here). The most one opening may hold is as it was: Long stays within it. |
+
+What it does not do. A size is a target the model is given, not a
+count that is checked: an opening that comes back longer or shorter is
+kept as it came, up to the 4,000 characters. Long openings times
+several of them is a long answer, and one that runs out is kept as far
+as it came whole (D221). The length is one setting for every world.
+Run in the real SillyTavern at a phone's width: the row on the sheet
+(both choosers a finger tall, nothing off the screen); two long
+openings asked for (the request told four to six paragraphs, about 450
+to 650 words); asked again for one short one; back on the sheet with
+those chosen; the page loaded again, the choice still there.
+
+Tests: `tools/hub-test.mjs` (the four lengths, the setting, the
+request with a scene before and without for each, nothing else of it
+changed); `tools/hub-flow-test.mjs` §36 (as the narrator writes unless
+chosen, a length chosen, asked again for another and with none, the
+length kept for the next Start); `tools/atlas-browser-test.mjs` §5h
+(the chooser on the sheet and beside Ask again, the row above the
+buttons).

@@ -24,7 +24,7 @@ import {
     ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, activeCampaignWorldId, worldsByCampaign, loreLibraryOn,
     STORY_SEP, packOf, entryUntouched, storyIdsOf, nextStoryId, storyOfChat, storyPlayedAt, lastStoryOf, storiesOf,
     MAX_NOTE, BRIEF_NOTE, MAX_WRAP, readDirection, describeDirection,
-    MAX_OPENERS, openersCount, countWord, startStepWords, elapsedWords, asksForLore, loreEntryName, untouchedLore, loreSample, freshCount, LORE_FRESH_EACH,
+    MAX_OPENERS, openersCount, countWord, startStepWords, elapsedWords, asksForLore, loreEntryName, untouchedLore, loreSample, freshCount, LORE_FRESH_EACH, OPENER_LENGTHS, openerLength,
 } from '../src/utils/hub.js';
 import { normalizePack, seedWorldState, countMessage, applyAdvance, reconcileWithChat, seenInScene } from '../src/utils/liveWorld.js';
 import { visitPlace, reconcileVisited } from '../src/utils/worldMap.js';
@@ -44,7 +44,7 @@ const clock = pack.clocks[0];
 
 console.log('\n§1 the rules');
 {
-    check('defaults: later that day, 600 characters, the count of repeated phrases off, no bar above a scene\'s chat, a narrator card for every scene', same(defaultHubConfig(), { gap: 'later', recapChars: 600, styleLaw: false, nudgeAt: 60, strip: false, sceneCards: true, openers: 3 }));
+    check('defaults: later that day, 600 characters, the count of repeated phrases off, no bar above a scene\'s chat, a narrator card for every scene', same(defaultHubConfig(), { gap: 'later', recapChars: 600, styleLaw: false, nudgeAt: 60, strip: false, sceneCards: true, openers: 3, openerLength: 'narrator' }));
     check('a card for every scene is on unless switched off, by exactly that; the setting is kept with the hub\'s', hubConfig({}).sceneCards === true && hubConfig({ hub: { sceneCards: false } }).sceneCards === false && hubConfig({ hub: { sceneCards: 'no' } }).sceneCards === true && normalizeHub({ sceneCards: false }).sceneCards === false);
     check('a fresh chat is suggested after sixty messages unless the player says otherwise: any number from 0 (never) to 500', hubConfig({}).nudgeAt === 60 && hubConfig({ hub: { nudgeAt: 0 } }).nudgeAt === 0 && hubConfig({ hub: { nudgeAt: '80' } }).nudgeAt === 80 && hubConfig({ hub: { nudgeAt: 9999 } }).nudgeAt === 500 && hubConfig({ hub: { nudgeAt: -5 } }).nudgeAt === 0 && hubConfig({ hub: { nudgeAt: 'soon' } }).nudgeAt === 60 && hubConfig({ hub: { nudgeAt: '' } }).nudgeAt === 60);
     check('the count of repeated phrases is on only when switched on, by exactly that', hubConfig({}).styleLaw === false && hubConfig({ hub: { styleLaw: true } }).styleLaw === true && hubConfig({ hub: { styleLaw: 'yes' } }).styleLaw === false && hubConfig({ hub: { styleLaw: 1 } }).styleLaw === false);
@@ -822,6 +822,21 @@ console.log('\n§ new faces from the lorebooks (D223)');
     check('…and told to bring them in as the words ask, a different one in each opener, met for the first time, and named in "who"', /because Jack's words ask for someone or something out of them: bring them in as those words ask, a different one in each opener, each written as their entry says and met here for the first time \(Jack does not know them\)\. Whoever of them is in an opener is named in its "who", by the name in brackets\./.test(p.system));
     check('for one opener there is no "different one in each"', !/a different one in each opener/.test(buildOpenersPrompt({ player: 'Jack', note: 'x', count: 1, fresh: loreSample(pool, { count: 2 }) }).system));
     check('with none given the request is as it was', !buildOpenersPrompt({ player: 'Jack', note: 'x' }).user.includes('From the lorebooks') && !/out of them/.test(buildOpenersPrompt({ player: 'Jack', note: 'x' }).system));
+}
+
+console.log('\n§ how long an opening is (D224)');
+{
+    check('four lengths: as the narrator writes, which is how it was, and three sizes', same(OPENER_LENGTHS.map(x => x.id), ['narrator', 'short', 'medium', 'long']) && same(OPENER_LENGTHS.map(x => x.label), ['As the narrator writes', 'Short', 'Medium', 'Long']) && OPENER_LENGTHS[0].words === '' && OPENER_LENGTHS.slice(1).every(x => /paragraph/.test(x.words) && /words/.test(x.words)));
+    check('the length chosen is kept with the hub\'s settings; anything else is as the narrator writes', openerLength('long') === 'long' && openerLength('huge') === 'narrator' && openerLength(undefined) === 'narrator' && hubConfig({ hub: { openerLength: 'short' } }).openerLength === 'short' && hubConfig({ hub: { openerLength: 7 } }).openerLength === 'narrator' && normalizeHub({ openerLength: 'medium' }).openerLength === 'medium');
+    check('the longest size stays within what one opening may hold', /650 words/.test(OPENER_LENGTHS[3].words) && 650 * 6 <= MAX_OPENER_TEXT);
+    const lines = 'Narrator: The rain had not stopped.';
+    const asIs = buildOpenersPrompt({ player: 'Jack', tail: lines });
+    check('as the narrator writes, after a scene: about as long as the narrator\'s own messages there, as before', /about as long as one of the narrator's own messages there; no headings/.test(asIs.system) && asIs.system === buildOpenersPrompt({ player: 'Jack', tail: lines, length: 'narrator' }).system && asIs.system === buildOpenersPrompt({ player: 'Jack', tail: lines, length: 'nonsense' }).system);
+    check('…and with no scene before: a paragraph or two, as before', /it stops with the first move still Jack's; a paragraph or two, plain prose/.test(buildOpenersPrompt({ player: 'Jack' }).system));
+    const long = buildOpenersPrompt({ player: 'Jack', tail: lines, length: 'long' }).system;
+    check('a size chosen, after a scene: said outright, whatever the length of the narrator\'s messages; the rest of how the narrator wrote still holds', /the same person and tense, speech set out the same way \(its marks and any colour tags\), and each opener four to six paragraphs, about 450 to 650 words long, whatever the length of the narrator's messages there; no headings/.test(long) && !/about as long as one of the narrator's own messages/.test(long));
+    check('a size chosen, with no scene before: in place of a paragraph or two', /still Jack's; one paragraph, about 60 to 120 words, plain prose/.test(buildOpenersPrompt({ player: 'Jack', length: 'short' }).system) && /still Jack's; two or three paragraphs, about 180 to 320 words, plain prose/.test(buildOpenersPrompt({ player: 'Jack', length: 'medium' }).system) && !/a paragraph or two/.test(buildOpenersPrompt({ player: 'Jack', length: 'medium' }).system));
+    check('the length changes nothing else of the request', buildOpenersPrompt({ player: 'Jack', tail: lines, length: 'long' }).user === asIs.user);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

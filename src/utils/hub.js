@@ -77,6 +77,7 @@ const CONFIG_DEFAULTS = Object.freeze({
     strip: false,          // the strip above a scene's chat (D121): off, the scene's options are in the Doom button's menu (the owner, D200)
     sceneCards: true,      // every scene gets a narrator card of its own, its openings the card's greetings (the owner, D209); off: every scene is a chat on the world's one narrator card (D114)
     openers: OPENERS,      // how many openings a Start asks for, as last chosen on the Start sheet (the owner, D221)
+    openerLength: 'narrator',    // how long each is: as the narrator writes, or a size chosen on the Start sheet (the owner, D224)
 });
 
 export function defaultHubConfig() {
@@ -98,6 +99,7 @@ export function hubConfig(settings) {
         strip: typeof h.strip === 'boolean' ? h.strip : !!(settings && isObj(settings.fab) && settings.fab.knock !== 'menu' && (settings.fab.hidden === true || settings.fab.bypassFlyout === true)),
         sceneCards: typeof h.sceneCards === 'boolean' ? h.sceneCards : CONFIG_DEFAULTS.sceneCards,
         openers: openersCount(h.openers),
+        openerLength: openerLength(h.openerLength),
     };
 }
 
@@ -105,6 +107,25 @@ export function hubConfig(settings) {
 export function openersCount(n) {
     const v = Math.round(Number(n));
     return Number.isFinite(v) && v >= 1 ? Math.min(MAX_OPENERS, v) : OPENERS;
+}
+
+/**
+ * How long an opening is (D224). 'narrator' is how it was before there was
+ * a choice: about as long as one of the narrator's own messages in the
+ * scene before, a paragraph or two where there is none. The others say a
+ * size outright, in words the request is given; the longest stays within
+ * what one opening may hold (MAX_OPENER_TEXT).
+ */
+export const OPENER_LENGTHS = Object.freeze([
+    { id: 'narrator', label: 'As the narrator writes', words: '' },
+    { id: 'short', label: 'Short', words: 'one paragraph, about 60 to 120 words' },
+    { id: 'medium', label: 'Medium', words: 'two or three paragraphs, about 180 to 320 words' },
+    { id: 'long', label: 'Long', words: 'four to six paragraphs, about 450 to 650 words' },
+]);
+
+/** A length as it is kept: one of OPENER_LENGTHS' ids, 'narrator' for anything else. */
+export function openerLength(id) {
+    return OPENER_LENGTHS.some(x => x.id === id) ? id : 'narrator';
 }
 
 /** A small number in words, as the sheet says it ("three ways it could open"). */
@@ -875,8 +896,10 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
  * the narrator's template; and the exact JSON asked for.
  * @returns {{ system: string, user: string }}
  */
-export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [], tail = '', then = null, now = null, thenPeople = [], voices = [], wrap = '', fresh = [] } = {}) {
+export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [], tail = '', then = null, now = null, thenPeople = [], voices = [], wrap = '', fresh = [], length = 'narrator' } = {}) {
     const name = clean(world.name, 80) || 'the world';
+    // How long each opener is (D224): a size the player chose, said outright; else as it was (as the narrator writes).
+    const size = (OPENER_LENGTHS.find(x => x.id === openerLength(length)) || OPENER_LENGTHS[0]).words;
     // What the player says happens next (D218) is the main word on the scene: it outranks the place, the people and the time
     // given beside it. How they said the scene before ended (D219) is where this one opens from.
     const wish = clean(note, MAX_NOTE);
@@ -919,8 +942,8 @@ Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording
             ? `The last lines of the scene before are given as they were played, and this scene opens right after them: it carries straight on from that very moment. No time is skipped, nobody has moved unless those lines moved them, and nothing in them is told again or changed. Each opener is the next thing that happens there, and it stops with the next move still ${who}'s. `
             : `The last lines of the scene before are given as they were played, so that you know how things were left. This scene opens ${clean(gapWords, 80)} after them: do not carry that conversation on. Each opener is a new moment that follows from how things were left: the place as ${who} finds it now, who is there, the first thing that happens, and it stops with the first move still ${who}'s. `)
         : `Each opener: the place as ${who} finds it, who is there, the first thing that happens, and it stops with the first move still ${who}'s; `}${lastLines
-        ? `Write as the narrator wrote in those lines: the same person and tense, speech set out the same way (its marks and any colour tags), about as long as one of the narrator's own messages there; no headings, no dice, no tracker or status block, nothing resolved or decided. Make nothing up that those lines, the record or the notes do not give you: where you do not know, stay with what is there. `
-        : 'a paragraph or two, plain prose, no markup, no headings, no dice, nothing resolved or decided. '}Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${wish ? `What ${who} says happens next is given in their own words, and it comes first: open the scene the way it asks. Where it names the place, says who is there, or says how much time has passed, follow it over the place, the people and the time given elsewhere here; what it leaves unsaid is as given. "where" is the place the scene opens in by that. ` : ''}${ended ? `Where it is given how the scene before ended in ${who}'s own words, that happened, after its last lines: this scene opens from that end, not from the lines, and nothing in it is undone. ` : ''}${unmet.length ? `Entries of the lorebooks that are not in the story yet are given, because ${who}'s words ask for someone or something out of them: bring them in as those words ask${n > 1 ? ', a different one in each opener' : ''}, each written as their entry says and met here for the first time (${who} does not know them). Whoever of them is in an opener is named in its "who", by the name in brackets. ` : ''}${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standNow.length ? 'Where it is said how a person stands now, that is how the story left them: they pick up from there, and it holds over older notes where the two differ. ' : ''}${speak.length ? 'Where example lines are given for a person, they show that person\'s voice (their words, their rhythm, their manner): write what they say in it. The lines are examples and were never said in this story: do not repeat or quote them. ' : ''}${asTracked.length ? `Where it is said how the tracker had a person when the scene before stopped, they are still so as this scene opens: dressed as they were, in the state they were in${gapWords ? ', unless the time that has passed would have changed it' : ''}. What was on a person's mind is theirs: it shapes what they do and is not said aloud. ` : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${law ? `${law} ` : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
+        ? `Write as the narrator wrote in those lines: the same person and tense, speech set out the same way (its marks and any colour tags), ${size ? `and each opener ${size} long, whatever the length of the narrator's messages there` : 'about as long as one of the narrator\'s own messages there'}; no headings, no dice, no tracker or status block, nothing resolved or decided. Make nothing up that those lines, the record or the notes do not give you: where you do not know, stay with what is there. `
+        : `${size || 'a paragraph or two'}, plain prose, no markup, no headings, no dice, nothing resolved or decided. `}Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${wish ? `What ${who} says happens next is given in their own words, and it comes first: open the scene the way it asks. Where it names the place, says who is there, or says how much time has passed, follow it over the place, the people and the time given elsewhere here; what it leaves unsaid is as given. "where" is the place the scene opens in by that. ` : ''}${ended ? `Where it is given how the scene before ended in ${who}'s own words, that happened, after its last lines: this scene opens from that end, not from the lines, and nothing in it is undone. ` : ''}${unmet.length ? `Entries of the lorebooks that are not in the story yet are given, because ${who}'s words ask for someone or something out of them: bring them in as those words ask${n > 1 ? ', a different one in each opener' : ''}, each written as their entry says and met here for the first time (${who} does not know them). Whoever of them is in an opener is named in its "who", by the name in brackets. ` : ''}${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standNow.length ? 'Where it is said how a person stands now, that is how the story left them: they pick up from there, and it holds over older notes where the two differ. ' : ''}${speak.length ? 'Where example lines are given for a person, they show that person\'s voice (their words, their rhythm, their manner): write what they say in it. The lines are examples and were never said in this story: do not repeat or quote them. ' : ''}${asTracked.length ? `Where it is said how the tracker had a person when the scene before stopped, they are still so as this scene opens: dressed as they were, in the state they were in${gapWords ? ', unless the time that has passed would have changed it' : ''}. What was on a person's mind is theirs: it shapes what they do and is not said aloud. ` : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${law ? `${law} ` : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
     const people = cast.length ? cast.map(c => (typeof c === 'string' ? clean(c, 260) : personLine(c.name, c))).join('\n- ') : 'no one in particular';
     const q = [quests && quests.main && quests.main !== 'None' ? `Main: ${clean(quests.main, 200)}` : '', ...((quests && Array.isArray(quests.optional)) ? quests.optional.map(x => clean(x, 200)).filter(Boolean).slice(0, 6) : [])].filter(Boolean);
     const user = `World: ${name}${world.blurb ? `. ${clean(world.blurb, 600)}` : ''}

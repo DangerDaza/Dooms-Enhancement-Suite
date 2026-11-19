@@ -363,7 +363,9 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-busy-step { font-weight: 600; }
 .dooms-atlas-busy-line { font-variant-numeric: tabular-nums; margin-top: 8px; }
 .dooms-atlas-setup-card.is-busy .dooms-atlas-setup-actions { margin-top: 12px; }
-/* How many openings to write (D221), beside the button. */
+/* How many openings to write (D221) and how long each is (D224): a row of their own above the buttons. */
+.dooms-atlas-openers-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 10px 0 8px; }
+.dooms-atlas-openers-for { margin: 0; flex: 0 0 100%; }
 .dooms-atlas-openers-pick { display: inline-flex; align-items: center; gap: 6px; }
 .dooms-atlas-openers-pick .dooms-atlas-card-label { margin: 0; }
 .dooms-atlas-openers-pick select.dooms-atlas-input { width: auto; min-width: 58px; padding: 6px 8px; }
