@@ -77,6 +77,25 @@
 .dooms-atlas-mixup p { margin: 0; }
 .dooms-atlas-mixup-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px !important; }
 .dooms-atlas-mixup-acts .dooms-atlas-btn { font-size: 1em; padding: 5px 9px; }
+/* What happens next (D218): the main word on a scene, at the head of the Start sheet; the details folded under it. How it ended (D219), on the End sheet. */
+.dooms-atlas-scene-next { position: relative; }
+.dooms-atlas-scene-next textarea, .dooms-atlas-end-next, .dooms-atlas-end-wrap { width: 100%; box-sizing: border-box; min-height: 7.5em; resize: vertical; line-height: 1.45; }
+.dooms-atlas-end-wrap { min-height: 4.5em; }
+.dooms-atlas-scene-count { display: block; margin-top: 3px; text-align: right; font-size: 0.7em; color: var(--atlas-muted); }
+.dooms-atlas-scene-read { color: var(--atlas-accent2); }
+.dooms-atlas-scene-read > span { color: var(--atlas-text); }
+.dooms-atlas-scene-seedline { font-style: italic; overflow-wrap: anywhere; }
+.dooms-atlas-scene-details { border: 1px solid var(--atlas-line); border-radius: var(--atlas-radius); padding: 0 10px; }
+.dooms-atlas-scene-details[open] { padding-bottom: 10px; }
+.dooms-atlas-scene-details > summary { cursor: pointer; padding: 9px 0; display: flex; align-items: baseline; gap: 8px; list-style: none; }
+.dooms-atlas-scene-details > summary::-webkit-details-marker { display: none; }
+.dooms-atlas-scene-details > summary::before { content: '▸'; color: var(--atlas-muted); flex: 0 0 auto; }
+.dooms-atlas-scene-details[open] > summary::before { content: '▾'; }
+.dooms-atlas-scene-details > summary .dooms-atlas-card-label { flex: 0 0 auto; margin: 0; }
+.dooms-atlas-scene-summary { flex: 1 1 auto; min-width: 0; font-size: 0.8em; color: var(--atlas-muted); overflow-wrap: anywhere; }
+.dooms-atlas-scene-details[open] .dooms-atlas-scene-summary { display: none; }
+.dooms-atlas-scene-details > .dooms-atlas-scene-field { margin-top: 8px; }
+.dooms-atlas-end-wrap-row { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 /* What the Atlas asks for in place of the tabs (D213): a campaign, or the campaign's world. */
 .dooms-atlas-gate { display: flex; flex-direction: column; gap: 10px; }
 .dooms-atlas-gate h3 { margin: 0; font-size: 1.05em; font-family: var(--atlas-display); color: var(--atlas-text); overflow-wrap: anywhere; }

@@ -27,11 +27,11 @@ import { startTravelCut, getPendingQuestCut, getCompletedQuests, QUESTS_DONE_CHA
 import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
-import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml, atlasCampaignGateHtml, atlasWorldChoiceHtml } from './atlasViews.js';
+import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml, atlasCampaignGateHtml, atlasWorldChoiceHtml, sceneSummaryText } from './atlasViews.js';
 import { isCanonOn } from '../features/canon.js';
 import { isVoicesEnabled, getEngine, getEngineIfLoaded, unlockVoicesAudio } from '../voices/voiceBoot.js';
 import { lastScenePresent, sceneAway, deletePlan, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, campaignNow, campaignsDecide, campaignList, worldOfCampaign, worldsWithCampaigns, worldStories, lastStory, storyInFront, worldMap, setWorldMap, attachWorld, makeCampaignWorld, switchCampaign, makeCampaign, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
-import { describeStartResult, describeEndResult, describeDeleteResult, gapOf, hubConfig, packOf } from '../../utils/hub.js';
+import { describeStartResult, describeEndResult, describeDeleteResult, gapOf, hubConfig, packOf, readDirection, describeDirection } from '../../utils/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
 
@@ -1042,7 +1042,7 @@ function wayTo(placeId) {
  * 'person', with `place` where they were last seen), a rumour, a line of
  * news, a hook, an earlier scene to go on from, or nothing at all.
  */
-function openSceneStart({ id = '', seed = null, place = null, cast = null } = {}) {
+function openSceneStart({ id = '', seed = null, place = null, cast = null, note = '' } = {}) {
     if (!model || !startPlan.ok) return;
     const m = id ? model.markers.find(x => x.id === id) : null;
     if (id && !m) return;
@@ -1067,10 +1067,41 @@ function openSceneStart({ id = '', seed = null, place = null, cast = null } = {}
         seed: sd, from: sd && sd.kind && !['place', 'anywhere'].includes(sd.kind) ? { kind: sd.kind, label: sd.label || '' } : null,
         gap: way.gap, journey: way.journey,
         seedText: sd && sd.text ? String(sd.text) : (way.from && way.journey ? `The party came here from ${way.from.label}: ${way.journey}.` : ''),
-        note: '', error: '', pending: null, world: worldKey(),
+        note: String(note || ''), error: '', pending: null, world: worldKey(), detailsOpen: false,
     };
+    setup = { ...setup, readLine: describeDirection(directionOf(setup.note)) };
     $(`${root()} .dooms-atlas-start`).prop('hidden', true);
     renderSetup();
+}
+
+/**
+ * What the player's words for the scene say of where, who and when (D218),
+ * read against the places the sheet can open in and the people the world
+ * knows. Where the sheet was opened from a place's own card, the place is
+ * that card's and is not read out of the words.
+ */
+function directionOf(text) {
+    if (!setup || !setup.start) return { place: null, people: [], gap: null };
+    const d = readDirection(text, { places: setup.places || [], people: (setup.people || []).map(p => p.name) });
+    return setup.places ? d : { ...d, place: null };
+}
+
+/** The box typed in: its count, and what was read of it, without the sheet being drawn again (the caret stays). */
+function sceneNoteTyped(el) {
+    if (!setup || !setup.start || setup.step !== 'form') return;
+    const text = String(el.value || '');
+    const line = describeDirection(directionOf(text));
+    setup = { ...setup, note: text, readLine: line };
+    const $p = $(`${root()} .dooms-atlas-setup`);
+    $p.find('.dooms-atlas-scene-count').text(`${text.length.toLocaleString('en-US')} / ${Number(el.getAttribute('maxlength') || 2000).toLocaleString('en-US')}`);
+    $p.find('.dooms-atlas-scene-read').prop('hidden', !line).find('span').text(line);
+}
+
+/** A detail changed: the line that stands for them while they are folded says so. */
+function sceneDetailsChanged() {
+    if (!setup || !setup.start || setup.step !== 'form') return;
+    const f = readSceneForm();
+    $(`${root()} .dooms-atlas-scene-summary`).text(sceneSummaryText({ place: f.place, places: setup.places, whereNew: f.whereNew, cast: f.cast.filter(n => setup.people.some(p => p.name === n)), extra: f.extra, gap: f.gap }));
 }
 
 /** A person as a way in (D193): the sheet with them ticked, at the place they were last seen. */
@@ -1115,7 +1146,9 @@ function readSceneForm() {
         else if (sel) { const x = setup.places.find(y => y.id === sel); place = { id: sel, label: x ? x.label : sel }; }
         else place = { id: '', label: '' };
     }
-    return { cast, extra, gap, place, whereNew, seedText: String($p.find('.dooms-atlas-scene-seed').val() || '').trim(), note: String($p.find('.dooms-atlas-scene-note').val() || '').trim() };
+    const note = String($p.find('.dooms-atlas-scene-note').val() || '').trim();
+    // What brings the party there is the sheet's own (a rumour, the news, a way on the map): it has no box (D218).
+    return { cast, extra, gap, place, whereNew, seedText: setup && setup.seedText ? String(setup.seedText) : '', note, readLine: describeDirection(directionOf(note)), detailsOpen: !!$p.find('.dooms-atlas-scene-details').prop('open') };
 }
 
 /** Another place chosen in the sheet's Where: who was last seen there is ticked, and the way there is the map's when it can tell. What was typed stays. */
@@ -1143,8 +1176,14 @@ async function writeOpenings() {
     setup = { ...setup, ...f, cast: f.cast.filter(n => setup.people.some(p => p.name === n)), step: 'busy', error: '' };
     renderSetup();
     // What the scene comes from rides with it (a hook played is taken as its quest); its text is the player's to change.
-    const seed = setup.seed ? { ...setup.seed, text: f.seedText } : f.place.id ? { kind: 'place', id: f.place.id, label: f.place.label, text: f.seedText } : { kind: 'anywhere', label: '', text: f.seedText };
-    const p = await prepareScene({ worldId: setup.worldId, seed, place: f.place.id || f.place.label ? f.place : null, cast: f.cast, gap: f.gap, note: f.note });
+    // The player's own words come first (D218): the place of the map they name, the people they name and the time they
+    // say has passed take the place of what the details say. The sheet keeps the details as they were entered.
+    const d = directionOf(f.note);
+    const place = d.place || f.place;
+    const cast = [...f.cast, ...d.people.filter(n => !f.cast.some(c => c.toLowerCase() === n.toLowerCase()))];
+    const gap = d.gap ? gapOf(d.gap.id, d.gap.words) : f.gap;
+    const seed = setup.seed ? { ...setup.seed, text: f.seedText } : place.id ? { kind: 'place', id: place.id, label: place.label, text: f.seedText } : { kind: 'anywhere', label: '', text: f.seedText };
+    const p = await prepareScene({ worldId: setup.worldId, seed, place: place.id || place.label ? place : null, cast, gap, note: f.note });
     if (!setup || !setup.start) { cancelStart(); return; }    // the sheet was closed meanwhile
     if (!p.ok) { setup = { ...setup, step: 'form', error: describeStartResult(p) }; renderSetup(); return; }
     setup = { ...setup, step: 'pick', chosen: 0, pending: pendingStart() || p, error: p.errors && p.errors.length ? p.errors.join(' ') : '' };
@@ -1247,7 +1286,7 @@ async function openEndScene() {
     arm(null);
     const cur = currentScene();
     if (!cur) { result = 'This chat is not a scene, so there is nothing to end.'; render(); return; }
-    setup = { end: true, prep: { scene: cur.scene, mark: cur.mark }, busy: true, states: {}, result: null, error: '', world: worldKey() };
+    setup = { end: true, prep: { scene: cur.scene, mark: cur.mark }, busy: true, states: {}, result: null, error: '', world: worldKey(), wrap: '', wrapIn: '', next: '' };
     $(`${root()} .dooms-atlas-start`).prop('hidden', true);
     renderSetup();
     const p = await prepareEnd({ onStep: (g) => { if (setup && setup.end && setup.busy) { setup = { ...setup, passes: g.states }; renderSetup(); } } });
@@ -1257,9 +1296,43 @@ async function openEndScene() {
     renderSetup();
 }
 
+/** The line beside "Write the record again with this": whether what is typed is in the record yet. Set as it is typed. */
+function syncWrapRow() {
+    if (!setup || !setup.end) return;
+    const text = String(setup.wrap || '').trim();
+    const inRecord = !!text && text === String(setup.wrapIn || '').trim();
+    const $p = $(`${root()} .dooms-atlas-setup`);
+    $p.find('[data-act="end-rewrap"]').prop('disabled', !text || inRecord || endRunning());
+    $p.find('.dooms-atlas-end-wrap-note').text(inRecord ? 'The record below was written with it.' : 'Not in the record yet: End scene writes it in first.');
+}
+
+/**
+ * The record written again with how the player says the scene ended
+ * (D219): one request, and the sheet shows the record, where people
+ * stand and the threads as they come out of it. False when it could not be.
+ */
+async function rewriteRecord() {
+    if (!setup || !setup.end || !setup.prep || endRunning()) return false;
+    const wrap = String(setup.wrap || '').trim();
+    if (!wrap) return true;
+    setup = { ...setup, busy: true, error: '', passes: null };
+    renderSetup();
+    const p = await prepareEnd({ wrap, onStep: (g) => { if (setup && setup.end && setup.busy) { setup = { ...setup, passes: g.states }; renderSetup(); } } });
+    if (!setup || !setup.end) return false;
+    if (!p.ok) { setup = { ...setup, busy: false, error: describeEndResult(p) }; renderSetup(); return false; }
+    if (p.error) { setup = { ...setup, busy: false, error: `The record could not be written again with it (${p.error}). The record as it was stands; End scene keeps your words with the scene all the same.`, wrapIn: wrap }; renderSetup(); return false; }
+    setup = { ...setup, prep: p, busy: false, wrapIn: wrap };
+    renderSetup();
+    return true;
+}
+
 /** The scene ended: the record kept, the ledger read, the chat's stores made the world's memory, the world moved on. Each part's state is shown as it runs. */
-async function endSceneGo({ thenContinue = false } = {}) {
+async function endSceneGo({ thenContinue = false, thenNext = false } = {}) {
     if (!setup || !setup.end || !setup.prep || endRunning()) return;
+    // How the player says it ended (D219) is written into the record before the scene is ended with it.
+    const wrap = String(setup.wrap || '').trim();
+    if (wrap && wrap !== String(setup.wrapIn || '').trim() && !(await rewriteRecord())) return;
+    if (!setup || !setup.end || !setup.prep) return;
     const $p = $(`${root()} .dooms-atlas-setup`);
     const recap = String($p.find('.dooms-atlas-end-recap').val() || '').trim();
     const skipCanon = $p.find('.dooms-atlas-end-skip-canon').is(':checked');
@@ -1277,7 +1350,7 @@ async function endSceneGo({ thenContinue = false } = {}) {
     setup = { ...setup, prep: { ...setup.prep, recap, continuity: continuityShown(setup.prep.continuity, cont), ...(counted ? { style: { ...setup.prep.style, phrases: counted.map(h => ({ ...h, ticked: chosen.has(h.phrase) })) } } : {}) }, states, error: '' };
     renderSetup();
     const onStep = (name, state) => { if (setup && setup.end) { setup = { ...setup, states: { ...setup.states, [name]: state } }; renderSetup(); } };
-    const r = await commitEnd({ recap, skipRecap: !recap, skipCanon, skipWorld, replaceMemory, onStep, bans, continuity: continuityChange(cont), conflicts: Array.isArray(setup.prep.conflicts) ? setup.prep.conflicts : undefined });
+    const r = await commitEnd({ recap, skipRecap: !recap, skipCanon, skipWorld, replaceMemory, onStep, bans, continuity: continuityChange(cont), conflicts: Array.isArray(setup.prep.conflicts) ? setup.prep.conflicts : undefined, wrap });
     if (!setup || !setup.end) return;
     if (!r.ok) { setup = { ...setup, states: { ...setup.states, snapshot: 'failed' }, error: describeEndResult(r) }; renderSetup(); return; }
     setup = { ...setup, result: r, states: { ...setup.states, canon: r.canon === 'ok' ? 'ok' : r.canon === 'failed' ? 'failed' : setup.states.canon, world: ['ok', 'failed', 'kept', 'skipped'].includes(r.world) ? r.world : setup.states.world, snapshot: r.snapshot === 'kept' ? 'kept' : 'ok', book: r.book === 'ok' ? 'ok' : r.book === 'failed' ? 'failed' : 'off' }, prep: { ...setup.prep, book: r.bookResult && r.bookResult.name ? r.bookResult.name : setup.prep.book } };
@@ -1285,6 +1358,17 @@ async function endSceneGo({ thenContinue = false } = {}) {
     setup = { ...setup, canUndo: !thenContinue && canUndoEnd().ok };    // one Undo puts the End back, all of it (D190)
     render();    // the chat in front is an ended scene now: the map shows the world as it stands
     renderSetup();
+    // End and start the next scene (D218): the Start sheet with what was typed for it; with words, its openings at once.
+    if (thenNext) {
+        const note = String(setup.next || '').trim();
+        setup = null;
+        renderSetup();
+        render();
+        if (!startPlan.ok) { result = `The scene is ended. ${whyNoStart()}`; render(); return; }
+        openSceneStart({ note });
+        if (note && setup && setup.start) await writeOpenings();
+        return;
+    }
     if (!thenContinue) return;
     // End and continue here (D181): the next scene opened straight on from this one, its first opening taken as it comes.
     setup = { ...setup, error: '', going: 'Writing how the next scene opens…' };
@@ -1881,6 +1965,8 @@ function build() {
             if (act === 'end-scene') { await openEndScene(); return; }
             if (act === 'end-go') { await endSceneGo(); return; }
             if (act === 'end-undo') { await undoEndNow(); return; }
+            if (act === 'end-rewrap') { await rewriteRecord(); return; }
+            if (act === 'end-next') { await endSceneGo({ thenNext: true }); return; }
             if (act === 'end-continue') { await endSceneGo({ thenContinue: true }); return; }
             if (act === 'scene-start') { ev.stopPropagation(); openSceneStart({ id: this.getAttribute('data-id') || '' }); return; }
             // The Scenes tab (D193): a scene started from the sheet alone, and what can be done with each scene of the world.
@@ -2190,6 +2276,12 @@ function build() {
         startFromLine(kind, this.textContent, i === null ? -1 : Number(i));
     });
     $(document).on('change', `${root()} .dooms-atlas-scene-where`, function () { sceneWhereChanged(); });
+    // What happens next (D218): what was read of the words as they are typed; the folded details' line as they change.
+    $(document).on('input', `${root()} .dooms-atlas-scene-note`, function () { sceneNoteTyped(this); });
+    $(document).on('change input', `${root()} .dooms-atlas-scene-details input, ${root()} .dooms-atlas-scene-details select`, function () { if (!$(this).hasClass('dooms-atlas-scene-where')) sceneDetailsChanged(); });
+    // How it ended (D219) and what happens next, on the End sheet: kept as they are typed, the sheet not drawn again.
+    $(document).on('input', `${root()} .dooms-atlas-end-wrap`, function () { if (!setup || !setup.end) return; setup = { ...setup, wrap: String($(this).val() || '') }; syncWrapRow(); });
+    $(document).on('input', `${root()} .dooms-atlas-end-next`, function () { if (setup && setup.end) setup = { ...setup, next: String($(this).val() || '') }; });
     // The opening marked to be shown first (D207): kept, and shown on the cards in place (what was typed below stays).
     $(document).on('change', `${root()} .dooms-atlas-opener-pick`, function () {
         const i = Number($(this).val()) || 0;

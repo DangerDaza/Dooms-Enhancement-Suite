@@ -1875,3 +1875,84 @@ story, forgotten when taken off, made safe); `tools/hub-flow-test.mjs`
 §34 (made in one story's chat and read in the other's, both ways, in a
 chat part of no story, in a scene, a story's own place put on the map,
 the blank world's own map, a world from before).
+
+## 57. What happens next: the main word on a scene (2026-11-19, D218)
+
+The owner, with the Start sheet and its last field circled (What you
+want from the scene, one line of 300 characters under Where, Who is
+there, When and What brings the party there): "We need to make this
+part accept more characters and become the main way that users
+transition between scenes." Asked how the sheet should be laid out
+around it, which wins where it disagrees with the other fields, whether
+it belongs on the End sheet too, and how much it should take: the box
+first with the details folded; my words win; on End too; 2,000
+characters.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D218 | The player says what happens next in a box of 2,000 characters at the head of the sheet; it outranks where, who and when; ending a scene and starting the next is one step | **Held.** **The Start sheet** opens on **What happens next**: a tall box, 2,000 characters (it was a line of 300), its count under it. Where, Who is there and When are folded under **Details**, said in one line while folded ("Where the story left off · Isabella · days later"), there to set what the words leave unsaid. What brings the party there has no box: its text is the sheet's own where it was opened from a rumour, the news, a hook or a way on the map, shown under the title and sent as before; anything else the player would have typed there goes in the one box. **The words win.** What they say of where, who and when is read as they are typed, with no request (`readDirection`, `src/utils/hub.js`): a place of the map they name (the longest name found), the people the world knows who are named (by their whole name, by the name before what is said of them, or by a first name that is no one else's), and how much time they say has passed ("three days later", "the next morning", "after two weeks", or none: "right after"). The sheet says what it read under the box ("From your words: at The Afterlife · with Rogue · three days later"), and that takes the place of the details when the openings are asked for: the scene's place, its people (theirs added to the ones ticked) and the gap the world is moved by. What cannot be read that way (a place on no map, a stranger) the openings' own request is given: it is told the player's words come first, over the place, the people and the time given beside them, and answers with the place the scene opens in (`where`); a place plainly other than the one given moves the scene there (a place of the world or of its map by that name, else one on no map yet), and the same place said another way does not. With nothing typed the request is as it was. The words are sent whole to the openings; the scene's brief, which rides every reply, carries the first 600 characters. **The End sheet** has the same box, under the record, and **End and start the next scene**: the scene is ended, and the next one's openings are written at once from what was typed; with nothing typed the Start sheet opens to be typed in. End and continue here (D181: the same place, the same people, no time passed) stays beside it. |
+
+What it does not do. The reading without a request knows only what the
+map and the world know by name and a set of ways of saying time; what
+it misses is left to the openings' request, which is told the words
+win but moves only the scene's place by its answer: a person the world
+does not know is in the opening as the words say and is not added to
+the scene's list of people, and a time said in a way that was not read
+does not move the world's clocks by itself (When, in the details,
+does). Where the sheet was opened from a place's own card the place is
+that card's, whatever the words name. The details' one line shows them
+as they are set, not as the words changed them: the line under the box
+says that. Run in the real SillyTavern at a phone's width: the sheet
+(the box, its count, the details folded and opened), words naming a
+place of the world, two of its people and "three days later", what was
+read of them, the openings' request (the words, that place, that gap,
+the place asked back), the scene started at that place with those
+people; the End sheet, the next scene's words typed, End and start the
+next scene, the openings of the next asked from them.
+
+Tests: `tools/hub-test.mjs` (the lengths, what is read of the words:
+places, people, time, none; the line for the sheet; the request with
+and without words, the place asked back, 2,000 characters sent; the
+answer's place kept; the brief's cut); `tools/hub-flow-test.mjs` §35
+(the words sent whole, the scene moved to a place on no map, to a
+place of the world, not moved by a rephrasing nor by an answer nobody
+asked, asked again, started there with its brief);
+`tools/atlas-browser-test.mjs` §5h, §5i, §5k (the box and its count
+first, the details folded and opened, what was read, the End sheet's
+box and its button).
+
+## 58. How it ended: a wrap-up at the End of a scene (2026-11-19, D219)
+
+The owner, while D218 was being built: "Also let's add a wrap up
+section to the end scene where the user can optionaly say how the scene
+ended if there are any lose threads." A scene's chat often stops short
+of its end: the last reply leaves a deal half struck, and the player
+knows how it came out. The record was written from the chat alone, so
+the next scene picked up from the last line played.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D219 | The End sheet asks, optionally, how the scene ended; what the player says happened is the end of the scene for the record, the ledger, where people stand, the threads and the next scene | **Held.** **The sheet** has **How it ended (optional)** above the record: 2,000 characters. The record is written when the sheet opens, as before, so the player reads it (and the threads it leaves open) and says how it ended where it stops short. **Write the record again with this** asks for the record once more with the player's words given after the scene, as what happened: the record closes on them, where the people stand is where they leave them, and a thread they settle is closed; they are the player's account, not an instruction to the model. The sheet says whether what is typed is in the record yet. **End scene** with words not yet written in writes them in first (one request), then ends. **Kept and passed on**: the words are kept with the scene's record (`wrap`); Canon's read of the scene at its End is given them after the scene (`updateCanon`'s `also`), so the ledger has what they establish; and the next scene's openings are told them after the last lines played, and that the scene opens from that end, not from the lines. A scene ended with nothing typed keeps none and nothing is told. For a long scene whose record is written in parts, they go with the last part. |
+
+What it does not do. The words are not put into the chat: the chat is
+as it was played, and a reader of it alone does not see them (the
+scene's record does). They are not checked against the chat: what the
+player says happened, happened. Written into the record after it was
+read, the record as rewritten is not shown again before the End where
+End scene writes it in by itself; Write the record again shows it, and
+one Undo puts the End back. A scene ended before this has none. Run in
+the real SillyTavern at a phone's width: the words typed, written into
+the record (the record's request given them, the record changed, the
+sheet saying so), ended (kept with the scene, the ledger's read given
+them), the next scene's openings told them; and End scene pressed with
+words not written in (the record asked for again with them, then
+ended).
+
+Tests: `tools/hub-test.mjs` (kept with the record, gone when ended
+again without, the record's request with and without them and for a
+part that is not the last, the next scene's openings told them);
+`tools/hub-flow-test.mjs` §35 (the record written first without, then
+with; ended: kept, the ledger's read given them; the next scene's
+openings; a scene ended with none); `tools/atlas-browser-test.mjs` §5i
+(the box above the record, nothing to write in, typed, written in,
+while writing, ended).

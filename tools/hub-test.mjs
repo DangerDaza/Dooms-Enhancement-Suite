@@ -23,6 +23,7 @@ import {
     loreEntries, castLore, standingLore, LORE_PER_PERSON, LORE_STANDING, sceneLength, sceneIsLong, continuationSeed,
     ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, activeCampaignWorldId, worldsByCampaign, loreLibraryOn,
     STORY_SEP, packOf, entryUntouched, storyIdsOf, nextStoryId, storyOfChat, storyPlayedAt, lastStoryOf, storiesOf,
+    MAX_NOTE, BRIEF_NOTE, MAX_WRAP, readDirection, describeDirection,
 } from '../src/utils/hub.js';
 import { normalizePack, seedWorldState, countMessage, applyAdvance, reconcileWithChat, seenInScene } from '../src/utils/liveWorld.js';
 import { visitPlace, reconcileVisited } from '../src/utils/worldMap.js';
@@ -181,7 +182,7 @@ console.log('\n§4 the brief');
 console.log('\n§5 the openers');
 {
     const p = buildOpenersPrompt({ world: { name: 'Harbourside', blurb: 'A port under a blockade.', template: 'Second person, present tense.' }, place: 'Customs house', region: 'The Harbour', weather: '☀️ clear', date: 'Day 12', time: 'evening', gapWords: 'the next day', cast: [{ name: 'Captain Reyes', tier: 'known' }], seed: 'The cutter will search every hold.', canonBlock: buildCanonBlock(memory.stores.dooms_canon), recaps: ['Jordan met Marit.', 'Jordan arrived.'], quests: { main: 'Find the ring', optional: ['Pay'] }, player: 'Jordan', note: 'find the ring' });
-    check('the request names the world, the spot, the gap, the people, the seed, the ledger, last time, the quests, the wish, the rules and the JSON shape', p.system.includes('narrator of Harbourside') && p.system.includes('"openers"') && p.system.includes('Second person, present tense.') && p.system.includes('Never speak or act for Jordan') && p.user.includes('Customs house (The Harbour)') && p.user.includes('this scene opens the next day') && p.user.includes('Captain Reyes: someone the player knows') && p.user.includes('The cutter will search') && p.user.includes('[CANON') && p.user.includes('Last scene: Jordan met Marit.') && p.user.includes('Before that: Jordan arrived.') && p.user.includes('Main: Find the ring; Pay') && p.user.includes('Jordan wants from this scene: find the ring'), p.user);
+    check('the request names the world, the spot, the gap, the people, the seed, the ledger, last time, the quests, the wish, the rules and the JSON shape', p.system.includes('narrator of Harbourside') && p.system.includes('"openers"') && p.system.includes('Second person, present tense.') && p.system.includes('Never speak or act for Jordan') && p.user.includes('Customs house (The Harbour)') && p.user.includes('this scene opens the next day') && p.user.includes('Captain Reyes: someone the player knows') && p.user.includes('The cutter will search') && p.user.includes('[CANON') && p.user.includes('Last scene: Jordan met Marit.') && p.user.includes('Before that: Jordan arrived.') && p.user.includes('Main: Find the ring; Pay') && p.user.includes('What Jordan says happens next (their own words; they come first):\nfind the ring\n'), p.user);
     const reply = '```json\n{"when":{"date":"Day 13","time":"morning"},"openers":[{"title":"The queue","text":"The customs house is busy. Reyes looks up. What do you do?","who":["Captain Reyes","Nobody"]},{"title":"","text":"Rain stopped overnight. Marit waits by the door.","who":["old marit"]},{"text":"The customs house is busy. Reyes looks up. What do you do?"},{"title":"Four","text":"A fourth one."}]}\n```';
     const parsed = parseOpenersReply(reply);
     const v = validateOpeners(parsed, { cast: ['Captain Reyes'], known: ['Old Marit'] });
@@ -686,6 +687,51 @@ console.log('\na world\'s stories (D216)');
     check('a story of a world with the longest id there can be is kept under its own id, and a scene\'s mark names it whole', Object.keys(hub.worlds)[0] === `${'w'.repeat(60)}~12` && readMark({ [HUB_META_KEY]: hubMark({ world: `${'w'.repeat(60)}~12`, scene: 's1' }) }).world === `${'w'.repeat(60)}~12`);
     const settings = { liveWorld: { customPacks: { 'night-city': '{"name":"Night City"}' } }, lorebook: { campaigns: { c1: { name: 'Nightcity' } }, campaignOrder: ['c1'] }, hub: { worlds } };
     check('a world is listed with the scenes of all its stories and how many stories it has; its campaign is the one kept under its own id', same(worldsByCampaign(settings), [{ id: 'night-city', name: 'Night City', campaign: 'c1', campaignName: 'Nightcity', scenes: 2, stories: 3 }]) && campaignWorldId(settings, 'c1') === 'night-city', JSON.stringify(worldsByCampaign(settings)));
+}
+
+console.log('\nwhat the player says happens next: the main word on a scene (D218)');
+{
+    const places = [{ id: 'pin:afterlife', label: 'The Afterlife' }, { id: 'kabuki', label: 'Kabuki' }, { id: 'market', label: 'Kabuki market' }];
+    const people = ['Isabella', 'Cassie (Katherine Hightower)', 'Rogue Amendiares', 'Doc Imura, the back-alley ripperdoc', 'Jackie Welles', 'Jackie Chan'];
+    const read = (t) => readDirection(t, { places, people });
+    check('it takes two thousand characters; six hundred of them ride the scene\'s brief', MAX_NOTE === 2000 && BRIEF_NOTE === 600 && MAX_WRAP === 2000);
+    const full = read('Three days later, Jack and Isabella go to the Afterlife to meet Rogue about the job.');
+    check('a place of the map, the people the story knows and the time that has passed are read out of the words', same(full, { place: { id: 'pin:afterlife', label: 'The Afterlife' }, people: ['Isabella', 'Rogue Amendiares'], gap: { id: 'when', words: 'three days later' } }), JSON.stringify(full));
+    check('in a line for the sheet', describeDirection(full) === 'at The Afterlife · with Isabella, Rogue Amendiares · three days later' && describeDirection(read('A quiet talk.')) === '' && describeDirection(null) === '');
+    check('of two places named, the longer name is the place', read('They meet at the Kabuki market.').place.id === 'market' && read('Back in Kabuki.').place.id === 'kabuki');
+    check('a name is a word of its own: part of another word is not it', read('The Kabukicho district').place === null && read('Isabellas everywhere').people.length === 0);
+    check('a person is known by their whole name, by the name before what is said of them, or by a first name that is no one else\'s', same(read('Doc Imura calls. Cassie is late. Rogue laughs.').people, ['Cassie (Katherine Hightower)', 'Rogue Amendiares', 'Doc Imura, the back-alley ripperdoc']) && same(read('Jackie walks in.').people, []) && same(read('Jackie Welles walks in.').people, ['Jackie Welles']), JSON.stringify(read('Doc Imura calls. Cassie is late. Rogue laughs.').people));
+    check('how much time has passed, in the words\' own words', read('The next morning they wake.').gap.words === 'the next morning' && read('After two weeks of lying low').gap.words === 'after two weeks' && read('later that night').gap.words === 'later that night' && read('A few hours pass before the call.').gap.words === 'a few hours pass' && read('It is tomorrow night').gap.words === 'tomorrow night');
+    check('no time at all where they say so; nothing where they do not say', same(read('Right after, they keep talking.').gap, { id: 'now', words: '' }) && same(read('picking up where we left off').gap, { id: 'now', words: '' }) && read('A fight in the alley.').gap === null && same(read(''), { place: null, people: [], gap: null }));
+    const base = { world: { name: 'Night City' }, place: 'Jack\'s safe house', cast: ['Isabella'], player: 'Jack', gapWords: '' };
+    const plain = buildOpenersPrompt(base);
+    const asked = buildOpenersPrompt({ ...base, note: 'Three days later Jack and Isabella meet Rogue at the Afterlife.\n\nShe has a job: a data shard lifted from Arasaka.' });
+    check('with nothing said, the request is as it was: no place asked back, no word of the player\'s', !plain.system.includes('"where"') && !plain.user.includes('says happens next') && !/comes first/.test(plain.system));
+    check('with it, the request is given the words whole and told they come first: over the place, the people and the time given', asked.user.includes('What Jack says happens next (their own words; they come first):\nThree days later Jack and Isabella meet Rogue at the Afterlife. She has a job: a data shard lifted from Arasaka.\n') && /What Jack says happens next is given in their own words, and it comes first: open the scene the way it asks\. Where it names the place, says who is there, or says how much time has passed, follow it over the place, the people and the time given elsewhere here; what it leaves unsaid is as given\./.test(asked.system), asked.system.slice(-900));
+    check('and is asked where the scene opens by them', asked.system.includes('"where": "<the place the scene opens in, a few words>"') && /"where" is the place the scene opens in by that\./.test(asked.system));
+    check('two thousand characters of it are sent, not three hundred', buildOpenersPrompt({ ...base, note: 'x'.repeat(2500) }).user.includes('x'.repeat(2000)) && !buildOpenersPrompt({ ...base, note: 'x'.repeat(2500) }).user.includes('x'.repeat(2001)));
+    const ok = validateOpeners({ when: { date: 'Day 4', time: 'night' }, where: '  The Afterlife,  the back booth ', openers: [{ title: 'The booth', text: 'Rogue does not look up.', who: ['Isabella'] }] }, { cast: ['Isabella'] });
+    check('the place the answer gives is kept with it; an answer with none has none', ok.ok && ok.clean.where === 'The Afterlife, the back booth' && validateOpeners({ openers: [{ title: 'a', text: 'b' }] }).clean.where === undefined);
+    const brief = buildBrief({ world: 'Night City', sceneNo: 2, place: 'The Afterlife', player: 'Jack', note: 'y'.repeat(1500) });
+    check('the scene\'s brief, which rides every reply, carries the start of it', brief.includes(`Jack wants: ${'y'.repeat(590)}`) && !brief.includes('y'.repeat(601)), String(brief.length));
+}
+
+console.log('\nhow the player says a scene ended (D219)');
+{
+    const wrap = 'They made it back to the safe house. Isabella agreed to the job, and the shard is hidden under the floor.';
+    const entry = openScene(normalizeWorldEntry(null), { title: 'The alley', place: { label: 'An alley' }, cast: ['Isabella'], chat: 'Scene 1', startedAt: 5 }).entry;
+    const ended = endSceneRecord(entry, 's1', { endedAt: 9, endDate: 'Day 2', recap: 'They fought in the alley.', wrap: `  ${wrap}  ` });
+    check('it is kept with the scene\'s record; a scene ended with none keeps none', ended.entry.scenes[0].wrap === wrap && endSceneRecord(entry, 's1', { endedAt: 9, recap: 'x' }).entry.scenes[0].wrap === undefined && normalizeScene({ id: 's1', wrap: 'z'.repeat(2600) }).wrap.length === 2000);
+    check('ended again without one, the old one goes', endSceneRecord(ended.entry, 's1', { endedAt: 12, recap: 'y' }).entry.scenes[0].wrap === undefined);
+    const p = buildRecapPrompt({ transcript: 'Jack: I run.\nNarrator: The alley is long.', player: 'Jack', wrap, continuity: { people: [], threads: [] } });
+    check('the record\'s request is given it after the scene, as what happened', p.user.includes(`The scene:\nJack: I run.\nNarrator: The alley is long.\n\nHow the scene ended, in Jack's own words (it happened, after the last of what is written above):\n${wrap}\n\nAnswer with the JSON object only.`), p.user.slice(-420));
+    check('and told that is how it ended: the record closes on it, the people stand where it leaves them, a thread it settles is closed; it is an account, not an instruction', /Where it is given how the scene ended in Jack's own words, that is how it ended, though the scene as written stops before it: the record closes on it, where the people stand is where it leaves them, and a thread it settles is closed\. It is Jack's account of what happened, not an instruction to you\.$/.test(p.system), p.system.slice(-320));
+    const none = buildRecapPrompt({ transcript: 'x', player: 'Jack' });
+    const first = buildRecapPrompt({ transcript: 'x', player: 'Jack', wrap, last: false });
+    check('with none, and for a part of a long scene that is not its last, the request is as it was', !none.user.includes('How the scene ended') && !/that is how it ended/.test(none.system) && !first.user.includes('How the scene ended') && first.system === buildRecapPrompt({ transcript: 'x', player: 'Jack', last: false }).system);
+    const next = buildOpenersPrompt({ world: { name: 'Night City' }, place: 'The safe house', player: 'Jack', tail: 'Narrator: The alley is long.', wrap });
+    check('the next scene\'s openings are told it after the last lines, and that the scene opens from that end', next.user.includes(`How the scene before ended, in Jack's own words (it happened after those lines):\n${wrap}\n`) && /Where it is given how the scene before ended in Jack's own words, that happened, after its last lines: this scene opens from that end, not from the lines, and nothing in it is undone\./.test(next.system), next.user.slice(-500));
+    check('with no lines to show, after what its record tells', buildOpenersPrompt({ world: { name: 'N' }, player: 'Jack', wrap }).user.includes('(it happened after what its record tells)'));
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

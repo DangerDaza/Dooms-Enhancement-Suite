@@ -12,7 +12,7 @@ import { escapeHtml } from '../../utils/html.js';
 import { kindOf, kindCounts, filterMarkers, ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { draftRows, draftChain, FILL_COUNTS } from '../../utils/atlasSetup.js';
-import { GAPS } from '../../utils/hub.js';
+import { GAPS, MAX_NOTE, MAX_WRAP } from '../../utils/hub.js';
 import { WORLD_SHAPES, WORLD_SIZES, WORLD_REGIONS } from '../../utils/worldGen.js';
 
 export const ATLAS_ID = 'dooms-atlas';
@@ -215,7 +215,7 @@ export function atlasSetupHtml({ step = 'notes', notes = '', reach = 'recent', c
  * @param {string} o.whereNew        a place typed in that is not on any map yet
  * @param {{ kind: string, label?: string }|null} o.from   what the scene is started from, said under the title
  */
-export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: '' }, sceneNo = 0, people = [], cast = [], extra = '', gap = { id: 'now', words: '' }, journey = '', seedText = '', note = '', error = '', pending = null, card = '', places = null, whereNew = '', from = null, chosen = 0, voices = false, listening = -1, newCard = false } = {}) {
+export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: '' }, sceneNo = 0, people = [], cast = [], extra = '', gap = { id: 'now', words: '' }, journey = '', seedText = '', note = '', error = '', pending = null, card = '', places = null, whereNew = '', from = null, chosen = 0, voices = false, listening = -1, newCard = false, readLine = '', detailsOpen = false } = {}) {
     const known = !!(place && place.label);
     const where = known ? place.label : (pending && pending.place && pending.place.label) || 'here';
     const title = `${sceneNo ? `Scene ${sceneNo}` : 'A scene'}${known ? ` at ${e(where)}` : ''}`;
@@ -273,24 +273,33 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
             </select>
             <input type="text" class="dooms-atlas-input dooms-atlas-scene-where-new" maxlength="80" value="${attr(fresh ? (whereNew || place.label || '') : '')}" placeholder="Its name" aria-label="A place that is on no map yet"${fresh ? '' : ' hidden'} />
         </fieldset>` : '';
+    // What the player says happens next comes first (D218): it is the main word on the scene, and outranks the details
+    // folded under it. What brought the party there, where the sheet was opened from a rumour, the news or a way on the
+    // map, is said under it and sent as before.
+    const typed = String(note || '');
     return `<div class="dooms-atlas-setup-card is-scene">
         <h3>${title}</h3>
-        <p>${newCard ? 'A fresh chat on a narrator card of its own' : `A fresh chat${card ? ` with ${e(card)}` : ''}`} that opens ${known ? 'here' : 'there'}, told what happened before and who is in it.</p>
+        <p>${newCard ? 'A fresh chat on a narrator card of its own' : `A fresh chat${card ? ` with ${e(card)}` : ''}`}, told what happened before and who is in it.</p>
         ${sceneFromLine(from)}
-        ${whereField}
-        <fieldset class="dooms-atlas-scene-field"><legend class="dooms-atlas-card-label">Who is there</legend>
-            ${who}
-            <input type="text" class="dooms-atlas-input dooms-atlas-scene-who" maxlength="200" value="${attr(extra)}" placeholder="Someone else, separated by commas" aria-label="Someone else who is there" />
-        </fieldset>
-        <fieldset class="dooms-atlas-scene-field"><legend class="dooms-atlas-card-label">When, counted from the last scene</legend>
-            <div class="dooms-atlas-gaps">${gaps}</div>
-            <input type="text" class="dooms-atlas-input dooms-atlas-scene-when" maxlength="80" value="${attr(gap.id === 'when' ? gap.words : '')}" placeholder="In my words: three days later, at the turn of the season…" aria-label="When, in your words" />
-            ${journey ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-route" aria-hidden="true"></i> The map puts the way here at ${e(journey)}.</p>` : ''}
-        </fieldset>
-        <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What brings the party ${known ? 'here' : 'there'} (optional)</span>
-            <textarea class="dooms-atlas-input dooms-atlas-scene-seed" maxlength="400" placeholder="An errand, a summons, a rumour followed…">${e(seedText)}</textarea></label>
-        <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What you want from the scene (optional)</span>
-            <input type="text" class="dooms-atlas-input dooms-atlas-scene-note" maxlength="300" value="${attr(note)}" placeholder="A quiet talk, a fight, an answer…" /></label>
+        ${seedText ? `<p class="dooms-atlas-start-note dooms-atlas-scene-seedline"><i class="fa-solid fa-quote-left" aria-hidden="true"></i> ${e(seedText)}</p>` : ''}
+        <label class="dooms-atlas-field dooms-atlas-scene-next"><span class="dooms-atlas-card-label">What happens next</span>
+            <textarea class="dooms-atlas-input dooms-atlas-scene-note" maxlength="${MAX_NOTE}" rows="6" placeholder="Say it as you would tell a friend: where the party goes, who is there, how much time has passed, what you want out of the scene. The openings are written from this.">${e(typed)}</textarea>
+            <span class="dooms-atlas-scene-count" aria-live="off">${typed.length.toLocaleString('en-US')} / ${MAX_NOTE.toLocaleString('en-US')}</span></label>
+        <p class="dooms-atlas-start-note dooms-atlas-scene-read"${readLine ? '' : ' hidden'}><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> From your words: <span>${e(readLine)}</span></p>
+        <details class="dooms-atlas-scene-details"${detailsOpen ? ' open' : ''}>
+            <summary><span class="dooms-atlas-card-label">Details</span> <span class="dooms-atlas-scene-summary">${e(sceneSummaryText({ place, places, whereNew, cast, extra, gap }))}</span></summary>
+            <p class="dooms-atlas-start-note">Where, who and when, for what your words leave unsaid. Where your words say otherwise, your words are followed.</p>
+            ${whereField}
+            <fieldset class="dooms-atlas-scene-field"><legend class="dooms-atlas-card-label">Who is there</legend>
+                ${who}
+                <input type="text" class="dooms-atlas-input dooms-atlas-scene-who" maxlength="200" value="${attr(extra)}" placeholder="Someone else, separated by commas" aria-label="Someone else who is there" />
+            </fieldset>
+            <fieldset class="dooms-atlas-scene-field"><legend class="dooms-atlas-card-label">When, counted from the last scene</legend>
+                <div class="dooms-atlas-gaps">${gaps}</div>
+                <input type="text" class="dooms-atlas-input dooms-atlas-scene-when" maxlength="80" value="${attr(gap.id === 'when' ? gap.words : '')}" placeholder="In my words: three days later, at the turn of the season…" aria-label="When, in your words" />
+                ${journey ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-route" aria-hidden="true"></i> The map puts the way here at ${e(journey)}.</p>` : ''}
+            </fieldset>
+        </details>
         ${err}
         <div class="dooms-atlas-setup-actions">
             <button type="button" class="dooms-atlas-btn is-primary" data-act="scene-write"><i class="fa-solid fa-feather" aria-hidden="true"></i> <span>Write three openings</span></button>
@@ -300,16 +309,29 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
     </div>`;
 }
 
-const sceneNoOf = (id) => String(id || '').replace(/^s/, '');
+/**
+ * The Start sheet's details in a line, for when they are folded (D218):
+ * where, who and when as they are set. "Where the story left off · Isabella, Rogue · days later".
+ */
+export function sceneSummaryText({ place = null, places = null, whereNew = '', cast = [], extra = '', gap = null } = {}) {
+    const choose = Array.isArray(places);
+    const where = whereNew || (place && place.label) || (choose ? 'Where the story left off' : 'here');
+    const names = [...(Array.isArray(cast) ? cast : []), ...String(extra || '').split(',').map(x => x.trim()).filter(Boolean)];
+    const who = names.length ? (names.length > 3 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more` : names.join(', ')) : 'no one else';
+    const g = gap && typeof gap === 'object' ? gap : { id: 'now', words: '' };
+    const when = g.id === 'when' ? (g.words || 'in your words') : ((GAPS.find(x => x.id === g.id) || { label: 'Right after' }).label || '').toLowerCase();
+    return [where, who, when].filter(Boolean).join(' · ');
+}
 
+const sceneNoOf = (id) => String(id || '').replace(/^s/, '');
 /** What a scene is started from (D193), said under the sheet's title: '' for a place's own card or nothing at all. */
 function sceneFromLine(from) {
     const f = from && typeof from === 'object' ? from : null;
     if (!f) return '';
     const label = f.label ? e(f.label) : '';
     const text = f.kind === 'person' ? `With ${label || 'someone'}: the sheet opens where they were last seen.`
-        : f.kind === 'rumour' ? 'From a rumour: it is what brings the party, below. Change it as you like.'
-        : f.kind === 'news' ? 'From the news: it is what brings the party, below. Change it as you like.'
+        : f.kind === 'rumour' ? 'From a rumour: it is what brings the party there.'
+        : f.kind === 'news' ? 'From the news: it is what brings the party there.'
         : f.kind === 'hook' ? `From the hook${label ? ` “${label}”` : ''}: the scene takes it as a quest.`
         : f.kind === 'scene' ? `Going on from ${label || 'an earlier scene'}: the same place and the same people, to change as you like.`
         : '';
@@ -596,7 +618,7 @@ export function atlasPassesHtml(states, { noun = 'Request' } = {}) {
  * @param {Object<string,string>} o.states  recap | canon | world | snapshot -> waiting | running | ok | failed | skipped | off | kept
  * @param {object|null} o.result   commitEnd()'s answer once it has run
  */
-export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, result = null, error = '', going = '', canUndo = false, undoing = false, passes = null } = {}) {
+export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, result = null, error = '', going = '', canUndo = false, undoing = false, passes = null, wrap = '', wrapIn = '', next = '' } = {}) {
     const scene = prep && (prep.scene || prep.mark) ? (prep.scene || prep.mark) : null;
     const title = scene ? `scene ${e(sceneNoOf(scene.id || scene.scene))}${scene.title ? `: ${e(scene.title)}` : ''}` : 'this scene';
     const when = prep && (prep.from || prep.to) ? `From ${e(prep.from || '?')} to ${e(prep.to || 'now')}.` : '';
@@ -630,9 +652,22 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
             <p class="dooms-atlas-start-note">The ticked ones are held against the next scenes: the narrator is told not to use them. One that stops turning up drops off the list by itself.</p>
         </fieldset>`
         : '';
+    // How the player says the scene ended (D219), where the chat stops short of it: the record is written again with it,
+    // and the ledger, where people stand, the threads and the next scene follow it.
+    const wrapText = String(wrap || '');
+    const wrapped = !!wrapText.trim() && wrapText.trim() === String(wrapIn || '').trim();
+    const locked = done || running || busy;
+    const wrapField = done && !wrapText.trim() ? '' : `<label class="dooms-atlas-field dooms-atlas-end-wrap-field"><span class="dooms-atlas-card-label">How it ended (optional)</span>
+            <textarea class="dooms-atlas-input dooms-atlas-end-wrap" maxlength="${MAX_WRAP}" rows="3" placeholder="If the chat stops short of the end, say how it ended: what was settled, where everyone went, a loose thread tied off. The record, where people stand and the next scene follow it."${locked ? ' readonly' : ''}>${e(wrapText)}</textarea></label>
+        ${done ? '' : `<p class="dooms-atlas-end-wrap-row"><button type="button" class="dooms-atlas-btn" data-act="end-rewrap"${locked || !wrapText.trim() || wrapped ? ' disabled' : ''} title="One request: the record below, where people stand and the threads are written again with how you say it ended"><i class="fa-solid fa-pen-nib" aria-hidden="true"></i> <span>Write the record again with this</span></button> <span class="dooms-atlas-start-note dooms-atlas-end-wrap-note">${wrapped ? 'The record below was written with it.' : 'Not in the record yet: End scene writes it in first.'}</span></p>`}`;
+    // What happens next (D218): ending a scene and starting the next is one step.
+    const nextText = String(next || '');
+    const nextField = done ? '' : `<label class="dooms-atlas-field dooms-atlas-end-next-field"><span class="dooms-atlas-card-label">What happens next (optional)</span>
+            <textarea class="dooms-atlas-input dooms-atlas-end-next" maxlength="${MAX_NOTE}" rows="4" placeholder="For the next scene: where the party goes, who is there, how much time has passed, what you want out of it. End and start the next scene writes its openings from this."${running || busy ? ' readonly' : ''}>${e(nextText)}</textarea></label>`;
     return `<div class="dooms-atlas-setup-card is-scene is-end">
         <h3>End ${title}</h3>
         ${when ? `<p>${when}</p>` : ''}
+        ${wrapField}
         <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What happened${busy ? ' (being written…)' : ''}</span>
             <textarea class="dooms-atlas-input dooms-atlas-setup-notes dooms-atlas-end-recap" maxlength="1500" placeholder="${busy ? 'The record of the scene is being written…' : 'What happened in this scene, in a few lines. The next scene is told this.'}"${done || busy ? ' readonly' : ''}>${prep && prep.recap ? e(prep.recap) : ''}</textarea></label>
         ${busy && Array.isArray(passes) && passes.length ? atlasPassesHtml(passes) : ''}
@@ -648,6 +683,7 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
             ${part('snapshot', 'The memory', 'everything this chat knows, with the map, kept for the next scene', true, '')}
             ${bookOn ? part('book', 'The book', `where people stand and the open threads, written to ${prep.book ? `the lorebook ${prep.book}` : 'a lorebook of the world\'s own'}`, true, '') : ''}
         </ul>
+        ${nextField}
         ${done ? `<p class="dooms-atlas-end-done"><i class="fa-solid fa-check" aria-hidden="true"></i> The scene is ended and remembered. ${going ? e(going) : 'The map shows the world as it stands now: open a place to start the next scene.'}</p>` : ''}
         ${error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : ''}
         <div class="dooms-atlas-setup-actions">
@@ -655,6 +691,7 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
                 ? `<button type="button" class="dooms-atlas-btn is-primary" data-act="setup-close"${going || undoing ? ' disabled' : ''}><i class="fa-solid fa-map" aria-hidden="true"></i> <span>To the map</span></button>
                    ${canUndo && !going ? `<button type="button" class="dooms-atlas-btn" data-act="end-undo"${undoing ? ' disabled' : ''} title="Put the End back, all of it: the scene is open again, and the record, the world, where people stand, the threads, the ledger and the continuity book are as they were before it"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> <span>${undoing ? 'Undoing…' : 'Undo this End'}</span></button>` : ''}`
                 : `<button type="button" class="dooms-atlas-btn is-primary" data-act="end-go"${busy || running || !prep ? ' disabled' : ''}><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> <span>${running ? 'Ending…' : 'End scene'}</span></button>
+                   <button type="button" class="dooms-atlas-btn" data-act="end-next"${busy || running || !prep ? ' disabled' : ''} title="End it with this record, then start the next scene: its openings are written from What happens next, or the sheet opens for you to say"><i class="fa-solid fa-forward" aria-hidden="true"></i> <span>End and start the next scene</span></button>
                    <button type="button" class="dooms-atlas-btn" data-act="end-continue"${busy || running || !prep || (prep && prep.stale) ? ' disabled' : ''} title="End it with this record and go straight on in a fresh chat: the same place, the same people, no time passed, so the world is not moved"><i class="fa-solid fa-forward-step" aria-hidden="true"></i> <span>End and continue here</span></button>
                    <button type="button" class="dooms-atlas-btn" data-act="setup-close"${running ? ' disabled' : ''}>Keep playing</button>`}
         </div>

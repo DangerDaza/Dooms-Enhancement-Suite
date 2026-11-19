@@ -37,7 +37,7 @@ import {
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
-    readConflicts, mergeConflicts, normalizeConflicts,
+    readConflicts, mergeConflicts, normalizeConflicts, MAX_WRAP,
     ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, worldsByCampaign, loreLibraryOn,
     packOf, entryUntouched, storyIdsOf, nextStoryId, storyOfChat, lastStoryOf, storiesOf, storyPlayedAt,
 } from '../../utils/hub.js';
@@ -988,6 +988,28 @@ async function moveWorldByGap(worldId, pack, memory, gap, recaps, { mode = 'betw
  * passed. Nothing where the chat cannot be read: the record stands alone.
  * @returns {Promise<{ text: string, messages: number, scene: string }>}
  */
+/**
+ * Where a scene opens once its openings are written (D218). The player's
+ * own words come first: where they put the scene somewhere other than
+ * the place the sheet gave, the request answers with that place, and the
+ * scene is there: a place of the world or of its map when it has one of
+ * that name, else a place of that name on no map yet.
+ */
+function placeBy(pack, given, said) {
+    const name = String(said || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (!name) return given;
+    // The same place said another way ("Jack's safe house, the bedroom" for "Jack's safehouse") is the place given: the two
+    // share a word of substance. Only a place that is plainly another takes its place.
+    const words = (t) => new Set(String(t || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(w => w.length >= 4 && !['with', 'from', 'that', 'this', 'near', 'room', 'house', 'street', 'place'].includes(w)));
+    const a = words(name);
+    if (given.label && (sameName(name, given.label) || [...words(given.label)].some(w => a.has(w)))) return given;
+    const own = (pack && Array.isArray(pack.places) ? pack.places : []).find(x => x && sameName(x.label, name));
+    if (own) return { id: own.id, label: own.label, region: regionOf(pack, own.id) };
+    let pin = null;
+    try { const map = worldMap(pack.id); pin = map ? map.made.find(x => sameName(x.label, name)) : null; } catch (e) { pin = null; }
+    return pin ? { id: pin.id, label: pin.label, region: '' } : { id: '', label: name, region: '' };
+}
+
 /** The scene a Start goes on from (D205): the one it names, else the one whose End made the world's memory, else the last that ended; null when its chat is gone. */
 function sceneBefore(entry, seed) {
     const named = seed && typeof seed === 'object' && seed.kind === 'scene' && seed.id ? String(seed.id) : '';
@@ -1130,9 +1152,13 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     const voices = dialogueConfig(extensionSettings).enabled
         ? names.map(n => ({ name: n, text: dialogueText(dialogueOf(extensionSettings.characterInjection, n), { name: n, player: players[0] || '', max: DIALOGUE.opening }) })).filter(x => x.text)
         : [];
-    const prompt = buildOpenersPrompt({ then, thenPeople, voices, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads });
+    // How the player said the scene before ended (D219), where its chat stops short of it: this scene opens from there.
+    const before = sceneBefore(g.entry, seed);
+    const wrapBefore = before && before.wrap && (!lastLines.scene || lastLines.scene === before.id) ? before.wrap : '';
+    const prompt = buildOpenersPrompt({ wrap: wrapBefore, then, thenPeople, voices, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads });
     let openers = [];
     let when = null;
+    let said = '';    // the place the scene opens in by the player's own words, as the request answered (D218)
     let errors = [];
     try {
         const r = await request(prompt, { transport: openersTransport, label: 'openers' });
@@ -1140,7 +1166,7 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
         if (r.busy) errors = ['Another request holds the line.'];
         else {
             const v = validateOpeners(parseOpenersReply(r.text), { cast: names, known: Object.keys(worldState.known || {}) });
-            if (v.ok) { openers = v.clean.openers; when = v.clean.when; } else errors = v.errors;
+            if (v.ok) { openers = v.clean.openers; when = v.clean.when; said = v.clean.where || ''; } else errors = v.errors;
             // Right after, the scene opens at the moment the one before stopped: its date and time are the tracker's, not
             // the narrator's to choose (D210). A tracker that is some messages behind the end is told to the request and
             // not held to.
@@ -1153,7 +1179,7 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     }
     const since = recentChanges(worldState, pack, { limit: 8, spoilerFree: liveWorldConfig(extensionSettings).spoilerFree }).map(c => `${c.gameDate ? `${c.gameDate}: ` : ''}${c.text}`);
     pending = {
-        token, worldId: g.id, pack, card: g.card, memory, seed: seed && typeof seed === 'object' ? seed : { kind: 'anywhere', text: seedText }, place: { id: placeId, label, region }, cast: names, lines, gap: theGap, note: String(note || ''),
+        token, worldId: g.id, pack, card: g.card, memory, seed: seed && typeof seed === 'object' ? seed : { kind: 'anywhere', text: seedText }, given: { id: placeId, label, region }, place: placeBy(pack, { id: placeId, label, region }, note ? said : ''), cast: names, lines, gap: theGap, note: String(note || ''),
         weather, since, recaps, player: players, openers, when, errors, notes, prompt, movedMemory,
         heldWhen: rightAfter && !then.back && (then.date || then.time) ? { date: then.date, time: then.time } : null,
         lore: { found: notesOf.found, missing: notesOf.missing, standing: !!notesOf.standing, books: notesOf.books, ...(voices.length ? { voices: voices.map(x => x.name) } : {}) },
@@ -1269,6 +1295,7 @@ export async function askOpenersAgain(token) {
         const v = validateOpeners(parseOpenersReply(r.text), { cast: p.cast, known: Object.keys(normalizeWorldState(p.memory.stores.dooms_world).known || {}) });
         if (!v.ok) return { ok: false, reason: 'openers', errors: v.errors, openers: p.openers };
         p.openers = v.clean.openers;
+        if (p.note && p.given) p.place = placeBy(p.pack, p.given, v.clean.where || '');    // where the player's words put it, as this answer has it (D218)
         p.when = p.heldWhen || v.clean.when || p.when;    // right after, the date and time are the tracker's (D210), asked again or not
         p.errors = [];
         return { ok: true, openers: p.openers, when: p.when };
@@ -1435,13 +1462,13 @@ function scenePeople(cur, players) {
  * threads it settled and opened (D188). Waits for the main generation and
  * the background line.
  */
-export async function prepareEnd({ onStep = null } = {}) {
+export async function prepareEnd({ onStep = null, wrap = '' } = {}) {
     const g = guardEnd();
     if (!g.ok) return g;
     const idle = await whenIdle();
     if (!idle) return { ok: false, reason: 'busy' };
     // A record the handover wrote and held back for its contradictions (D190) is the one the sheet shows: nothing is asked again.
-    if (prepared && prepared.held && prepared.id === chatId() && prepared.reply === lastReplyId() && prepared.result) { prepared.held = false; return prepared.result; }
+    if (!wrap && prepared && prepared.held && prepared.id === chatId() && prepared.reply === lastReplyId() && prepared.result) { prepared.held = false; return prepared.result; }
     const token = { meta: meta(), id: chatId() };
     const players = playerNames();
     // The scene's brief is kept on the mark (D120: it rides the brief slot, the chat has no scenario of its own).
@@ -1468,7 +1495,7 @@ export async function prepareEnd({ onStep = null } = {}) {
         for (let i = 0; i < count; i++) {
             // Which request is being asked for, for the sheet's bars (D198).
             try { if (typeof onStep === 'function') onStep({ page: i + 1, pages: count, states: Array.from({ length: count }, (x, k) => (k < i ? 'done' : k === i ? 'run' : 'wait')) }); } catch (e) { /* the sheet is gone */ }
-            const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1, continuity: draft, check, lead: i > 0 ? parts[i].lead : '' });
+            const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1, continuity: draft, check, lead: i > 0 ? parts[i].lead : '', wrap });
             const r = await request(prompt, { transport: recapTransport, label: 'recap' });
             if (r.busy) { error = 'Another request holds the line.'; break; }
             const p = parseRecapReply(r.text, { maxChars: cfg().recapChars });
@@ -1512,7 +1539,7 @@ async function establishedFor(worldId, cast, players) {
  * Each step says how it went; a chat that changes under End stops it
  * before anything of the world is touched.
  */
-export async function commitEnd({ recap = '', skipRecap = false, skipCanon = false, skipWorld = false, replaceMemory = false, onStep = null, bans = null, continuity = undefined, conflicts = undefined } = {}) {
+export async function commitEnd({ recap = '', skipRecap = false, skipCanon = false, skipWorld = false, replaceMemory = false, onStep = null, bans = null, continuity = undefined, conflicts = undefined, wrap = '' } = {}) {
     const step = (name, state) => { if (typeof onStep === 'function') { try { onStep(name, state); } catch (e) { /* the sheet's own */ } } };
     if (ending) return { ok: false, reason: 'running' };
     const g = guardEnd();
@@ -1535,8 +1562,8 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         const canonDone = !!(g.cur.mark.end && g.cur.mark.end.canonAt && g.cur.mark.end.canonAt === replyId);
         if (isCanonOn() && !skipCanon && !canonDone) {
             step('canon', 'running');
-            let r = await updateCanon({ reason: 'scene-end', scope: 'scene' });
-            if (!r.ok && (r.reason === 'busy' || r.reason === 'running')) { await waitForBackground(); await sleep(timing.idleStepMs); r = await updateCanon({ reason: 'scene-end', scope: 'scene' }); }
+            let r = await updateCanon({ reason: 'scene-end', scope: 'scene', also: wrap });    // how the player says it ended is read with the scene (D219)
+            if (!r.ok && (r.reason === 'busy' || r.reason === 'running')) { await waitForBackground(); await sleep(timing.idleStepMs); r = await updateCanon({ reason: 'scene-end', scope: 'scene', also: wrap }); }
             out.canon = r.ok ? 'ok' : 'failed';
             out.canonResult = r;
             step('canon', out.canon);
@@ -1577,7 +1604,7 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         const recapText = skipRecap ? '' : String(recap || '').trim();
         // What the record found the scene to contradict (D190) is kept with the scene: as the sheet had it, else as the record said.
         const found = normalizeConflicts(conflicts !== undefined ? conflicts : (prepared && prepared.id === token.id && prepared.reply === replyId ? prepared.conflicts : []));
-        const ended = endSceneRecord(entry, sceneId, { endedAt: now, endDate: facts.date, recap: recapText, noRecap: !recapText, conflicts: found });
+        const ended = endSceneRecord(entry, sceneId, { endedAt: now, endDate: facts.date, recap: recapText, noRecap: !recapText, conflicts: found, wrap: String(wrap || '').slice(0, MAX_WRAP) });
         if (found.length) out.conflicts = found.length;
         // The style law (D179): the phrases the narrator leaned on in this scene are held against the next ones. The ones
         // chosen on the End sheet; with no sheet (/endscene), the ones the count chose by itself. It is the narrator's

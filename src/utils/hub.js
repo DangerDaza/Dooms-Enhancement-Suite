@@ -35,7 +35,9 @@ export const MAX_OPENER_TEXT = 4000;    // an opening may be as long as one of t
 export const MAX_BRIEF = 3600;         // the brief carries where the scene's people stand and the open threads too (D188)
 export const MAX_LINE = 200;           // a person's line in the brief
 export const MAX_SEED = 400;           // what brought us here
-export const MAX_NOTE = 300;           // the player's line
+export const MAX_NOTE = 2000;          // what the player says happens next (D218): a few paragraphs; it was a line of 300
+export const BRIEF_NOTE = 600;         // of it in the scene's brief, which rides every reply
+export const MAX_WRAP = 2000;          // how the player says a scene ended (D219)
 export const MAX_CAST = 12;
 export const MAX_TITLE = 60;           // a scene's title
 export const MAX_SCENES = 200;
@@ -228,6 +230,7 @@ export function normalizeScene(raw, seq = 0) {
         reopened: r.reopened === true,
         gone: r.gone === true,
         noRecap: r.noRecap === true,
+        ...(clean(r.wrap, MAX_WRAP) ? { wrap: clean(r.wrap, MAX_WRAP) } : {}),    // how the player said it ended, where the chat stops short of it (D219); absent when they said nothing
         ...(r.ownCard === true ? { ownCard: true } : {}),    // its card was made for it (D209) and goes when it does; absent for a scene on the world's narrator card or on the player's own
         ...(r.log ? { log: clean(r.log, 160) } : {}),    // the file that holds what its End changed in the world (D206); absent for a scene ended before that was kept
         ...(conflicts.length ? { conflicts } : {}),    // what the scene's record found against what was established (D190); absent when it found nothing
@@ -718,7 +721,7 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
         since: since.length ? `Since last time: ${since.map(s => noStop(clean(s, 160))).filter(Boolean).slice(0, 12).join('; ')}.` : '',
         last: lastRecap ? `Last time: ${clean(lastRecap, 1500)}` : '',
         before: beforeRecap ? `Before that: ${clean(beforeRecap, 1500)}` : '',
-        note: note ? `${clean(player, 60) || 'The player'} wants: ${clean(note, MAX_NOTE)}` : '',
+        note: note ? `${clean(player, 60) || 'The player'} wants: ${cutText(clean(note, MAX_NOTE), BRIEF_NOTE)}` : '',
     };
     const end = (s) => (s && !/[.!?…"”\]]$/.test(s) ? `${s}.` : s);
     const law = styleLawText(style, { max: 500 });    // the style law (D179): short, and never cut to make room
@@ -745,8 +748,12 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
  * the narrator's template; and the exact JSON asked for.
  * @returns {{ system: string, user: string }}
  */
-export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [], tail = '', then = null, now = null, thenPeople = [], voices = [] } = {}) {
+export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [], tail = '', then = null, now = null, thenPeople = [], voices = [], wrap = '' } = {}) {
     const name = clean(world.name, 80) || 'the world';
+    // What the player says happens next (D218) is the main word on the scene: it outranks the place, the people and the time
+    // given beside it. How they said the scene before ended (D219) is where this one opens from.
+    const wish = clean(note, MAX_NOTE);
+    const ended = clean(wrap, MAX_WRAP);
     // Example lines of how the people of the scene speak, from their cards in the Workshop (D212). Kept as written: line
     // breaks are part of an example.
     const speak = (Array.isArray(voices) ? voices : []).filter(x => isObj(x) && clean(x.name, 60) && String(x.text || '').trim()).slice(0, MAX_CAST).map(x => `[${clean(x.name, 60)}]\n${String(x.text).trim().slice(0, 1600)}`);
@@ -771,7 +778,7 @@ export function buildOpenersPrompt({ world = {}, place = '', region = '', weathe
     const standingText = clean(standing, LORE_STANDING + 400);
     const law = styleLawText(style, { max: 500 });
     const system = `You are the narrator of ${name}. A new scene is about to open and you write its first message: how the scene opens, before ${who} has done anything. You answer with one JSON object and nothing else, in exactly this shape:
-{"when": {"date": "<the story's date when the scene opens>", "time": "<the time of day>"}, "openers": [{"title": "<four words at most>", "text": "<the opening narration>", "who": ["<names of the people present>"]}]}
+{"when": {"date": "<the story's date when the scene opens>", "time": "<the time of day>"}, ${wish ? '"where": "<the place the scene opens in, a few words>", ' : ''}"openers": [{"title": "<four words at most>", "text": "<the opening narration>", "who": ["<names of the people present>"]}]}
 Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording. ${known
         ? (!gapWords
             ? (t.back
@@ -784,7 +791,7 @@ Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording
             : `The last lines of the scene before are given as they were played, so that you know how things were left. This scene opens ${clean(gapWords, 80)} after them: do not carry that conversation on. Each opener is a new moment that follows from how things were left: the place as ${who} finds it now, who is there, the first thing that happens, and it stops with the first move still ${who}'s. `)
         : `Each opener: the place as ${who} finds it, who is there, the first thing that happens, and it stops with the first move still ${who}'s; `}${lastLines
         ? `Write as the narrator wrote in those lines: the same person and tense, speech set out the same way (its marks and any colour tags), about as long as one of the narrator's own messages there; no headings, no dice, no tracker or status block, nothing resolved or decided. Make nothing up that those lines, the record or the notes do not give you: where you do not know, stay with what is there. `
-        : 'a paragraph or two, plain prose, no markup, no headings, no dice, nothing resolved or decided. '}Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standNow.length ? 'Where it is said how a person stands now, that is how the story left them: they pick up from there, and it holds over older notes where the two differ. ' : ''}${speak.length ? 'Where example lines are given for a person, they show that person\'s voice (their words, their rhythm, their manner): write what they say in it. The lines are examples and were never said in this story: do not repeat or quote them. ' : ''}${asTracked.length ? `Where it is said how the tracker had a person when the scene before stopped, they are still so as this scene opens: dressed as they were, in the state they were in${gapWords ? ', unless the time that has passed would have changed it' : ''}. What was on a person's mind is theirs: it shapes what they do and is not said aloud. ` : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${law ? `${law} ` : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
+        : 'a paragraph or two, plain prose, no markup, no headings, no dice, nothing resolved or decided. '}Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${wish ? `What ${who} says happens next is given in their own words, and it comes first: open the scene the way it asks. Where it names the place, says who is there, or says how much time has passed, follow it over the place, the people and the time given elsewhere here; what it leaves unsaid is as given. "where" is the place the scene opens in by that. ` : ''}${ended ? `Where it is given how the scene before ended in ${who}'s own words, that happened, after its last lines: this scene opens from that end, not from the lines, and nothing in it is undone. ` : ''}${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standNow.length ? 'Where it is said how a person stands now, that is how the story left them: they pick up from there, and it holds over older notes where the two differ. ' : ''}${speak.length ? 'Where example lines are given for a person, they show that person\'s voice (their words, their rhythm, their manner): write what they say in it. The lines are examples and were never said in this story: do not repeat or quote them. ' : ''}${asTracked.length ? `Where it is said how the tracker had a person when the scene before stopped, they are still so as this scene opens: dressed as they were, in the state they were in${gapWords ? ', unless the time that has passed would have changed it' : ''}. What was on a person's mind is theirs: it shapes what they do and is not said aloud. ` : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${law ? `${law} ` : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
     const people = cast.length ? cast.map(c => (typeof c === 'string' ? clean(c, 260) : personLine(c.name, c))).join('\n- ') : 'no one in particular';
     const q = [quests && quests.main && quests.main !== 'None' ? `Main: ${clean(quests.main, 200)}` : '', ...((quests && Array.isArray(quests.optional)) ? quests.optional.map(x => clean(x, 200)).filter(Boolean).slice(0, 6) : [])].filter(Boolean);
     const user = `World: ${name}${world.blurb ? `. ${clean(world.blurb, 600)}` : ''}
@@ -796,7 +803,7 @@ ${!gapWords ? (t.back ? 'This scene opens right after the last lines: the time o
 People here:
 - ${people}
 ${asTracked.length ? `How the tracker had them when the scene before stopped:\n${asTracked.join('\n')}\n` : ''}${notes.length ? `Their own notes:\n${notes.map(l => `[${l.name}] ${l.text}`).join('\n')}\n` : ''}${speak.length ? `How they speak (example lines, not to be repeated):\n${speak.join('\n')}\n` : ''}${standNow.length ? `Where they stand now:\n${standNow.join('\n')}\n` : ''}${standingText ? `The story's standing notes:\n${standingText}\n` : ''}What brought us here: ${clean(seed, MAX_SEED) || 'nothing in particular; the world as it is'}
-${canonBlock ? `What the story has established:\n${clean(canonBlock, 1200)}\n` : ''}${recaps.length ? `Last time:\n${recaps.map(r => clean(r, 700)).filter(Boolean).slice(0, 2).map((r, i) => `${i ? 'Before that' : 'Last scene'}: ${r}`).join('\n')}\n` : ''}${q.length ? `Open quests: ${q.join('; ')}\n` : ''}${open.length ? `Left open by the story so far (a scene may pick one up; none has to be):\n${open.map(t => `- ${t}`).join('\n')}\n` : ''}${note ? `${who} wants from this scene: ${clean(note, MAX_NOTE)}\n` : ''}${lastLines ? `The last lines of the scene before, as they were played (${rightAfter ? 'this scene carries straight on from the last of them' : `this scene opens ${clean(gapWords, 80)} after them`}):\n${lastLines}\n` : ''}The player: ${who} (never written for).
+${canonBlock ? `What the story has established:\n${clean(canonBlock, 1200)}\n` : ''}${recaps.length ? `Last time:\n${recaps.map(r => clean(r, 700)).filter(Boolean).slice(0, 2).map((r, i) => `${i ? 'Before that' : 'Last scene'}: ${r}`).join('\n')}\n` : ''}${q.length ? `Open quests: ${q.join('; ')}\n` : ''}${open.length ? `Left open by the story so far (a scene may pick one up; none has to be):\n${open.map(t => `- ${t}`).join('\n')}\n` : ''}${wish ? `What ${who} says happens next (their own words; they come first):\n${wish}\n` : ''}${lastLines ? `The last lines of the scene before, as they were played (${rightAfter ? 'this scene carries straight on from the last of them' : `this scene opens ${clean(gapWords, 80)} after them`}):\n${lastLines}\n` : ''}${ended ? `How the scene before ended, in ${who}'s own words (it happened after ${lastLines ? 'those lines' : 'what its record tells'}):\n${ended}\n` : ''}The player: ${who} (never written for).
 
 Answer with the JSON object only.`;
     return { system, user };
@@ -841,7 +848,9 @@ export function validateOpeners(reply, { cast = [], known = [], max = OPENERS } 
     if (!openers.length) return { ok: false, errors: errors.length ? errors : ['No usable opener.'], clean: null };
     let when = null;
     if (isObj(reply.when)) { const d = clean(reply.when.date, 80); const t = clean(reply.when.time, 80); if (d && t) when = { date: d, time: t }; }
-    return { ok: true, errors, clean: { when, openers } };
+    // The place the scene opens in by the player's own words (D218), where the request asked for it.
+    const where = clean(reply.where, 80);
+    return { ok: true, errors, clean: { when, openers, ...(where ? { where } : {}) } };
 }
 
 /**
@@ -1127,8 +1136,10 @@ export function sceneTranscriptParts(chat, { budget = RECAP_BUDGET, persona = 'P
  * (D190), again in the same request.
  * @param {{ canon?: string, lore?: Array<{ name: string, text: string }>, standing?: string }|null} o.check
  */
-export function buildRecapPrompt({ transcript = '', brief = '', player = '', maxChars = RECAP_CHARS, soFar = '', last = true, continuity = null, check = null, lead = '', ledger = null } = {}) {
+export function buildRecapPrompt({ transcript = '', brief = '', player = '', maxChars = RECAP_CHARS, soFar = '', last = true, continuity = null, check = null, lead = '', ledger = null, wrap = '' } = {}) {
     const who = clean(player, 60) || 'the player';
+    // How the player says the scene ended (D219): given with its last part. It happened, though the chat stops short of it.
+    const ending = last ? clean(wrap, MAX_WRAP) : '';
     // The ledger's facts asked for in the same answer (D208): a long chat is read once, each request giving the record of its
     // part and what the part established. The ask is Canon's own (canonAsk), so the two requests cannot say different things.
     const led = isObj(ledger) ? canonAsk({ entries: ledger.entries, player: ledger.players && ledger.players.length ? ledger.players : player, names: ledger.names, adds: ledger.adds || LEDGER_ADDS, drops: ledger.drops || LEDGER_DROPS }) : null;
@@ -1146,8 +1157,8 @@ export function buildRecapPrompt({ transcript = '', brief = '', player = '', max
         : '';
     const system = `You write the record of a scene that has just ended, for the narrator of the next one. You answer with one JSON object and nothing else: ${shape}. Rules for "recap": at most ${maxChars} characters; past tense; ${who} by name; what was said, learned, promised, lost and gained; nothing that did not happen; no advice, no questions, no markup.${more}${against}${alsoLedger}${soFar ? ' The record so far covers the earlier part of the scene: carry what still matters forward and add what this part adds.' : ''}${!last ? ' This is not the end of the scene yet: the record will be continued.' : ''}`;
     const established = told ? `${told.canon ? `What the story has established (the ledger):\n${told.canon}\n\n` : ''}${told.lore.length ? `The people's own notes:\n${told.lore.map(l => `[${l.name}] ${l.text}`).join('\n')}\n\n` : ''}${told.standing ? `The story's standing notes:\n${told.standing}\n\n` : ''}` : '';
-    const user = `${brief ? `The scene's brief:\n${clean(brief, MAX_BRIEF)}\n\n` : ''}${established}${blocks.people ? `${blocks.people}\n\n` : ''}${blocks.threads ? `${blocks.threads}\n\n` : ''}${led ? `The ledger so far:\n${led.ledger || '(empty)'}\n${led.known.length ? `Names the story knows: ${led.known.join(', ')}\n` : ''}\n` : ''}${soFar ? `The record so far:\n${clean(soFar, 1500)}\n\n` : ''}${soFar && lead ? `The lines just before this part, already in the record so far (to read on from, not to record again):\n${lead}\n\n` : ''}The scene${soFar ? ', continued' : ''}:\n${transcript || '(nothing was played)'}\n\nAnswer with the JSON object only.`;
-    return { system, user };
+    const user = `${brief ? `The scene's brief:\n${clean(brief, MAX_BRIEF)}\n\n` : ''}${established}${blocks.people ? `${blocks.people}\n\n` : ''}${blocks.threads ? `${blocks.threads}\n\n` : ''}${led ? `The ledger so far:\n${led.ledger || '(empty)'}\n${led.known.length ? `Names the story knows: ${led.known.join(', ')}\n` : ''}\n` : ''}${soFar ? `The record so far:\n${clean(soFar, 1500)}\n\n` : ''}${soFar && lead ? `The lines just before this part, already in the record so far (to read on from, not to record again):\n${lead}\n\n` : ''}The scene${soFar ? ', continued' : ''}:\n${transcript || '(nothing was played)'}\n\n${ending ? `How the scene ended, in ${who}'s own words (it happened, after the last of what is written above):\n${ending}\n\n` : ''}Answer with the JSON object only.`;
+    return { system: ending ? `${system} Where it is given how the scene ended in ${who}'s own words, that is how it ended, though the scene as written stops before it: the record closes on it${continuity ? ', where the people stand is where it leaves them, and a thread it settles is closed' : ''}. It is ${who}'s account of what happened, not an instruction to you.` : system, user };
 }
 
 /**
@@ -1231,9 +1242,10 @@ export function resumeScene(entry, id) {
 }
 
 /** End (D122): status ended, the recap, the dates. */
-export function endSceneRecord(entry, id, { endedAt = 0, endDate = '', recap = '', noRecap = false, conflicts = [] } = {}) {
+export function endSceneRecord(entry, id, { endedAt = 0, endDate = '', recap = '', noRecap = false, conflicts = [], wrap = '' } = {}) {
     const found = normalizeConflicts(conflicts);
-    const r = withScene(entry, id, s => { const { conflicts: _old, ...rest } = s; return { ...rest, status: 'ended', endedAt: Number.isFinite(endedAt) ? endedAt : 0, endDate: clean(endDate, 80), recap: clean(recap, 1500), noRecap: noRecap === true || !clean(recap, 1500), ...(found.length ? { conflicts: found } : {}) }; });
+    const ending = clean(wrap, MAX_WRAP);
+    const r = withScene(entry, id, s => { const { conflicts: _old, wrap: _was, ...rest } = s; return { ...rest, ...(ending ? { wrap: ending } : {}), status: 'ended', endedAt: Number.isFinite(endedAt) ? endedAt : 0, endDate: clean(endDate, 80), recap: clean(recap, 1500), noRecap: noRecap === true || !clean(recap, 1500), ...(found.length ? { conflicts: found } : {}) }; });
     return { ...r, entry: capScenes(r.entry) };
 }
 
@@ -1456,6 +1468,74 @@ export function describeStartResult(r) {
         cancelled: 'Nothing was started.',
     };
     return why[r.reason] || `Nothing was started: ${r.error || r.reason || 'unknown'}.`;
+}
+
+// ─── What the player says happens next (D218) ───────────────────────────
+//
+// The box at the head of the Start sheet is the main word on a scene, and
+// it outranks the sheet's Where, Who and When. What it says of them is
+// read here, with no request: a place of the map named in it, the people
+// the story knows who are named in it, and how much time it says has
+// passed. What it does not say is left as the sheet has it; what it says
+// that cannot be read this way (a place on no map, a stranger) the
+// openings' own request is told to follow, and answers with.
+
+const escapeRe = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Whether a name stands in a text as a word of its own, whatever its case. */
+const namedIn = (text, name) => { const n = clean(name, 80); return n.length >= 3 && new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRe(n)}($|[^\\p{L}\\p{N}])`, 'iu').test(text); };
+
+const COUNT = '(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|a\\s+few|a\\s+couple\\s+of|several|some|many|\\d{1,3})';
+const SPAN = '(?:minute|hour|day|night|evening|morning|week|month|season|year)s?';
+const TIME_PASSED = [
+    new RegExp(`\\b${COUNT}\\s+${SPAN}\\s+(?:later|after(?:wards?)?|on|pass(?:es|ed)?|go(?:es)?\\s+by|have\\s+passed|has\\s+passed)\\b`, 'i'),
+    new RegExp(`\\bafter\\s+${COUNT}\\s+${SPAN}\\b`, 'i'),
+    /\b(?:the\s+)?(?:next|following)\s+(?:morning|day|night|evening|afternoon|week|month|season|year)\b/i,
+    /\blater\s+that\s+(?:same\s+)?(?:day|night|evening|morning|afternoon|week)\b/i,
+    /\bthat\s+(?:same\s+)?(?:night|evening|afternoon)\b/i,
+    /\b(?:tomorrow(?:\s+(?:morning|night|evening))?|tonight|at\s+(?:dawn|dusk|nightfall|sunrise|sunset|midnight|noon)|by\s+(?:morning|nightfall|evening))\b/i,
+    /\b(?:hours|days|weeks|months|years)\s+(?:later|pass(?:ed)?|go\s+by|have\s+passed)\b/i,
+];
+const NO_TIME = /\b(?:right\s+after|straight\s+after|immediately|at\s+once|moments?\s+later|seconds?\s+later|without\s+a\s+pause|pick(?:s|ing)?\s+up\s+(?:right\s+)?where|continu(?:e|es|ing)\s+(?:straight|right)\s+(?:on|from))\b/i;
+
+/**
+ * What a player's words for the next scene say of where, who and when.
+ * @param {string} text
+ * @param {{ places?: Array<{ id: string, label: string }>, people?: string[] }} [known]
+ * @returns {{ place: { id: string, label: string }|null, people: string[], gap: { id: 'now'|'when', words: string }|null }}
+ *   `place`: the place of the map it names (the longest name found); `people`: the known people it names, in the
+ *   order given; `gap`: how much time it says has passed, in its own words, or 'now' where it says none has.
+ */
+export function readDirection(text, { places = [], people = [] } = {}) {
+    const t = String(text || '').replace(/\s+/g, ' ').trim();
+    const out = { place: null, people: [], gap: null };
+    if (!t) return out;
+    for (const p of Array.isArray(places) ? places : []) {
+        if (!isObj(p) || !p.label || !namedIn(t, p.label)) continue;
+        if (!out.place || clean(p.label, 80).length > out.place.label.length) out.place = { id: String(p.id || ''), label: clean(p.label, 80) };
+    }
+    for (const n of Array.isArray(people) ? people : []) {
+        const name = clean(n, 60);
+        if (!name || out.people.some(x => sameName(x, name))) continue;
+        // By the whole name; by the name before what is said of them ("Doc Imura, the back-alley ripperdoc", "Cassie
+        // (Katherine Hightower)"); or by its first word where that is a name of its own (four letters or more) and no one else's.
+        const head = name.split(/[,(]/)[0].trim();
+        const first = name.split(/[\s,(]/)[0];
+        const alone = first.length >= 4 && first !== name && !people.some(o => clean(o, 60) !== name && sameName(clean(o, 60).split(/[\s,(]/)[0], first));
+        if (namedIn(t, name) || (head !== name && head.length >= 4 && namedIn(t, head)) || (alone && namedIn(t, first))) out.people.push(name);
+    }
+    if (NO_TIME.test(t)) out.gap = { id: 'now', words: '' };
+    else for (const re of TIME_PASSED) { const m = re.exec(t); if (m) { const w = clean(m[0], 80); out.gap = { id: 'when', words: w.charAt(0).toLowerCase() + w.slice(1) }; break; } }
+    return out;
+}
+
+/** What was read of a player's words, in a line for the sheet: "at The Afterlife · with Rogue · three days later". '' when nothing was. */
+export function describeDirection(read) {
+    const r = isObj(read) ? read : {};
+    const parts = [];
+    if (r.place && r.place.label) parts.push(`at ${r.place.label}`);
+    if (Array.isArray(r.people) && r.people.length) parts.push(`with ${r.people.join(', ')}`);
+    if (r.gap) parts.push(r.gap.id === 'now' ? 'right after' : r.gap.words);
+    return parts.join(' · ');
 }
 
 // ─── A world's stories (D216) ───────────────────────────────────────────

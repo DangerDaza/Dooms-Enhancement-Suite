@@ -292,7 +292,7 @@ let firstFile = '';
     hub.__setOpenersTransport(async (prompt) => { openersPrompt = prompt; return '```json\n{"when":{"date":"Day 1","time":"dusk"},"openers":[{"title":"The queue","text":"The Anchor is loud tonight. Old Marit looks up from her net. What do you do?","who":["Old Marit"]},{"title":"A quiet corner","text":"Rain drums the shutters. Marit waves you to the back room.","who":["Old Marit"]},{"title":"The stranger","text":"A stranger blocks the door. Marit shakes her head at you.","who":["Old Marit"]}]}\n```'; });
     const p = await hub.prepareScene({ worldId: 'harbourside', seed: { kind: 'place', id: 'the-anchor', label: 'The Anchor' }, place: { id: 'the-anchor' }, cast: ['Old Marit', 'Jordan'], gap: { id: 'now' }, note: 'find the ring' });
     check('prepared: three openers, when, the place and its region, the cast without the player', p.ok && p.openers.length === 3 && p.when.date === 'Day 1' && p.place.label === 'The Anchor, a tavern' && p.place.region && p.cast.length === 1 && p.cast[0] === 'Old Marit' && p.errors.length === 0, JSON.stringify(p));
-    check('the request: the world, the spot, the person\'s Workshop line, the seed, the wish; no ledger and no last time yet', openersPrompt && openersPrompt.user.includes('World: Harbourside') && openersPrompt.user.includes('Where the scene opens: The Anchor, a tavern (') && openersPrompt.user.includes('Old Marit: Keeps the Anchor; a net-mender with debts.') && openersPrompt.user.includes('Jordan wants from this scene: find the ring') && !openersPrompt.user.includes('[CANON') && !openersPrompt.user.includes('Last time'), openersPrompt && openersPrompt.user);
+    check('the request: the world, the spot, the person\'s Workshop line, the seed, the wish; no ledger and no last time yet', openersPrompt && openersPrompt.user.includes('World: Harbourside') && openersPrompt.user.includes('Where the scene opens: The Anchor, a tavern (') && openersPrompt.user.includes('Old Marit: Keeps the Anchor; a net-mender with debts.') && openersPrompt.user.includes('What Jordan says happens next (their own words; they come first):\nfind the ring\n') && openersPrompt.system.includes('"where": "<the place the scene opens in, a few words>"') && !openersPrompt.user.includes('[CANON') && !openersPrompt.user.includes('Last time'), openersPrompt && openersPrompt.user);
     check('a second Start while one is pending replaces it; the first token is cancelled', (await hub.commitScene(p.token - 1, {})).reason === 'cancelled' && hub.pendingStart().token === p.token);
     const r = await hub.commitScene(p.token, { choice: 1 });
     firstFile = r.file;
@@ -2865,6 +2865,101 @@ console.log('\n§34 the map is the world\'s: one map for all its stories and eve
     delete extensionSettings.hub.maps.oldmapland;
     delete extensionSettings.liveWorld.customPacks.oldmapland;
     extensionSettings.liveWorld.pack = packWas;
+}
+
+console.log('\n§35 what the player says happens next, and how they say a scene ended (D218, D219)');
+{
+    const W = 'wishland';
+    const cardsWas = extensionSettings.hub.sceneCards;
+    const packWas = extensionSettings.liveWorld.pack;
+    extensionSettings.hub.sceneCards = true;
+    extensionSettings.hub.styleLaw = false;
+    extensionSettings.liveWorld.customPacks[W] = JSON.stringify({ ...example, id: W, name: 'Wishland' });
+    extensionSettings.liveWorld.pack = W;
+    hub.__setBookApi(shelfApi);
+    const at = (avatar) => ctxTarget.characters.findIndex(c => c.avatar === avatar);
+    ctxTarget.characterId = at('Wanderer.png');
+    ctxTarget.name2 = 'Wanderer';
+    files.set('Wanderer - wishland', { header: { chat_metadata: {} }, messages: [], avatar: 'Wanderer.png', chName: 'Wanderer' });
+    await openPlain('Wanderer - wishland');
+    chat.push(user('We begin.'));
+    chat.push({ is_user: false, name: 'Wanderer', mes: 'It begins.', extra: {} });
+    const taken = await hub.commitAdopt({ recap: 'It began.' });
+    const packW = lw.getActivePack();
+    const somewhere = packW.places[0];
+    const other = packW.places.find(x => x.id !== somewhere.id && !x.label.toLowerCase().split(/\W+/).some(w => w.length >= 4 && somewhere.label.toLowerCase().includes(w)));
+    let asked = null;
+    let reply = { when: { date: 'Day 5', time: 'night' }, where: '', openers: [{ title: 'One', text: 'First.', who: [] }, { title: 'Two', text: 'Second.', who: [] }, { title: 'Three', text: 'Third.', who: [] }] };
+    hub.__setOpenersTransport(async (prompt) => { asked = prompt; return JSON.stringify(reply); });
+    hub.__setGapTransport(async () => '{"elapsed":"a day","now":{"date":"Day 5","time":"dawn"},"clocks":{},"moved":[],"blurb":"x","heard":[]}');
+    let recapAsked = null;
+    hub.__setRecapTransport(async (prompt) => { recapAsked = prompt; return '{"recap":"They talked, and then it ended as told.","people":[],"threads":{"closed":[],"opened":[]}}'; });
+    let canonAsked = null;
+    cn.__setCanonTransport(async (prompt) => { canonAsked = prompt; return '{"add":[],"drop":[]}'; });
+    const words = 'Three days later we go to the old mill to meet the smuggler. '.repeat(20).trim();
+    const start = (o) => hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: '' }, place: { id: somewhere.id, label: somewhere.label }, cast: [], gap: { id: 'now' }, ...o });
+
+    // What happens next.
+    check('(the chat began the story, and the words are longer than the old line held)', taken.ok && taken.worldId === W && words.length > 1000 && !!other);
+    const plain = await start({});
+    check('with nothing said, the scene opens where the sheet says, and the request asks for no place back', plain.ok && plain.place.id === somewhere.id && !asked.system.includes('"where"') && !asked.user.includes('says happens next'));
+    hub.cancelStart();
+    reply = { ...reply, where: 'The old mill' };
+    const told = await start({ note: words });
+    check('what the player says happens next is sent whole, and the request is told it comes first', told.ok && asked.user.includes(words) && /it comes first: open the scene the way it asks/.test(asked.system) && asked.system.includes('"where": "<the place the scene opens in, a few words>"'));
+    check('where the answer puts the scene somewhere the sheet did not, the scene is there: a place on no map yet, by its name', told.place.id === '' && told.place.label === 'The old mill' && hub.pendingStart().place.label === 'The old mill', JSON.stringify(told.place));
+    hub.cancelStart();
+    reply = { ...reply, where: other.label };
+    const known = await start({ note: words });
+    check('a place of the world by that name is that place', known.ok && known.place.id === other.id && known.place.label === other.label, JSON.stringify(known.place));
+    hub.cancelStart();
+    reply = { ...reply, where: `${somewhere.label}, the back of it` };
+    const same1 = await start({ note: words });
+    check('the place the sheet gave, said another way, is still that place', same1.ok && same1.place.id === somewhere.id, JSON.stringify(same1.place));
+    hub.cancelStart();
+    reply = { ...reply, where: 'The old mill' };
+    const ignored = await start({});
+    check('an answer that names a place unasked changes nothing: only the player\'s words move a scene', ignored.ok && ignored.place.id === somewhere.id);
+    hub.cancelStart();
+    const again = await start({ note: words });
+    reply = { ...reply, where: other.label };
+    const re = await hub.askOpenersAgain(again.token);
+    check('asked again, the scene is where the new answer puts it', again.ok && re.ok && hub.pendingStart().place.id === other.id, JSON.stringify(hub.pendingStart().place));
+    const c1 = await hub.commitScene(again.token, { choice: 0 });
+    const header = c1.ok ? files.get(c1.file).header.chat_metadata : {};
+    check('started, the scene is at that place: its mark, its record, and its brief with the start of the player\'s words', c1.ok && header.dooms_hub.place.label === other.label && hub.worldEntry(W).scenes.find(x => x.id === 's1').place.label === other.label && header.dooms_hub.brief.includes('Jordan wants: Three days later we go to the old mill') && !header.dooms_hub.brief.includes(words), JSON.stringify([c1.ok, c1.reason, header.dooms_hub && header.dooms_hub.place]));
+
+    // How the scene ended.
+    chat.push(user('I ask the smuggler his price.'));
+    chat.push({ is_user: false, name: 'Narrator', mes: 'He names it, and waits.', extra: {} });
+    const wrap = 'We paid the smuggler half up front and left by the river. He will bring the crate to the docks at dawn.';
+    const first = await hub.prepareEnd();
+    check('(the record is written first, as before, with nothing of how it ended)', first.ok && !recapAsked.user.includes('How the scene ended'));
+    const second = await hub.prepareEnd({ wrap });
+    check('written again with how the player says it ended: the request is given it after the scene, as what happened', second.ok && recapAsked.user.includes(`How the scene ended, in Jordan's own words (it happened, after the last of what is written above):\n${wrap}\n`) && /that is how it ended, though the scene as written stops before it/.test(recapAsked.system) && second.recap === 'They talked, and then it ended as told.');
+    const ended = await hub.commitEnd({ recap: second.recap, skipWorld: true, wrap });
+    const rec = hub.worldEntry(W).scenes.find(x => x.id === 's1');
+    check('ended: it is kept with the scene, and the ledger reads it with the scene', ended.ok && rec.wrap === wrap && rec.status === 'ended' && !!canonAsked && canonAsked.user.includes(`How the scene ended, in Jordan's own words (it happened, after the last of what is written above):\n${wrap}`), JSON.stringify([ended.ok, ended.reason, rec.wrap, canonAsked && canonAsked.user.slice(-200)]));
+    reply = { ...reply, where: '' };
+    const next = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: '' }, place: null, cast: [], gap: { id: 'now' } });
+    check('the next scene\'s openings are told how the one before ended, after its last lines, and to open from there', next.ok && asked.user.includes(`How the scene before ended, in Jordan's own words (it happened after those lines):\n${wrap}\n`) && asked.user.includes('He names it, and waits.') && /this scene opens from that end, not from the lines/.test(asked.system), asked.user.slice(-600));
+    hub.cancelStart();
+    // A scene ended with nothing said keeps none, and the scene after it is told none.
+    const c2 = await (async () => { const p = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: '' }, place: null, cast: [], gap: { id: 'now' } }); return p.ok ? hub.commitScene(p.token, { choice: 1 }) : p; })();
+    chat.push(user('On.'));
+    chat.push({ is_user: false, name: 'Narrator', mes: 'On it goes.', extra: {} });
+    canonAsked = null;
+    const e2 = await hub.endScene({ skipWorld: true });
+    const n3 = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: '' }, place: null, cast: [], gap: { id: 'now' } });
+    check('a scene ended with nothing said of its end keeps none: the ledger and the next scene are told none', c2.ok && e2.ok && hub.worldEntry(W).scenes.find(x => x.id === 's2').wrap === undefined && !!canonAsked && !canonAsked.user.includes('How the scene ended') && n3.ok && !asked.user.includes('How the scene before ended'), JSON.stringify([c2.ok, e2.ok, e2.reason]));
+    hub.cancelStart();
+
+    cn.__setCanonTransport(null);
+    extensionSettings.liveWorld.pack = packWas;
+    extensionSettings.hub.sceneCards = cardsWas;
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+    hub.__setRecapTransport(null);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
