@@ -357,6 +357,16 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-setup-warn { padding: 8px 10px; border-radius: var(--atlas-radius); border: 1px solid color-mix(in srgb, var(--atlas-accent2) 60%, transparent); background: color-mix(in srgb, var(--atlas-accent2) 10%, transparent); font-size: 0.86em !important; }
 .dooms-atlas-setup-bar { height: 8px; border-radius: 999px; background: var(--atlas-panel2); border: 1px solid var(--atlas-line); overflow: hidden; }
 .dooms-atlas-setup-bar span { display: block; height: 100%; background: var(--atlas-accent); transition: width 0.3s; }
+/* A Start that waits (D220): the bar moves and measures nothing; the step and the time waited are said in words. */
+.dooms-atlas-setup-bar.is-waiting span { width: 38%; border-radius: 999px; animation: dooms-atlas-pass-run 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .dooms-atlas-setup-bar.is-waiting span { animation: none; width: 55%; } }
+.dooms-atlas-busy-step { font-weight: 600; }
+.dooms-atlas-busy-line { font-variant-numeric: tabular-nums; margin-top: 8px; }
+.dooms-atlas-setup-card.is-busy .dooms-atlas-setup-actions { margin-top: 12px; }
+/* How many openings to write (D221), beside the button. */
+.dooms-atlas-openers-pick { display: inline-flex; align-items: center; gap: 6px; }
+.dooms-atlas-openers-pick .dooms-atlas-card-label { margin: 0; }
+.dooms-atlas-openers-pick select.dooms-atlas-input { width: auto; min-width: 58px; padding: 6px 8px; }
 .dooms-atlas-setup-head, .dooms-atlas-setup-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px 170px 26px; gap: 6px; align-items: center; }
 .dooms-atlas-setup-head { font-size: 0.68em; letter-spacing: 0.1em; text-transform: uppercase; color: var(--atlas-muted); padding: 0 4px; }
 .dooms-atlas-setup-list { list-style: none; margin: 0; padding: 0 4px 0 0; overflow: auto; max-height: 44vh; display: flex; flex-direction: column; gap: 4px; }
@@ -677,6 +687,7 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
     .dooms-atlas-setup-card, .dooms-atlas-setup-card.is-worldgen { width: 100%; max-height: none; height: 100%; border-radius: 0; border: 0; padding: 16px 14px; }
     .dooms-atlas-setup-card.is-end .dooms-atlas-setup-actions { bottom: -16px; margin: 0 -14px -16px; padding: 10px 14px 14px; }
     .dooms-atlas-setup-actions .dooms-atlas-btn { flex: 1 1 auto; justify-content: center; min-height: 42px; }
+    .dooms-atlas-openers-pick select.dooms-atlas-input { min-height: 42px; }
     .dooms-atlas-foot-actions .dooms-atlas-btn { flex: 1 1 auto; justify-content: center; min-height: 40px; }
     .dooms-atlas-card { width: 260px; }
     .dooms-atlas-compass { width: 70px; height: 70px; right: 10px; bottom: 10px; }

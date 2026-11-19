@@ -12,7 +12,7 @@ import { escapeHtml } from '../../utils/html.js';
 import { kindOf, kindCounts, filterMarkers, ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { draftRows, draftChain, FILL_COUNTS } from '../../utils/atlasSetup.js';
-import { GAPS, MAX_NOTE, MAX_WRAP } from '../../utils/hub.js';
+import { GAPS, MAX_NOTE, MAX_WRAP, OPENERS, MAX_OPENERS, openersCount, countWord, startStepWords, elapsedWords } from '../../utils/hub.js';
 import { WORLD_SHAPES, WORLD_SIZES, WORLD_REGIONS } from '../../utils/worldGen.js';
 
 export const ATLAS_ID = 'dooms-atlas';
@@ -215,12 +215,24 @@ export function atlasSetupHtml({ step = 'notes', notes = '', reach = 'recent', c
  * @param {string} o.whereNew        a place typed in that is not on any map yet
  * @param {{ kind: string, label?: string }|null} o.from   what the scene is started from, said under the title
  */
-export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: '' }, sceneNo = 0, people = [], cast = [], extra = '', gap = { id: 'now', words: '' }, journey = '', seedText = '', note = '', error = '', pending = null, card = '', places = null, whereNew = '', from = null, chosen = 0, voices = false, listening = -1, newCard = false, readLine = '', detailsOpen = false } = {}) {
+export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: '' }, sceneNo = 0, people = [], cast = [], extra = '', gap = { id: 'now', words: '' }, journey = '', seedText = '', note = '', error = '', pending = null, card = '', places = null, whereNew = '', from = null, chosen = 0, voices = false, listening = -1, newCard = false, readLine = '', detailsOpen = false, count = OPENERS, busy = null, kept = false } = {}) {
     const known = !!(place && place.label);
     const where = known ? place.label : (pending && pending.place && pending.place.label) || 'here';
     const title = `${sceneNo ? `Scene ${sceneNo}` : 'A scene'}${known ? ` at ${e(where)}` : ''}`;
     const err = error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : '';
-    if (step === 'busy' || step === 'opening') return `<div class="dooms-atlas-setup-card is-busy is-scene"><h3>${title}</h3><p>${step === 'busy' ? 'Writing three ways it could open…' : 'Opening the scene…'}</p><div class="dooms-atlas-setup-bar" role="progressbar" aria-label="${step === 'busy' ? 'Writing the openings' : 'Opening the scene'}"><span style="width:60%"></span></div></div>`;
+    // While the sheet waits (D220): the step it is at, in words, and how long it has waited; the bar moves and measures
+    // nothing (it stood at a fixed 60%, which read as stuck). Stop goes back with what was typed.
+    if (step === 'busy' || step === 'opening') {
+        const at = busy && typeof busy === 'object' ? busy : {};
+        const since = Number(at.since) || 0;
+        const words = startStepWords({ step: step === 'opening' ? 'opening' : (at.step || 'openers'), words: at.words || '', count: at.count || count });
+        return `<div class="dooms-atlas-setup-card is-busy is-scene"><h3>${title}</h3>
+            <p class="dooms-atlas-busy-step" role="status" aria-live="polite">${e(words)}</p>
+            <div class="dooms-atlas-setup-bar is-waiting" role="progressbar" aria-label="${step === 'busy' ? 'Working on the openings' : 'Opening the scene'}"><span></span></div>
+            ${step === 'busy' ? `<p class="dooms-atlas-start-note dooms-atlas-busy-line"><span class="dooms-atlas-busy-time" data-since="${since}">${elapsedWords(since ? Date.now() - since : 0)}</span><span class="dooms-atlas-busy-hint"${since && Date.now() - since >= BUSY_HINT_MS ? '' : ' hidden'}> · A slow model can take a few minutes. Stop goes back with ${at.again ? 'the openings you had' : 'your words kept'}.</span></p>
+            <div class="dooms-atlas-setup-actions"><button type="button" class="dooms-atlas-btn" data-act="scene-stop"><i class="fa-solid fa-stop" aria-hidden="true"></i> <span>Stop</span></button></div>` : ''}
+        </div>`;
+    }
     if (step === 'pick') {
         const p = pending && typeof pending === 'object' ? pending : { openers: [], when: null };
         const when = p.when ? [p.when.date, p.when.time].filter(Boolean).join(', ') : '';
@@ -239,7 +251,7 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
             </li>`).join('');
         return `<div class="dooms-atlas-setup-card is-review is-scene">
             <h3>How does ${sceneNo ? `scene ${sceneNo}` : 'the scene'} open?</h3>
-            <p>${e(where)}${when ? ` · ${e(when)}` : ''}. ${list.length > 1 ? `All ${list.length === 3 ? 'three' : list.length} are swipes of the scene's first message. Mark the one to show first.` : ''}</p>
+            <p>${e(where)}${when ? ` · ${e(when)}` : ''}. ${list.length > 1 ? `All ${countWord(list.length)} are swipes of the scene's first message. Mark the one to show first.` : ''}</p>
             ${newCard ? `<p class="dooms-atlas-start-note dooms-atlas-card-line"><i class="fa-solid fa-id-card" aria-hidden="true"></i> Starting makes a new narrator card for this scene${list.length ? `, with ${list.length === 1 ? 'this opening as its greeting' : 'these openings as its greetings'}` : ''}. It is blank otherwise: no other card's text is sent in this scene.</p>` : ''}
             ${tailLine(p.tail)}
             ${loreLine(p.lore)}
@@ -253,6 +265,7 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
                 ${list.length ? `<button type="button" class="dooms-atlas-btn is-primary" data-act="scene-pick"><i class="fa-solid fa-play" aria-hidden="true"></i> <span>Start ${sceneNo ? `scene ${sceneNo}` : 'the scene'}</span></button>` : ''}
                 <button type="button" class="dooms-atlas-btn" data-act="scene-own"><i class="fa-solid fa-pen" aria-hidden="true"></i> <span>Open with mine</span></button>
                 <button type="button" class="dooms-atlas-btn" data-act="scene-again"><i class="fa-solid fa-rotate" aria-hidden="true"></i> <span>Ask again</span></button>
+                ${openersPick(p.count || list.length || count, 'dooms-atlas-again-count', 'How many openings to ask for again')}
                 <button type="button" class="dooms-atlas-btn" data-act="scene-back">Back</button>
             </div>
         </div>`;
@@ -285,6 +298,7 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
         <label class="dooms-atlas-field dooms-atlas-scene-next"><span class="dooms-atlas-card-label">What happens next</span>
             <textarea class="dooms-atlas-input dooms-atlas-scene-note" maxlength="${MAX_NOTE}" rows="6" placeholder="Say it as you would tell a friend: where the party goes, who is there, how much time has passed, what you want out of the scene. The openings are written from this.">${e(typed)}</textarea>
             <span class="dooms-atlas-scene-count" aria-live="off">${typed.length.toLocaleString('en-US')} / ${MAX_NOTE.toLocaleString('en-US')}</span></label>
+        ${kept && typed ? '<p class="dooms-atlas-start-note dooms-atlas-scene-kept"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Your words from before, kept until a scene is started with them.</p>' : ''}
         <p class="dooms-atlas-start-note dooms-atlas-scene-read"${readLine ? '' : ' hidden'}><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> From your words: <span>${e(readLine)}</span></p>
         <details class="dooms-atlas-scene-details"${detailsOpen ? ' open' : ''}>
             <summary><span class="dooms-atlas-card-label">Details</span> <span class="dooms-atlas-scene-summary">${e(sceneSummaryText({ place, places, whereNew, cast, extra, gap }))}</span></summary>
@@ -302,12 +316,28 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
         </details>
         ${err}
         <div class="dooms-atlas-setup-actions">
-            <button type="button" class="dooms-atlas-btn is-primary" data-act="scene-write"><i class="fa-solid fa-feather" aria-hidden="true"></i> <span>Write three openings</span></button>
+            <button type="button" class="dooms-atlas-btn is-primary" data-act="scene-write"><i class="fa-solid fa-feather" aria-hidden="true"></i> <span class="dooms-atlas-scene-write-label">${e(openersLabel(count))}</span></button>
+            ${openersPick(count, 'dooms-atlas-scene-openers', 'How many openings to write')}
             <button type="button" class="dooms-atlas-btn" data-act="setup-close">Not now</button>
         </div>
-        <p class="dooms-atlas-start-note">One request writes three ways the scene could open. Nothing is started until you pick one.</p>
+        <p class="dooms-atlas-start-note dooms-atlas-scene-howmany">${e(openersNote(count))}</p>
     </div>`;
 }
+
+/** How long the sheet waits before it says a slow model can take minutes (D220). */
+export const BUSY_HINT_MS = 45000;
+
+/** The number of openings to write (D221), chosen beside the button: one to six, the last choice kept. */
+function openersPick(count, cls, label) {
+    const n = openersCount(count);
+    return `<label class="dooms-atlas-openers-pick"><span class="dooms-atlas-card-label">Openings</span>
+                <select class="dooms-atlas-input ${cls}" aria-label="${attr(label)}">${Array.from({ length: MAX_OPENERS }, (_, i) => `<option value="${i + 1}"${i + 1 === n ? ' selected' : ''}>${i + 1}</option>`).join('')}</select></label>`;
+}
+
+/** The Write button's words for a number of openings. */
+export const openersLabel = (count) => { const n = openersCount(count); return n === 1 ? 'Write the opening' : `Write ${countWord(n)} openings`; };
+/** The line under it. */
+export const openersNote = (count) => { const n = openersCount(count); return n === 1 ? 'One request writes how the scene could open. Nothing is started until you take it.' : `One request writes ${countWord(n)} ways the scene could open. Nothing is started until you pick one.`; };
 
 /**
  * The Start sheet's details in a line, for when they are folded (D218):
@@ -510,14 +540,22 @@ function voiceLine(lore) {
 
 function loreLine(lore) {
     const l = lore && typeof lore === 'object' ? lore : null;
-    if (!l || !Array.isArray(l.books) || !l.books.length) return '';
+    if (!l) return '';
+    // Someone out of the lorebooks was asked for (D223): who the openings were given, or that there was no one to give.
+    const fresh = Array.isArray(l.fresh) ? l.fresh.map(x => String(x || '').trim()).filter(Boolean) : null;
+    const asked = fresh
+        ? `<p class="dooms-atlas-start-note dooms-atlas-fresh-line"><i class="fa-solid fa-user-plus" aria-hidden="true"></i> ${fresh.length
+            ? `Your words ask for someone out of the lorebooks, so the openings were given ${fresh.length === 1 ? 'an entry' : `${fresh.length} entries`} the story has not touched${l.unmet > fresh.length ? ` (of ${l.unmet})` : ''}: ${e(fresh.join(', '))}. Whoever is in the opening shown first joins the scene's people. Ask again draws ${l.unmet > fresh.length ? 'others' : 'on the same ones'}.`
+            : 'Your words ask for someone out of the lorebooks, but no entry the story has not touched was found in the lorebooks of this story.'}</p>`
+        : '';
+    if (!Array.isArray(l.books) || !l.books.length) return asked;
     const found = Array.isArray(l.found) ? l.found : [];
     const missing = Array.isArray(l.missing) ? l.missing : [];
     const parts = [];
     if (found.length) parts.push(`Written with the lorebook ${found.length === 1 ? 'entry' : 'entries'} of ${e(listOf(found))}${l.standing ? " and the story's standing notes" : ''}.`);
     else if (l.standing) parts.push("Written with the story's standing notes.");
     if (missing.length) parts.push(`No entry was found for ${e(listOf(missing))}: the opening has only a line about ${missing.length === 1 ? 'them' : 'each'}. An entry whose title begins with the name, or that has the name among its keywords, is found.`);
-    return parts.length ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-book" aria-hidden="true"></i> ${parts.join(' ')}</p>` : '';
+    return `${parts.length ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-book" aria-hidden="true"></i> ${parts.join(' ')}</p>` : ''}${asked}`;
 }
 
 /**
@@ -670,6 +708,7 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
         ${wrapField}
         <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What happened${busy ? ' (being written…)' : ''}</span>
             <textarea class="dooms-atlas-input dooms-atlas-setup-notes dooms-atlas-end-recap" maxlength="1500" placeholder="${busy ? 'The record of the scene is being written…' : 'What happened in this scene, in a few lines. The next scene is told this.'}"${done || busy ? ' readonly' : ''}>${prep && prep.recap ? e(prep.recap) : ''}</textarea></label>
+        ${prep && prep.before && !busy ? '<p class="dooms-atlas-start-note dooms-atlas-end-before"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Written knowing what you said had happened before this scene opened. The ledger is told it too.</p>' : ''}
         ${busy && Array.isArray(passes) && passes.length ? atlasPassesHtml(passes) : ''}
         ${prep && prep.error ? `<p class="dooms-atlas-setup-error" role="alert">The record could not be written (${e(prep.error)}). Write it yourself, or end without one.</p>` : ''}
         ${continuityFieldsHtml(prep && prep.continuity, { locked: done || running || busy, book: prep && prep.book ? prep.book : '' })}

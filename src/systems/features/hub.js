@@ -37,7 +37,8 @@ import {
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
-    readConflicts, mergeConflicts, normalizeConflicts, MAX_WRAP,
+    readConflicts, mergeConflicts, normalizeConflicts, MAX_WRAP, MAX_NOTE, MAX_CAST, MAX_LINE,
+    openersCount, untouchedLore, loreSample, freshCount, asksForLore,
     ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, worldsByCampaign, loreLibraryOn,
     packOf, entryUntouched, storyIdsOf, nextStoryId, storyOfChat, lastStoryOf, storiesOf, storyPlayedAt,
 } from '../../utils/hub.js';
@@ -66,7 +67,7 @@ let recapTransport = null;
 let gapTransport = null;
 let hooksTransport = null;
 let hooksBusyWorld = '';     // the world a hooks request runs for, '' when none
-let timing = { idleStepMs: 250, idleMaxMs: 120000, retryMs: 4000, rateMs: 30000 };    // retryMs, rateMs: how long a whole read's failed request waits before its second try (D198)
+let timing = { idleStepMs: 250, idleMaxMs: 120000, retryMs: 4000, rateMs: 30000, startMaxMs: 300000, readMaxMs: 20000 };    // startMaxMs: how long a Start waits on one request; readMaxMs: on one read of a file or a lorebook (the owner, D220)    // retryMs, rateMs: how long a whole read's failed request waits before its second try (D198)
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -128,7 +129,44 @@ async function whenIdle(maxMs = timing.idleMaxMs) {
     }
 }
 
-async function request(prompt, { transport, label }) {
+/** A span of time in words, for a wait that was given up on: "5 minutes", "20 seconds". */
+const spanWords = (ms) => (ms >= 60000 ? `${Math.round(ms / 60000)} ${Math.round(ms / 60000) === 1 ? 'minute' : 'minutes'}` : `${Math.max(1, Math.round(ms / 1000))} seconds`);
+
+/**
+ * Work that is waited on for so long and no longer, or until the wait is
+ * stopped (D220): a request that never answers held the Start sheet for
+ * good. What the work was doing is left to finish or not by itself; its
+ * answer, should one come, goes nowhere. The error says which it was by
+ * its `code`: 'timeout' or 'stopped'.
+ * @param {Promise<any>|any} work
+ * @param {{ ms?: number, stop?: Promise<any>|null, what?: string }} o
+ */
+function limited(work, { ms = 0, stop = null, what = 'It' } = {}) {
+    if (!(ms > 0) && !stop) return Promise.resolve(work);
+    return new Promise((yes, no) => {
+        let over = false;
+        let timer = null;
+        const end = (fn, v) => { if (over) return; over = true; if (timer) clearTimeout(timer); fn(v); };
+        if (ms > 0) timer = setTimeout(() => end(no, Object.assign(new Error(`${what} did not answer in ${spanWords(ms)}`), { code: 'timeout' })), ms);
+        if (stop) Promise.resolve(stop).then(() => end(no, Object.assign(new Error('stopped'), { code: 'stopped' })));
+        Promise.resolve(work).then(v => end(yes, v), e => end(no, e));
+    });
+}
+
+/** A wait that can be ended from outside: `stopped` settles when `stop()` is called. */
+function stopper() {
+    let fire = () => {};
+    const stopped = new Promise(r => { fire = r; });
+    return { stopped, stop: () => fire(true) };
+}
+
+/**
+ * One background request. With `maxMs` it is waited on that long and no
+ * longer, and with `stop` until that settles (D220); either way the line
+ * is let go of, so the request after it is not held by one that never
+ * came back. `onWait` is told when another request has the line first.
+ */
+async function request(prompt, { transport, label, maxMs = 0, stop = null, onWait = null }) {
     const external = extensionSettings.generationMode === 'external';
     const messages = [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }];
     const run = async () => {
@@ -136,8 +174,9 @@ async function request(prompt, { transport, label }) {
         if (external) return generateWithExternalAPI(messages);
         return safeGenerateRaw({ prompt: messages, quietToLoud: false });
     };
-    await waitForBackground();
-    const result = await withBackgroundProfile(run, { external, label });
+    if (backgroundHolder() && typeof onWait === 'function') { try { onWait(backgroundHolder()); } catch (e) { /* the caller's own */ } }
+    await limited(waitForBackground(), { ms: maxMs, stop, what: 'The request before this one' });
+    const result = await withBackgroundProfile(() => limited(run(), { ms: maxMs, stop, what: label === 'gap' ? 'The request that moves the world on' : label === 'openers' ? 'The request for the openings' : 'The request' }), { external, label });
     if (result === BACKGROUND_BUSY) return { busy: true, text: '' };
     const text = typeof result === 'string' ? result : (result && typeof result === 'object' && typeof result.text === 'string' ? result.text : String(result ?? ''));
     return { busy: false, text };
@@ -628,20 +667,22 @@ async function booksOf(worldId) {
  * the entries that are always on. A background request sees no lorebook,
  * so the openings are given these; a book that cannot be read is passed
  * over, and with none read the openings are written as before.
- * @returns {Promise<{ lore: Array<{ name: string, text: string }>, standing: string, found: string[], missing: string[], books: string[] }>}
+ * @returns {Promise<{ lore: Array<{ name: string, text: string }>, standing: string, found: string[], missing: string[], books: string[], entries: object[] }>}
  */
 async function sceneLore(worldId, names, players = []) {
-    const out = { lore: [], standing: '', found: [], missing: [], books: [] };
+    const out = { lore: [], standing: '', found: [], missing: [], books: [], entries: [] };
     try {
         const books = await booksOf(worldId);
         const entries = [];
         for (const book of books) {
             try {
-                const data = loreReader ? await loreReader(book) : await (await import('../lorebook/lorebookAPI.js')).loadWorldData(book, true);
+                // A book that does not answer is passed over like one that cannot be read (D220).
+                const data = await limited(loreReader ? loreReader(book) : (async () => (await import('../lorebook/lorebookAPI.js')).loadWorldData(book, true))(), { ms: timing.readMaxMs, what: `The lorebook "${book}"` });
                 if (data) { entries.push(...loreEntries(book, data)); out.books.push(book); }
             } catch (e) { log(`the lorebook "${book}" could not be read`, String(e && e.message || e)); }
         }
         if (!entries.length) return out;
+        out.entries = entries;    // all of them, for the ones the story has not touched (D223)
         const cast = castLore(entries, names);
         // The player's own entry, when there is room for it: who they are matters to how a scene opens on them.
         const left = Math.max(0, 10000 - cast.found.reduce((n, f) => n + f.text.length, 0));
@@ -936,6 +977,9 @@ function castLines(names, worldState) {
     });
 }
 
+/** The head of a lorebook entry as a person's line in the brief: its first sentence or two, within a line's length. */
+const cutLine = (text) => { const t = String(text || '').replace(/\s+/g, ' ').trim(); return t.length > MAX_LINE ? `${t.slice(0, MAX_LINE - 1).replace(/\s+\S*$/, '')}…` : t; };
+
 /** The world's memory for a Start: the snapshot, or a first seed from the pack. */
 function memoryFor(entry, pack, worldId) {
     if (entry.memory && entry.memory.stores && entry.memory.stores.dooms_world) return entry.memory;
@@ -950,14 +994,14 @@ function memoryFor(entry, pack, worldId) {
  * written when the reply breaks a rule, the request fails or the line is
  * busy; Start goes on either way.
  */
-async function moveWorldByGap(worldId, pack, memory, gap, recaps, { mode = 'between', from = '', to = '' } = {}) {
+async function moveWorldByGap(worldId, pack, memory, gap, recaps, { mode = 'between', from = '', to = '', maxMs = 0, stop = null, onWait = null } = {}) {
     const state = normalizeWorldState(memory.stores.dooms_world);
     const lw = liveWorldConfig(extensionSettings);
     const players = playerNames();
     const prompt = buildGapPrompt({ pack, state, facts: memory.facts, gap: gap.words, recaps, maxStep: lw.maxStep, spoilerFree: lw.spoilerFree, player: players, mode, from, to });
     log(mode === 'after' ? 'the world moves for the scene just ended' : `the world moves by "${gap.words}" before the scene`, { world: worldId });
     try {
-        const r = await request(prompt, { transport: gapTransport, label: 'gap' });
+        const r = await request(prompt, { transport: gapTransport, label: 'gap', maxMs, stop, onWait });
         if (r.busy) return { ok: false, reason: 'busy' };
         const v = validateGap(parseAdvanceReply(r.text), pack, state, { maxStep: lw.maxStep, player: players });
         if (!v.ok) { log('the gap run was discarded', v.errors); return { ok: false, reason: 'invalid', errors: v.errors }; }
@@ -1070,7 +1114,7 @@ async function lastLinesFor(worldId, entry, seed, gap, players) {
         if (!card) return { ...none, scene: s.id };
         const b = bridge();
         const inFront = chatInFront(card, s.chat);
-        const messages = inFront ? (chatArray() || []) : await b.readChat({ chName: card.name, avatar: card.avatar, fileName: s.chat });
+        const messages = inFront ? (chatArray() || []) : await limited(b.readChat({ chName: card.name, avatar: card.avatar, fileName: s.chat }), { ms: timing.readMaxMs, what: 'The chat of the scene before' });
         const t = sceneTail(messages, { count: gap && gap.id === 'now' ? TAIL.now : TAIL.later, persona: players[0] || 'Player' });
         // The tracker as it stood at the last of those messages (D210): the lines have their tracker blocks taken out, so
         // the time of day and the weather they were played in are read from the message's own copy of the tracker.
@@ -1081,14 +1125,46 @@ async function lastLinesFor(worldId, entry, seed, gap, players) {
     }
 }
 
-export async function prepareScene({ worldId, seed = null, place = null, cast = [], gap = null, note = '', hookId = '' } = {}) {
+let startWait = null;      // the wait of the Start being prepared or asked again, for a Stop to end (D220)
+
+/**
+ * A Start prepared. It never throws and never waits for good (D220): a
+ * step that does not answer in time, or that fails, is said by its
+ * `reason` ('timeout', 'error') with what it was, and a Start stopped
+ * meanwhile is 'cancelled'. `onStep` is told what is being done
+ * ({ step: 'world'|'gap'|'lore'|'book'|'lines'|'line'|'openers', words?, count? }),
+ * for the sheet to say while it waits. `count` is how many openings are
+ * asked for (D221); the number last chosen where none is given.
+ */
+export async function prepareScene(args = {}) {
+    try {
+        return await prepareSceneRun(args);
+    } catch (e) {
+        const error = String(e && e.message || e);
+        if (e && e.code === 'stopped') return { ok: false, reason: 'cancelled' };
+        log('the Start could not be prepared', error);
+        return { ok: false, reason: e && e.code === 'timeout' ? 'timeout' : 'error', error };
+    }
+}
+
+async function prepareSceneRun({ worldId, seed = null, place = null, cast = [], gap = null, note = '', hookId = '', count = 0, onStep = null } = {}) {
+    const say = (step, more = {}) => { if (typeof onStep === 'function') { try { onStep({ step, ...more }); } catch (e) { /* the sheet's own */ } } };
     const g = guardStart(worldId);
     if (!g.ok) return g;
-    const res = await loadPack(packOf(g.id));
-    if (!res.ok) return { ok: false, reason: 'no-world', errors: res.errors };
-    const pack = res.pack;
     const token = ++pendingToken;
     pending = null;
+    if (startWait) startWait.stop();
+    const wait = stopper();
+    startWait = wait;
+    // One request is waited on so long and no longer, and a Stop ends the wait at once (D220). While another request has
+    // the line the sheet says so, and says the step again once the line is free.
+    const lim = (step, more = {}) => ({ maxMs: timing.startMaxMs, stop: wait.stopped, onWait: (holder) => say(holder ? 'line' : step, holder ? {} : more) });
+    const n = openersCount(count || cfg().openers);
+    say('world');
+    const res = await limited(loadPack(packOf(g.id)), { ms: timing.readMaxMs, stop: wait.stopped, what: 'The world' });
+    if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
+    if (!res.ok) return { ok: false, reason: 'no-world', errors: res.errors };
+    const pack = res.pack;
     const theGap = gapOf(gap && gap.id, gap && gap.words);
     let memory = memoryFor(g.entry, pack, g.id);
     const stoodAt = memory.facts;    // the world's date, time and weather as the last End left them, before any gap moves them on
@@ -1097,7 +1173,8 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     let movedMemory = null;    // the gap run's result is held with the Start and written with the record (a Start backed out of moves nothing)
     // A world no scene has ended in is not moved before its first: a memory a hooks round made (takenAt 0) is not one an End wrote.
     if (gapMoves(theGap) && g.entry.memory && g.entry.memory.takenAt > 0) {
-        const moved = await moveWorldByGap(g.id, pack, memory, theGap, recaps);
+        say('gap', { words: theGap.words });
+        const moved = await moveWorldByGap(g.id, pack, memory, theGap, recaps, lim('gap', { words: theGap.words }));
         if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
         if (moved.ok) { memory = moved.memory; movedMemory = moved.memory; }
         else notes.push(`The world did not move for the gap (${moved.reason}${moved.errors ? `: ${moved.errors.join(' ')}` : moved.error ? `: ${moved.error}` : ''}).`);
@@ -1115,17 +1192,20 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     const canonBlock = memory.stores.dooms_canon ? buildCanonBlock(normalizeCanon(memory.stores.dooms_canon), { maxChars: 1200 }) : '';
     const quests = memory.stores.dooms_tracker && memory.stores.dooms_tracker.quests ? memory.stores.dooms_tracker.quests : { main: 'None', optional: [] };
     // The people's own entries and the campaign's standing notes, read from its lorebooks (D177): the request sees no lorebook otherwise.
-    const notesOf = await sceneLore(g.id, names, players);
+    say('lore');
+    const notesOf = await limited(sceneLore(g.id, names, players), { stop: wait.stopped });
     if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
     // Where the people of the scene stand now and what the story has left open (D188), as the scenes before left them
     // and as the player has since corrected them in the continuity book (D189).
-    await syncFromBook(g.id);
+    say('book');
+    await limited(syncFromBook(g.id), { stop: wait.stopped });
     if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
     const contNow = entryOf(g.id).continuity;
     const stand = standingLines(contNow, names);
     const threads = threadLines(contNow);
     // The last lines of the scene before, as they were played (D205): the record says what happened, not where it stopped.
-    const lastLines = await lastLinesFor(g.id, g.entry, seed, theGap, players);
+    say('lines');
+    const lastLines = await limited(lastLinesFor(g.id, g.entry, seed, theGap, players), { stop: wait.stopped });
     if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
     // When the scene before stopped (D210): by the tracker of its last message, where its chat could be read and has one;
     // else by the world's memory as its End left it. The opening is written for that moment (right after) or counted
@@ -1155,18 +1235,36 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     // How the player said the scene before ended (D219), where its chat stops short of it: this scene opens from there.
     const before = sceneBefore(g.entry, seed);
     const wrapBefore = before && before.wrap && (!lastLines.scene || lastLines.scene === before.id) ? before.wrap : '';
-    const prompt = buildOpenersPrompt({ wrap: wrapBefore, then, thenPeople, voices, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads });
+    // Entries of the lorebooks the story has not touched (D223), where the player's words name the lorebooks: who is in the
+    // story already is told by its people (the scenes', the world's, the ones the continuity keeps) and by its own text
+    // (the records, the ledger, where people stand, the open threads). Kept in turn for this Start: Ask again draws the next.
+    let pool = [];
+    if (asksForLore(note) && notesOf.entries && notesOf.entries.length) {
+        const cont = contNow && typeof contNow === 'object' ? contNow : {};
+        const storyPeople = [...names, ...players, ...Object.keys(worldState.known || {}), ...g.entry.scenes.flatMap(x => x.cast || []), ...(Array.isArray(cont.people) ? cont.people.map(x => x.name) : [])];
+        const storyText = [
+            ...g.entry.scenes.map(x => `${x.title} ${x.recap} ${x.wrap || ''}`),
+            memory.stores.dooms_canon ? buildCanonBlock(normalizeCanon(memory.stores.dooms_canon), { maxChars: 40000 }) : '',
+            ...(Array.isArray(cont.people) ? cont.people.map(x => x.now) : []), ...(Array.isArray(cont.threads) ? cont.threads.map(x => x.text) : []),
+        ].join('\n');
+        pool = untouchedLore(notesOf.entries, { people: storyPeople, text: storyText, workshop: Object.keys(extensionSettings.characterInjection && typeof extensionSettings.characterInjection === 'object' ? extensionSettings.characterInjection : {}), words: note });
+    }
+    const fresh = loreSample(pool, { from: 0, count: freshCount(n) });
+    const ask = { wrap: wrapBefore, then, thenPeople, voices, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads };
+    const prompt = buildOpenersPrompt({ ...ask, count: n, fresh });
     let openers = [];
     let when = null;
     let said = '';    // the place the scene opens in by the player's own words, as the request answered (D218)
     let errors = [];
+    say('openers', { count: n });
     try {
-        const r = await request(prompt, { transport: openersTransport, label: 'openers' });
+        const r = await request(prompt, { transport: openersTransport, label: 'openers', ...lim('openers', { count: n }) });
         if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
         if (r.busy) errors = ['Another request holds the line.'];
         else {
-            const v = validateOpeners(parseOpenersReply(r.text), { cast: names, known: Object.keys(worldState.known || {}) });
+            const v = validateOpeners(parseOpenersReply(r.text), { cast: names, known: [...Object.keys(worldState.known || {}), ...fresh.map(f => f.name)], max: n });
             if (v.ok) { openers = v.clean.openers; when = v.clean.when; said = v.clean.where || ''; } else errors = v.errors;
+            if (v.ok && v.clean.partial) errors = [cutShort(openers.length, n)];
             // Right after, the scene opens at the moment the one before stopped: its date and time are the tracker's, not
             // the narrator's to choose (D210). A tracker that is some messages behind the end is told to the request and
             // not held to.
@@ -1174,20 +1272,26 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
             if (!v.ok) log('the openers were discarded', { errors: v.errors, reply: r.text.slice(0, 300) });
         }
     } catch (e) {
-        errors = [String(e && e.message || e)];
+        if (e && e.code === 'stopped') return { ok: false, reason: 'cancelled' };
+        errors = [`${String(e && e.message || e)}.`.replace(/\.\.$/, '.')];
         log('the openers request failed', errors[0]);
     }
+    if (token !== pendingToken) return { ok: false, reason: 'cancelled' };    // stopped while it waited: nothing is kept
     const since = recentChanges(worldState, pack, { limit: 8, spoilerFree: liveWorldConfig(extensionSettings).spoilerFree }).map(c => `${c.gameDate ? `${c.gameDate}: ` : ''}${c.text}`);
     pending = {
         token, worldId: g.id, pack, card: g.card, memory, seed: seed && typeof seed === 'object' ? seed : { kind: 'anywhere', text: seedText }, given: { id: placeId, label, region }, place: placeBy(pack, { id: placeId, label, region }, note ? said : ''), cast: names, lines, gap: theGap, note: String(note || ''),
         weather, since, recaps, player: players, openers, when, errors, notes, prompt, movedMemory,
+        count: n, ask, pool, poolAt: 0, fresh,    // how many were asked for (D221); the lorebooks' untouched entries, kept in turn (D223)
         heldWhen: rightAfter && !then.back && (then.date || then.time) ? { date: then.date, time: then.time } : null,
-        lore: { found: notesOf.found, missing: notesOf.missing, standing: !!notesOf.standing, books: notesOf.books, ...(voices.length ? { voices: voices.map(x => x.name) } : {}) },
+        lore: { found: notesOf.found, missing: notesOf.missing, standing: !!notesOf.standing, books: notesOf.books, ...(voices.length ? { voices: voices.map(x => x.name) } : {}), ...(asksForLore(note) ? { fresh: fresh.map(f => f.name), unmet: pool.length } : {}) },
         stand, threads, continuity: { stand: stand.map(x => x.name), threads: threads.length },
         tail: { messages: lastLines.messages, scene: lastLines.scene, right: theGap.id === 'now', ...(then.date || then.time || then.weather || thenPeople.length ? { then: { date: then.date, time: then.time, weather: [then.weather, then.temperature].filter(Boolean).join(', '), fromTracker: !!lf, ...(thenPeople.length ? { people: thenPeople.map(x => x.name) } : {}) } } : {}) },
     };
-    return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes, lore: pending.lore, continuity: pending.continuity, tail: pending.tail };
+    return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes, lore: pending.lore, continuity: pending.continuity, tail: pending.tail, count: n };
 }
+
+/** What the sheet is told when an answer ran out before its end (D221): the openings that came whole are kept. */
+const cutShort = (got, asked) => `The answer was cut short: ${got} of the ${asked} openings came whole. A longer response limit on the connection, or fewer openings, avoids it.`;
 
 // ─── Hooks over the memory (§4.4) ────────────────────────────────────────
 
@@ -1281,32 +1385,68 @@ export function setHubHookAside(worldId, hookId) {
 export function pendingStart() {
     return pending ? { token: pending.token, world: { id: pending.worldId, name: pending.pack.name }, place: pending.place, cast: pending.cast, gap: pending.gap, openers: pending.openers, when: pending.when, errors: pending.errors, notes: pending.notes, lore: pending.lore || null,
         // What the openings were written with, for the sheet to say (D178, D205), and the card that will speak them (D207).
-        continuity: pending.continuity || null, tail: pending.tail || null, card: { name: (pending.card && pending.card.name) || '' } } : null;
+        continuity: pending.continuity || null, tail: pending.tail || null, card: { name: (pending.card && pending.card.name) || '' }, count: pending.count || pending.openers.length } : null;
 }
 
 /** Ask again (D119): three more; the old ones stay until the new land. */
-export async function askOpenersAgain(token) {
+export async function askOpenersAgain(token, { count = 0, onStep = null } = {}) {
     if (!pending || pending.token !== token) return { ok: false, reason: 'cancelled' };
     const p = pending;
+    const say = (step, more = {}) => { if (typeof onStep === 'function') { try { onStep({ step, ...more }); } catch (e) { /* the sheet's own */ } } };
+    const n = openersCount(count || p.count || cfg().openers);    // as many as before, or the number chosen beside the button (D221)
+    if (startWait) startWait.stop();
+    const wait = stopper();
+    startWait = wait;
+    // Asking again is asking for other faces too (D223): the next of the lorebooks' untouched entries, round again past the last.
+    const at = p.pool && p.pool.length ? ((p.poolAt || 0) + freshCount(p.count)) % p.pool.length : 0;
+    const fresh = p.pool && p.pool.length ? loreSample(p.pool, { from: at, count: freshCount(n) }) : [];
+    const prompt = p.ask ? buildOpenersPrompt({ ...p.ask, count: n, fresh }) : p.prompt;
+    say('openers', { count: n });
     try {
-        const r = await request(p.prompt, { transport: openersTransport, label: 'openers' });
+        const r = await request(prompt, { transport: openersTransport, label: 'openers', maxMs: timing.startMaxMs, stop: wait.stopped, onWait: (holder) => say(holder ? 'line' : 'openers', holder ? {} : { count: n }) });
         if (!pending || pending.token !== token) return { ok: false, reason: 'cancelled' };
         if (r.busy) return { ok: false, reason: 'busy', openers: p.openers };
-        const v = validateOpeners(parseOpenersReply(r.text), { cast: p.cast, known: Object.keys(normalizeWorldState(p.memory.stores.dooms_world).known || {}) });
+        const v = validateOpeners(parseOpenersReply(r.text), { cast: p.cast, known: [...Object.keys(normalizeWorldState(p.memory.stores.dooms_world).known || {}), ...fresh.map(f => f.name)], max: n });
         if (!v.ok) return { ok: false, reason: 'openers', errors: v.errors, openers: p.openers };
         p.openers = v.clean.openers;
+        p.count = n;
+        p.prompt = prompt;
+        p.poolAt = at;
+        p.fresh = fresh;
+        if (p.lore && p.lore.fresh) p.lore = { ...p.lore, fresh: fresh.map(f => f.name) };
         if (p.note && p.given) p.place = placeBy(p.pack, p.given, v.clean.where || '');    // where the player's words put it, as this answer has it (D218)
         p.when = p.heldWhen || v.clean.when || p.when;    // right after, the date and time are the tracker's (D210), asked again or not
-        p.errors = [];
-        return { ok: true, openers: p.openers, when: p.when };
+        p.errors = v.clean.partial ? [cutShort(p.openers.length, n)] : [];
+        return { ok: true, openers: p.openers, when: p.when, errors: p.errors };
     } catch (e) {
-        return { ok: false, reason: 'error', error: String(e && e.message || e), openers: p.openers };
+        // Stopped, or no answer in time (D220): the openings from before stay.
+        if (e && e.code === 'stopped') return { ok: false, reason: 'stopped', openers: p.openers };
+        return { ok: false, reason: e && e.code === 'timeout' ? 'timeout' : 'error', error: String(e && e.message || e), openers: p.openers };
     }
+}
+
+/** The wait of a Start ended (D220): the request it is waiting on is given up on. What was prepared before stays. */
+export function stopStartWait() {
+    if (startWait) { const w = startWait; startWait = null; w.stop(); }
 }
 
 export function cancelStart() {
     pending = null;
     pendingToken++;
+    stopStartWait();
+}
+
+/** How many openings a Start asks for (D221): as last chosen on the Start sheet, three until one is. */
+export function openersWanted() {
+    return cfg().openers;
+}
+
+/** The number chosen, kept for the next Start. Nothing is drawn again for it. */
+export function setOpenersWanted(n) {
+    const s = store();
+    const v = openersCount(n);
+    if (s.openers !== v) { s.openers = v; try { saveSettings(); } catch (e) { log('settings save failed', String(e && e.message || e)); } }
+    return v;
 }
 
 /**
@@ -1330,6 +1470,17 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     const entry = entryOf(p.worldId);
     const n = entry.seq + 1;
     const title = sceneTitle({ opener: list[0] || null, seed: p.seed, place: p.place.label });
+    // Whoever the opening shown first brings in out of the lorebooks (D223) is one of the scene's people from here on:
+    // in its brief by their Workshop line, else by the head of their entry.
+    const joined = choice !== 'own' && list.length && Array.isArray(p.fresh) && p.fresh.length
+        ? (Array.isArray(list[0].who) ? list[0].who : []).filter(w => p.fresh.some(f => sameName(f.name, w)) && !p.cast.some(c => sameName(c, w)))
+        : [];
+    const cast = [...p.cast, ...joined].slice(0, MAX_CAST);
+    const lines = [...p.lines, ...joined.map((w) => {
+        const own = castLines([w], normalizeWorldState(p.memory.stores.dooms_world))[0];
+        const f = p.fresh.find(x => sameName(x.name, w));
+        return own && own.line !== w ? own : { name: w, line: personLine(w, { description: f ? cutLine(f.text) : '' }) };
+    })].slice(0, MAX_CAST);
     // The scene's own card (D209), made now: blank but for a line that says what it is, the openings its greetings. It is
     // made before the file, which is written under it; a file that cannot be written takes the card away again.
     let card = p.card;
@@ -1352,12 +1503,12 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     let memoryNow = live || p.memory;
     if (moved) memoryNow = { ...memoryNow, stores: { ...memoryNow.stores, dooms_world: moved.stores.dooms_world }, facts: moved.facts };
     const hooked = p.seed && p.seed.kind === 'hook' && p.seed.id ? { id: p.seed.id, title: p.seed.label || '', text: p.seed.text || '' } : null;
-    const seeded = seedStores(memoryNow, { chatId: fileName, place: p.place.label, cast: p.cast, player: p.player, weather: p.weather, when: p.when, hookId: hooked ? hooked.id : '', hook: hooked, now });
+    const seeded = seedStores(memoryNow, { chatId: fileName, place: p.place.label, cast, player: p.player, weather: p.weather, when: p.when, hookId: hooked ? hooked.id : '', hook: hooked, now });
     // With the continuity book switched on, SillyTavern's own World Info carries where people stand and the open threads
     // into every reply (D189); the brief says them only when the book is not there to.
     const bookOn = await bookIsLive(p.worldId);
-    const brief = buildBrief({ world: p.pack.name, sceneNo: n, place: p.place.label, region: p.place.region, date: seeded.facts.date, time: seeded.facts.time, weather: seeded.facts.weather, gapWords: p.gap.words, cast: p.lines.map(l => l.line), seed: p.seed.text || p.seed.label || '', since: p.since, lastRecap: p.recaps[0] || '', beforeRecap: p.recaps[1] || '', player: p.player[0] || '', note: p.note, style: isStyleLawOn() ? g.entry.style : null, stand: bookOn ? [] : (p.stand || []), threads: bookOn ? [] : (p.threads || []) });
-    const mark = hubMark({ world: p.worldId, scene: `s${n}`, title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, startedAt: now, startDate: seeded.facts.date, file: fileName, brief });
+    const brief = buildBrief({ world: p.pack.name, sceneNo: n, place: p.place.label, region: p.place.region, date: seeded.facts.date, time: seeded.facts.time, weather: seeded.facts.weather, gapWords: p.gap.words, cast: lines.map(l => l.line), seed: p.seed.text || p.seed.label || '', since: p.since, lastRecap: p.recaps[0] || '', beforeRecap: p.recaps[1] || '', player: p.player[0] || '', note: p.note, style: isStyleLawOn() ? g.entry.style : null, stand: bookOn ? [] : (p.stand || []), threads: bookOn ? [] : (p.threads || []) });
+    const mark = hubMark({ world: p.worldId, scene: `s${n}`, title, seed: p.seed, place: p.place, cast, gap: p.gap, startedAt: now, startDate: seeded.facts.date, file: fileName, brief });
     // The brief rides DES's own slot every generation (D120): a chat-completion preset may not send the scenario at all.
     const header = sceneHeader({ stores: seeded.stores, mark, scenario: '', worldInfo: '', integrity: b.uuid(), persona: b.userAvatar() });
     const message = list.length ? openerMessage({ name: card.name, openers: list, chosen: 0, sendDate: b.timestamp(), tracker: seeded.tracker, title }) : null;
@@ -1369,7 +1520,7 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
         if (ownCard) await dropSceneCard(card.avatar);    // the card was made for a scene that is not there
         return { ok: false, reason: 'file', error };
     }
-    const opened = openScene(entry, { title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, chat: fileName, card: card.avatar, ownCard, startedAt: now, startDate: seeded.facts.date });
+    const opened = openScene(entry, { title, seed: p.seed, place: p.place, cast, gap: p.gap, chat: fileName, card: card.avatar, ownCard, startedAt: now, startDate: seeded.facts.date, note: String(p.note || '').slice(0, MAX_NOTE) });    // what the player said happens next is kept for the record to be told (D222)
     // The record and the world moved by the gap are written together, once the file exists (D117, §2.2); a hook played
     // leaves the memory's round, the way it left the chat's copy (§4.4), and one the round no longer holds (another
     // round landed while the Start waited) is recorded as played from the seed. A world with no memory gets none here.
@@ -1473,6 +1624,9 @@ export async function prepareEnd({ onStep = null, wrap = '' } = {}) {
     const players = playerNames();
     // The scene's brief is kept on the mark (D120: it rides the brief slot, the chat has no scenario of its own).
     const brief = g.cur.mark && typeof g.cur.mark.brief === 'string' ? g.cur.mark.brief : '';
+    // What the player said happens next when they started it (D218): what it says had happened since the scene before is
+    // part of the story, and the record is told it with the scene's first part (D222).
+    const before = g.cur.scene && g.cur.scene.note ? String(g.cur.scene.note) : '';
     // A scene longer than one page is read in passes, oldest first, each pass carrying the record so far (§5.2).
     // Each pass after the first is handed the lines that lead into its page, and a cut never parts the player's message from its reply (D199).
     const parts = sceneTranscriptParts(chatArray() || [], { budget: RECAP_BUDGET, persona: players[0] || 'Player' });
@@ -1495,7 +1649,7 @@ export async function prepareEnd({ onStep = null, wrap = '' } = {}) {
         for (let i = 0; i < count; i++) {
             // Which request is being asked for, for the sheet's bars (D198).
             try { if (typeof onStep === 'function') onStep({ page: i + 1, pages: count, states: Array.from({ length: count }, (x, k) => (k < i ? 'done' : k === i ? 'run' : 'wait')) }); } catch (e) { /* the sheet is gone */ }
-            const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1, continuity: draft, check, lead: i > 0 ? parts[i].lead : '', wrap });
+            const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1, continuity: draft, check, lead: i > 0 ? parts[i].lead : '', wrap, before });
             const r = await request(prompt, { transport: recapTransport, label: 'recap' });
             if (r.busy) { error = 'Another request holds the line.'; break; }
             const p = parseRecapReply(r.text, { maxChars: cfg().recapChars });
@@ -1512,7 +1666,7 @@ export async function prepareEnd({ onStep = null, wrap = '' } = {}) {
     const canonDone = !!(g.cur.mark.end && g.cur.mark.end.canonAt && g.cur.mark.end.canonAt === lastReplyId());
     const continuity = draftChanges(draft);
     // Kept for an End that has no sheet to hand it back (the command, the handover): this chat's, for this last reply.
-    const result = { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, stale, canonDone, steps: { canon: isCanonOn() && !canonDone, world: isLiveWorldOn() && !!getWorldState() }, pages: pages.length, style: isStyleLawOn() ? sceneStyle() : null, continuity, book: continuityBookOf(g.cur.worldId), conflicts, checked: { ledger: !!check.canon, notes: check.lore.map(l => l.name), standing: !!check.standing } };
+    const result = { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, stale, canonDone, steps: { canon: isCanonOn() && !canonDone, world: isLiveWorldOn() && !!getWorldState() }, pages: pages.length, style: isStyleLawOn() ? sceneStyle() : null, continuity, book: continuityBookOf(g.cur.worldId), conflicts, checked: { ledger: !!check.canon, notes: check.lore.map(l => l.name), standing: !!check.standing }, before: !!before };
     prepared = { id: token.id, reply: lastReplyId(), change: { people: continuity.people.map(x => ({ name: x.name, now: x.now })), opened: continuity.opened.map(t => t.text), closed: continuity.closed.map(t => t.id) }, conflicts, result, held: false };
     return result;
 }
@@ -1562,8 +1716,10 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         const canonDone = !!(g.cur.mark.end && g.cur.mark.end.canonAt && g.cur.mark.end.canonAt === replyId);
         if (isCanonOn() && !skipCanon && !canonDone) {
             step('canon', 'running');
-            let r = await updateCanon({ reason: 'scene-end', scope: 'scene', also: wrap });    // how the player says it ended is read with the scene (D219)
-            if (!r.ok && (r.reason === 'busy' || r.reason === 'running')) { await waitForBackground(); await sleep(timing.idleStepMs); r = await updateCanon({ reason: 'scene-end', scope: 'scene', also: wrap }); }
+            // How the player says it ended is read with the scene (D219), and what they said had happened before it opened (D222).
+            const before = g.cur.scene && g.cur.scene.note ? String(g.cur.scene.note) : '';
+            let r = await updateCanon({ reason: 'scene-end', scope: 'scene', also: wrap, before });
+            if (!r.ok && (r.reason === 'busy' || r.reason === 'running')) { await waitForBackground(); await sleep(timing.idleStepMs); r = await updateCanon({ reason: 'scene-end', scope: 'scene', also: wrap, before }); }
             out.canon = r.ok ? 'ok' : 'failed';
             out.canonResult = r;
             step('canon', out.canon);

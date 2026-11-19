@@ -24,6 +24,7 @@ import {
     ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, activeCampaignWorldId, worldsByCampaign, loreLibraryOn,
     STORY_SEP, packOf, entryUntouched, storyIdsOf, nextStoryId, storyOfChat, storyPlayedAt, lastStoryOf, storiesOf,
     MAX_NOTE, BRIEF_NOTE, MAX_WRAP, readDirection, describeDirection,
+    MAX_OPENERS, openersCount, countWord, startStepWords, elapsedWords, asksForLore, loreEntryName, untouchedLore, loreSample, freshCount, LORE_FRESH_EACH,
 } from '../src/utils/hub.js';
 import { normalizePack, seedWorldState, countMessage, applyAdvance, reconcileWithChat, seenInScene } from '../src/utils/liveWorld.js';
 import { visitPlace, reconcileVisited } from '../src/utils/worldMap.js';
@@ -43,7 +44,7 @@ const clock = pack.clocks[0];
 
 console.log('\n§1 the rules');
 {
-    check('defaults: later that day, 600 characters, the count of repeated phrases off, no bar above a scene\'s chat, a narrator card for every scene', same(defaultHubConfig(), { gap: 'later', recapChars: 600, styleLaw: false, nudgeAt: 60, strip: false, sceneCards: true }));
+    check('defaults: later that day, 600 characters, the count of repeated phrases off, no bar above a scene\'s chat, a narrator card for every scene', same(defaultHubConfig(), { gap: 'later', recapChars: 600, styleLaw: false, nudgeAt: 60, strip: false, sceneCards: true, openers: 3 }));
     check('a card for every scene is on unless switched off, by exactly that; the setting is kept with the hub\'s', hubConfig({}).sceneCards === true && hubConfig({ hub: { sceneCards: false } }).sceneCards === false && hubConfig({ hub: { sceneCards: 'no' } }).sceneCards === true && normalizeHub({ sceneCards: false }).sceneCards === false);
     check('a fresh chat is suggested after sixty messages unless the player says otherwise: any number from 0 (never) to 500', hubConfig({}).nudgeAt === 60 && hubConfig({ hub: { nudgeAt: 0 } }).nudgeAt === 0 && hubConfig({ hub: { nudgeAt: '80' } }).nudgeAt === 80 && hubConfig({ hub: { nudgeAt: 9999 } }).nudgeAt === 500 && hubConfig({ hub: { nudgeAt: -5 } }).nudgeAt === 0 && hubConfig({ hub: { nudgeAt: 'soon' } }).nudgeAt === 60 && hubConfig({ hub: { nudgeAt: '' } }).nudgeAt === 60);
     check('the count of repeated phrases is on only when switched on, by exactly that', hubConfig({}).styleLaw === false && hubConfig({ hub: { styleLaw: true } }).styleLaw === true && hubConfig({ hub: { styleLaw: 'yes' } }).styleLaw === false && hubConfig({ hub: { styleLaw: 1 } }).styleLaw === false);
@@ -198,7 +199,7 @@ console.log('\n§5 the openers');
     check('the first message: the chosen in front, the others as swipes, the tracker data on every swipe, the mark on it', msg.name === 'Mara' && msg.is_user === false && msg.is_system === false && msg.mes.startsWith('Rain stopped') && msg.swipe_id === 0 && msg.swipes.length === 3 && msg.swipes[1].startsWith('The customs house') && msg.swipe_info.length === 3 && same(msg.extra.dooms_tracker_swipes[2], tracker) && same(msg.swipe_info[1].extra.dooms_tracker_swipes[1], tracker) && msg.extra[HUB_META_KEY].opener === true && msg.extra[HUB_META_KEY].title === 'Rain stopped', JSON.stringify(msg).slice(0, 300));
     check('no openers, no message; no tracker, no swipe data', openerMessage({ openers: [] }) === null && !('dooms_tracker_swipes' in openerMessage({ openers: [{ title: 'a', text: 'b' }] }).extra));
     check('a scene\'s title: the opener\'s, else the seed\'s, else the place\'s', sceneTitle({ opener: { title: 'The queue' }, seed: { label: 'x' } }) === 'The queue' && sceneTitle({ seed: { kind: 'rumour', text: 'The cutter will search every hold tonight, they say.' } }).length <= 60 && sceneTitle({ place: 'The quay' }) === 'The quay' && sceneTitle({}) === 'A scene');
-    check(`at most ${OPENERS} openers asked for`, buildOpenersPrompt({ count: 9 }).system.includes('Write 3 openers') && buildOpenersPrompt({ count: 1 }).system.includes('Write 1 opener that'));
+    check(`${OPENERS} openers asked for unless another number is chosen, ${MAX_OPENERS} at the most`, buildOpenersPrompt({}).system.includes('Write 3 openers') && buildOpenersPrompt({ count: 9 }).system.includes('Write 6 openers') && buildOpenersPrompt({ count: 5 }).system.includes('Write 5 openers') && buildOpenersPrompt({ count: 1 }).system.includes('Write 1 opener that'));
 }
 
 console.log('\n§6 the file');
@@ -696,13 +697,13 @@ console.log('\nwhat the player says happens next: the main word on a scene (D218
     const read = (t) => readDirection(t, { places, people });
     check('it takes two thousand characters; six hundred of them ride the scene\'s brief', MAX_NOTE === 2000 && BRIEF_NOTE === 600 && MAX_WRAP === 2000);
     const full = read('Three days later, Jack and Isabella go to the Afterlife to meet Rogue about the job.');
-    check('a place of the map, the people the story knows and the time that has passed are read out of the words', same(full, { place: { id: 'pin:afterlife', label: 'The Afterlife' }, people: ['Isabella', 'Rogue Amendiares'], gap: { id: 'when', words: 'three days later' } }), JSON.stringify(full));
+    check('a place of the map, the people the story knows and the time that has passed are read out of the words', same(full, { place: { id: 'pin:afterlife', label: 'The Afterlife' }, people: ['Isabella', 'Rogue Amendiares'], gap: { id: 'when', words: 'three days later' }, lore: false }), JSON.stringify(full));
     check('in a line for the sheet', describeDirection(full) === 'at The Afterlife · with Isabella, Rogue Amendiares · three days later' && describeDirection(read('A quiet talk.')) === '' && describeDirection(null) === '');
     check('of two places named, the longer name is the place', read('They meet at the Kabuki market.').place.id === 'market' && read('Back in Kabuki.').place.id === 'kabuki');
     check('a name is a word of its own: part of another word is not it', read('The Kabukicho district').place === null && read('Isabellas everywhere').people.length === 0);
     check('a person is known by their whole name, by the name before what is said of them, or by a first name that is no one else\'s', same(read('Doc Imura calls. Cassie is late. Rogue laughs.').people, ['Cassie (Katherine Hightower)', 'Rogue Amendiares', 'Doc Imura, the back-alley ripperdoc']) && same(read('Jackie walks in.').people, []) && same(read('Jackie Welles walks in.').people, ['Jackie Welles']), JSON.stringify(read('Doc Imura calls. Cassie is late. Rogue laughs.').people));
     check('how much time has passed, in the words\' own words', read('The next morning they wake.').gap.words === 'the next morning' && read('After two weeks of lying low').gap.words === 'after two weeks' && read('later that night').gap.words === 'later that night' && read('A few hours pass before the call.').gap.words === 'a few hours pass' && read('It is tomorrow night').gap.words === 'tomorrow night');
-    check('no time at all where they say so; nothing where they do not say', same(read('Right after, they keep talking.').gap, { id: 'now', words: '' }) && same(read('picking up where we left off').gap, { id: 'now', words: '' }) && read('A fight in the alley.').gap === null && same(read(''), { place: null, people: [], gap: null }));
+    check('no time at all where they say so; nothing where they do not say', same(read('Right after, they keep talking.').gap, { id: 'now', words: '' }) && same(read('picking up where we left off').gap, { id: 'now', words: '' }) && read('A fight in the alley.').gap === null && same(read(''), { place: null, people: [], gap: null, lore: false }));
     const base = { world: { name: 'Night City' }, place: 'Jack\'s safe house', cast: ['Isabella'], player: 'Jack', gapWords: '' };
     const plain = buildOpenersPrompt(base);
     const asked = buildOpenersPrompt({ ...base, note: 'Three days later Jack and Isabella meet Rogue at the Afterlife.\n\nShe has a job: a data shard lifted from Arasaka.' });
@@ -732,6 +733,95 @@ console.log('\nhow the player says a scene ended (D219)');
     const next = buildOpenersPrompt({ world: { name: 'Night City' }, place: 'The safe house', player: 'Jack', tail: 'Narrator: The alley is long.', wrap });
     check('the next scene\'s openings are told it after the last lines, and that the scene opens from that end', next.user.includes(`How the scene before ended, in Jack's own words (it happened after those lines):\n${wrap}\n`) && /Where it is given how the scene before ended in Jack's own words, that happened, after its last lines: this scene opens from that end, not from the lines, and nothing in it is undone\./.test(next.system), next.user.slice(-500));
     check('with no lines to show, after what its record tells', buildOpenersPrompt({ world: { name: 'N' }, player: 'Jack', wrap }).user.includes('(it happened after what its record tells)'));
+}
+
+console.log('\n§ a Start that says what it is doing, and as many openings as chosen (D220, D221)');
+{
+    check('one to six openings, three where none was chosen', MAX_OPENERS === 6 && openersCount(undefined) === 3 && openersCount(0) === 3 && openersCount('x') === 3 && openersCount(1) === 1 && openersCount('5') === 5 && openersCount(6) === 6 && openersCount(40) === 6 && openersCount(2.4) === 2);
+    check('the number chosen is kept with the hub\'s settings, within its range', hubConfig({ hub: { openers: 5 } }).openers === 5 && hubConfig({ hub: { openers: 99 } }).openers === 6 && hubConfig({ hub: {} }).openers === 3 && normalizeHub({ openers: 2 }).openers === 2);
+    check('a number in words for the sheet', countWord(1) === 'one' && countWord(3) === 'three' && countWord(6) === 'six' && countWord(14) === '14');
+    const six = { when: { date: 'D', time: 'T' }, openers: Array.from({ length: 8 }, (_, i) => ({ title: `T${i}`, text: `Text ${i}.`, who: [] })) };
+    check('as many are kept as were asked for: three unless told, six at the most', validateOpeners(six).clean.openers.length === 3 && validateOpeners(six, { max: 5 }).clean.openers.length === 5 && validateOpeners(six, { max: 9 }).clean.openers.length === 6 && validateOpeners(six, { max: 1 }).clean.openers.length === 1);
+    const whole = JSON.stringify({ when: { date: 'Day 2', time: 'dusk' }, where: 'The old mill', openers: [{ title: 'A', text: 'First one.', who: ['Mira'] }, { title: 'B', text: 'Second one.', who: [] }, { title: 'C', text: 'Third one, which is long.', who: [] }] });
+    const cut = whole.slice(0, whole.indexOf('Third one') + 9);
+    const got = parseOpenersReply(cut);
+    const v = validateOpeners(got, { known: ['Mira'], max: 3 });
+    check('an answer that ran out before its end: the openers that came whole are kept, with the date and the place written before the cut', !!got && got.partial === true && v.ok && v.clean.partial === true && v.clean.openers.length === 2 && same(v.clean.openers[0].who, ['Mira']) && same(v.clean.when, { date: 'Day 2', time: 'dusk' }) && v.clean.where === 'The old mill', JSON.stringify(got));
+    check('a whole answer is not said to be cut, nor one opener answered bare', validateOpeners(parseOpenersReply(whole)).clean.partial === undefined && validateOpeners(parseOpenersReply('{"title":"A","text":"Only one."}')).clean.partial === undefined && validateOpeners(parseOpenersReply('{"title":"A","text":"Only one."}')).clean.openers.length === 1);
+    check('an answer cut before any opener came whole holds nothing', parseOpenersReply('{"when":{"date":"D","time":"T"},"openers":[{"title":"A","text":"It beg') === null);
+    check('each step in words', startStepWords({ step: 'world' }) === 'Reading the world…' && startStepWords({ step: 'gap', words: 'the next week' }) === 'Moving the world on (the next week)…' && startStepWords({ step: 'lore' }) === 'Reading the lorebooks…' && startStepWords({ step: 'book' }) === 'Reading where the people stand…' && startStepWords({ step: 'lines' }) === 'Reading the last lines of the scene before…' && startStepWords({ step: 'line' }) === 'Waiting for another request to finish…');
+    check('the openings by their number', startStepWords({ step: 'openers' }) === 'Writing three ways it could open…' && startStepWords({ step: 'openers', count: 1 }) === 'Writing how it could open…' && startStepWords({ step: 'openers', count: 5 }) === 'Writing five ways it could open…' && startStepWords({}) === 'Writing three ways it could open…');
+    check('the time waited', elapsedWords(0) === '0:00' && elapsedWords(7400) === '0:07' && elapsedWords(161000) === '2:41' && elapsedWords(-5) === '0:00' && elapsedWords('x') === '0:00');
+    check('a Start that did not come back, in words: what was typed is kept', /^The world did not answer in 20 seconds\. Nothing was started, and your words are kept: try again\.$/.test(describeStartResult({ ok: false, reason: 'timeout', error: 'The world did not answer in 20 seconds' })) && describeStartResult({ ok: false, reason: 'stopped' }) === 'Stopped. Nothing was started, and your words are kept.' && /went wrong while the scene was prepared \(x is not a function\)/.test(describeStartResult({ ok: false, reason: 'error', error: 'x is not a function' })));
+}
+
+console.log('\n§ what happened in between is kept with the scene it opens (D222)');
+{
+    const note = 'Isabella and Jack spend the next week together. Jack meets her mother. The story starts on their first day back.';
+    const opened = openScene(normalizeWorldEntry(null), { title: 'Back to work', chat: 'Scene 1', note });
+    check('a scene keeps what the player said happens next when they started it', opened.scene.note === note && normalizeScene({ id: 's1', note: 'x'.repeat(5000) }).note.length === MAX_NOTE);
+    check('one started with nothing said keeps none', openScene(normalizeWorldEntry(null), { title: 'x', chat: 'c' }).scene.note === undefined && !('note' in normalizeScene({ id: 's1' })));
+    const ended = endSceneRecord(opened.entry, 's1', { endedAt: 5, recap: 'They went back.' });
+    check('ending it keeps them', ended.scene.note === note);
+    const p = buildRecapPrompt({ transcript: 'Narrator: The office.', player: 'Jack', before: note });
+    check('the record is told them before the scene, as the player\'s own words', p.user.includes(`Before this scene opened, Jack said this of what had happened since the scene before and of how this one should open (their own words):\n${note}\n\nThe scene:\nNarrator: The office.`));
+    check('…and that what had happened by then did happen, and what is only asked for did not', /what it says had already happened by then \(time that passed, what was done in it, who was met\) did happen, off the page, and the record tells it in a sentence or two before what the scene shows/.test(p.system) && /What it only asks for, plans or expects is not part of the story unless the scene shows it\.$/.test(p.system));
+    const both = buildRecapPrompt({ transcript: 'x', player: 'Jack', before: note, wrap: 'They left.' });
+    check('with how the scene ended too, both are told', both.user.includes('Before this scene opened') && both.user.includes('How the scene ended') && /did happen, off the page/.test(both.system) && /that is how it ended/.test(both.system));
+    check('a later part of a long scene is not told them again', !buildRecapPrompt({ transcript: 'x', player: 'Jack', before: note, soFar: 'So far.' }).user.includes('Before this scene opened') && !/off the page/.test(buildRecapPrompt({ transcript: 'x', player: 'Jack', before: note, soFar: 'So far.' }).system));
+    check('with nothing said, the request is as it was', !buildRecapPrompt({ transcript: 'x', player: 'Jack' }).user.includes('Before this scene opened') && !/off the page/.test(buildRecapPrompt({ transcript: 'x', player: 'Jack' }).system));
+}
+
+console.log('\n§ new faces from the lorebooks (D223)');
+{
+    check('the words name the lorebooks, however they are spelt', asksForLore('one of the unexplored girls in the lore books') && asksForLore('someone from the Lorebook') && asksForLore('a face out of the lore-books') && !asksForLore('the lore of the place') && !asksForLore('books on a shelf') && !asksForLore(''));
+    const read = readDirection('Each of the openings should lead to one of the unexplored girls in the lore books.', { places: [], people: [] });
+    check('read out of the words with the rest, and said on the sheet', read.lore === true && describeDirection(read) === 'new faces from the lorebooks' && describeDirection(readDirection('Three days later, someone new from the lorebooks.', {})) === 'three days later · new faces from the lorebooks');
+    check('the name an entry goes by', loreEntryName({ title: 'Kiyoha — who she is', keys: [] }) === 'Kiyoha' && loreEntryName({ title: 'Rogue (fixer)', keys: [] }) === 'Rogue' && loreEntryName({ title: 'Character: Mira Okonkwo', keys: [] }) === 'Mira Okonkwo' && loreEntryName({ title: 'The Afterlife: a bar', keys: [] }) === 'The Afterlife' && loreEntryName({ title: '', keys: ['Sable', 'forger'] }) === 'Sable' && loreEntryName({ title: 'Jean-Luc', keys: [] }) === 'Jean-Luc' && loreEntryName({}) === '');
+    const book = loreEntries('Faces', { entries: {
+        1: { key: ['Isabella'], comment: 'Isabella — who she is', content: 'Isabella is a singer with dark hair. She laughs easily.' },
+        2: { key: ['Mira'], comment: 'Mira Okonkwo', content: 'Mira is a courier, twenty-six years old. She talks fast and she never sits still.' },
+        3: { key: ['Afterlife'], comment: 'The Afterlife', content: 'A bar in an old morgue.' },
+        4: { key: ['Sable'], comment: 'Sable (the forger)', content: 'Sable forges papers. She has grey eyes and her voice is soft.' },
+        5: { key: ['canal'], comment: 'The Canals', content: 'Black water between the towers.' },
+        6: { key: [], comment: 'STORY CANON', content: 'Always on.', constant: true },
+        7: { key: ['Tom'], comment: 'Old Tom', content: 'Tom keeps the ferry. He is sixty years old and his beard is white.' },
+        8: { key: ['Rogue'], comment: 'Rogue', content: 'Rogue runs the Afterlife. She is feared.' },
+        9: { key: ['Vex'], comment: 'Vex', content: 'A name on a wall.' },
+        10: { key: ['off'], comment: 'Switched off', content: 'Not read.', disable: true },
+    } });
+    const order = () => 0.5;
+    const pick = (o) => untouchedLore(book, { rand: order, ...o }).map(x => x.name);
+    const all = pick({});
+    check('with nothing known, every entry but the ones that are always on or switched off', same([...all].sort(), ['Isabella', 'Mira Okonkwo', 'Old Tom', 'Rogue', 'Sable', 'The Afterlife', 'The Canals', 'Vex']), JSON.stringify(all));
+    check('the story\'s people are in it already: by their whole name, by the name before what is said of them, by a first name', !pick({ people: ['Isabella'] }).includes('Isabella') && !pick({ people: ['Rogue Amendiares'] }).includes('Rogue') && !pick({ people: ['Mira, the courier'] }).includes('Mira Okonkwo') && !pick({ people: ['Sable (the forger)'] }).includes('Sable'));
+    check('a word names begin with is not the name: Old Marit is not Old Tom, The Baron is not The Canals', pick({ people: ['Old Marit', 'The Baron'] }).includes('Old Tom') && pick({ people: ['Old Marit', 'The Baron'] }).includes('The Canals') && pick({ people: ['Old Marit', 'The Baron'] }).includes('The Afterlife'));
+    check('what the story\'s own text names is in it already: by the entry\'s name or one of its keys, as a word of its own', !pick({ text: 'They met at the Afterlife.' }).includes('The Afterlife') && !pick({ text: 'Along the canal at night.' }).includes('The Canals') && pick({ text: 'A sablefish supper.' }).includes('Sable') && !pick({ text: 'Rogue was not there.' }).includes('Rogue'));
+    const ranked = untouchedLore(book, { rand: order });
+    check('people first: an entry that reads as a person comes before one that does not', ranked.findIndex(x => x.name === 'The Canals') > ranked.findIndex(x => x.name === 'Old Tom') && ranked.findIndex(x => x.name === 'Vex') > ranked.findIndex(x => x.name === 'Mira Okonkwo') && ranked.find(x => x.name === 'Mira Okonkwo').person === true && ranked.find(x => x.name === 'The Canals').person === false);
+    const girls = untouchedLore(book, { rand: order, words: 'one of the unexplored girls in the lore books' }).map(x => x.name);
+    check('the kind the words ask for comes before the other', girls.indexOf('Old Tom') > Math.max(girls.indexOf('Mira Okonkwo'), girls.indexOf('Sable'), girls.indexOf('Isabella')), JSON.stringify(girls));
+    const carded = untouchedLore(book, { rand: order, workshop: ['Vex'] }).map(x => x.name);
+    check('one with a card in the Workshop is a person, whatever its entry reads like', carded[0] === 'Vex');
+    let k = 0;
+    const turn = () => [0.9, 0.1, 0.5, 0.3, 0.7, 0.2, 0.8, 0.4][k++ % 8];
+    const a = untouchedLore(book, { rand: turn }).map(x => x.name).join();
+    k = 3;
+    const b = untouchedLore(book, { rand: turn }).map(x => x.name).join();
+    check('among equals the order is drawn afresh each time', a !== b);
+    check('each is cut to a length, and no more are kept than the pool holds', untouchedLore([{ book: 'B', title: 'Long One', keys: [], content: 'She is tall. '.repeat(400), constant: false }], {})[0].text.length <= LORE_FRESH_EACH && untouchedLore(book, { rand: order, pool: 3 }).length === 3);
+    check('about twice as many are given as openings are asked for, six at the least', freshCount(1) === 6 && freshCount(3) === 8 && freshCount(6) === 14 && freshCount(undefined) === 8);
+    const pool = untouchedLore(book, { rand: order });
+    const s1 = loreSample(pool, { from: 0, count: 3 }).map(x => x.name);
+    const s2 = loreSample(pool, { from: 3, count: 3 }).map(x => x.name);
+    const s3 = loreSample(pool, { from: 6, count: 3 }).map(x => x.name);
+    check('the ones given are taken in turn, round again past the last', s1.length === 3 && s2.length === 3 && !s1.some(n => s2.includes(n)) && s3.length === 3 && s3[2] === s1[0], JSON.stringify([s1, s2, s3]));
+    check('never more than there are, and within a total length', loreSample(pool, { from: 0, count: 50 }).length === pool.length && loreSample(pool, { from: 0, count: 8, total: 250 }).length <= 2 && same(loreSample([], {}), []));
+    const p = buildOpenersPrompt({ world: { name: 'Night City' }, player: 'Jack', note: 'Lead to one of the unexplored girls in the lore books.', count: 3, fresh: loreSample(pool, { from: 0, count: 2 }) });
+    check('the request is given them under their names, after the player\'s words', p.user.includes(`From the lorebooks, not in the story yet (Jack has not met them):\n[${pool[0].name}] ${pool[0].text}\n[${pool[1].name}] ${pool[1].text}\n`) && p.user.indexOf('says happens next') < p.user.indexOf('From the lorebooks'));
+    check('…and told to bring them in as the words ask, a different one in each opener, met for the first time, and named in "who"', /because Jack's words ask for someone or something out of them: bring them in as those words ask, a different one in each opener, each written as their entry says and met here for the first time \(Jack does not know them\)\. Whoever of them is in an opener is named in its "who", by the name in brackets\./.test(p.system));
+    check('for one opener there is no "different one in each"', !/a different one in each opener/.test(buildOpenersPrompt({ player: 'Jack', note: 'x', count: 1, fresh: loreSample(pool, { count: 2 }) }).system));
+    check('with none given the request is as it was', !buildOpenersPrompt({ player: 'Jack', note: 'x' }).user.includes('From the lorebooks') && !/out of them/.test(buildOpenersPrompt({ player: 'Jack', note: 'x' }).system));
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

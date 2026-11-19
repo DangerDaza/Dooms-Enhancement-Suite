@@ -222,7 +222,7 @@ export function __setCanonTransport(fn) {
 const SCENE_ADDS = 16;
 const SCENE_DROPS = 8;
 
-export async function updateCanon({ reason = 'manual', scope = 'recent', text: given = '', adds: more = 0, also = '' } = {}) {
+export async function updateCanon({ reason = 'manual', scope = 'recent', text: given = '', adds: more = 0, also = '', before = '' } = {}) {
     if (!ready()) return { ok: false, reason: 'off' };
     if (updating) return { ok: false, reason: 'running' };
     if (reason !== 'manual' && scope !== 'scene' && mainGenerationBusy()) { scheduleRun(reason, BUSY_RETRY_MS); return { ok: false, reason: 'busy' }; }
@@ -243,7 +243,11 @@ export async function updateCanon({ reason = 'manual', scope = 'recent', text: g
             : buildRecentText(chatArray() || [], { count: c.recentMessages, persona: players[0] || 'Player' });
         // How the player says the scene ended (D219), where the chat stops short of it: it happened, and is read with the scene.
         const extra = scene && typeof also === 'string' ? also.replace(/\s+/g, ' ').trim().slice(0, 2000) : '';
-        const recent = extra ? `${read}\n\nHow the scene ended, in ${players[0] || 'the player'}'s own words (it happened, after the last of what is written above):\n${extra}` : read;
+        // What the player said happens next when they started the scene (D222): what it says had happened since the scene before
+        // did happen, off the page; what it only asks for or plans establishes nothing.
+        const earlier = scene && typeof before === 'string' ? before.replace(/\s+/g, ' ').trim().slice(0, 2000) : '';
+        const lead = earlier ? `Before this scene opened, ${players[0] || 'the player'} said this of what had happened since the scene before (their own words: what it says had already happened by then did happen, off the page; what it only asks for, plans or expects did not):\n${earlier}\n\nThe scene:\n` : '';
+        const recent = `${lead}${read}${extra ? `\n\nHow the scene ended, in ${players[0] || 'the player'}'s own words (it happened, after the last of what is written above):\n${extra}` : ''}`;
         // A whole chat handed over in one request may add more than a scene's page does (D198), within the ledger's own limits.
         const caps = scene ? { adds: Math.max(SCENE_ADDS, Math.min(64, Math.floor(Number(more) || 0))), drops: SCENE_DROPS } : {};
         const prompt = buildCanonPrompt({ entries: state.entries, recent, now, player: players, names: knownNames(), ...caps });

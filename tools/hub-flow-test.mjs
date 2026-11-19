@@ -2962,5 +2962,194 @@ console.log('\n§35 what the player says happens next, and how they say a scene 
     hub.__setRecapTransport(null);
 }
 
+console.log('\n§36 a Start that does not wait for good, as many openings as chosen, what happened in between, and new faces from the lorebooks (D220–D223)');
+{
+    const W = 'waitland';
+    const api = await import(`${DES}/src/systems/generation/apiClient.js`);
+    const cardsWas = extensionSettings.hub.sceneCards;
+    const packWas = extensionSettings.liveWorld.pack;
+    const loreWas = extensionSettings.lorebook;
+    const openersWas = extensionSettings.hub.openers;
+    extensionSettings.hub.sceneCards = true;
+    extensionSettings.hub.styleLaw = false;
+    extensionSettings.liveWorld.customPacks[W] = JSON.stringify({ ...example, id: W, name: 'Waitland' });
+    extensionSettings.liveWorld.pack = W;
+    hub.__setBookApi(shelfApi);
+    const at = (avatar) => ctxTarget.characters.findIndex(c => c.avatar === avatar);
+    ctxTarget.characterId = at('Wanderer.png');
+    ctxTarget.name2 = 'Wanderer';
+    files.set('Wanderer - waitland', { header: { chat_metadata: {} }, messages: [], avatar: 'Wanderer.png', chName: 'Wanderer' });
+    await openPlain('Wanderer - waitland');
+    chat.push(user('We begin.'));
+    chat.push({ is_user: false, name: 'Wanderer', mes: 'It begins at the Lantern House, where Isabella waits.', extra: {} });
+    hub.__setRecapTransport(async () => '{"recap":"It began at the Lantern House, where Isabella waited.","people":[],"threads":{"closed":[],"opened":[]}}');
+    const taken = await hub.commitAdopt({ recap: 'It began at the Lantern House, where Isabella waited.' });
+    const five = (n) => ({ when: { date: 'Day 9', time: 'noon' }, openers: Array.from({ length: n }, (_, i) => ({ title: `T${i + 1}`, text: `Opening number ${i + 1}.`, who: [] })) });
+    let asked = null;
+    let answer = async () => JSON.stringify(five(6));
+    hub.__setOpenersTransport(async (prompt) => { asked = prompt; return answer(prompt); });
+    let gapAnswer = async () => '{"elapsed":"a week","now":{"date":"Day 9","time":"dawn"},"clocks":{},"moved":[],"blurb":"x","heard":[]}';
+    hub.__setGapTransport(async (prompt) => gapAnswer(prompt));
+    const start = (o) => hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: '' }, place: null, cast: [], gap: { id: 'now' }, ...o });
+    const never = () => new Promise(() => {});
+    const soon = (ms) => new Promise(r => setTimeout(r, ms));
+
+    // As many openings as chosen (D221).
+    check('(the chat began the story)', taken.ok && taken.worldId === W);
+    const steps = [];
+    const three = await start({ onStep: (x) => steps.push(x.step) });
+    check('unless a number is chosen, three are asked for and three are kept', three.ok && three.count === 3 && three.openers.length === 3 && asked.system.includes('Write 3 openers') && hub.pendingStart().count === 3);
+    check('the sheet is told each step as it is done', same(steps, ['world', 'lore', 'book', 'lines', 'openers']), JSON.stringify(steps));
+    hub.cancelStart();
+    const fiveOf = await start({ count: 5 });
+    check('five chosen: five asked for, five kept', fiveOf.ok && fiveOf.count === 5 && fiveOf.openers.length === 5 && asked.system.includes('Write 5 openers'));
+    const two = await hub.askOpenersAgain(fiveOf.token, { count: 2 });
+    check('asked again for another number: that many, and the Start holds the number', two.ok && two.openers.length === 2 && asked.system.includes('Write 2 openers') && hub.pendingStart().count === 2);
+    const same2 = await hub.askOpenersAgain(fiveOf.token);
+    check('asked again with no number: as many as last time', same2.ok && same2.openers.length === 2);
+    hub.cancelStart();
+    check('the number last chosen on the sheet is the one a Start with no number asks for', hub.setOpenersWanted(4) === 4 && hub.openersWanted() === 4 && extensionSettings.hub.openers === 4 && hub.setOpenersWanted(99) === 6 && hub.setOpenersWanted(0) === 3);
+    hub.setOpenersWanted(4);
+    const four = await start({});
+    check('…four', four.ok && four.count === 4 && four.openers.length === 4);
+    hub.cancelStart();
+    hub.setOpenersWanted(3);
+    // An answer that ran out before its end.
+    answer = async () => JSON.stringify(five(5)).replace(/\{"title":"T4".*$/, '{"title":"T4","text":"Opening num');
+    const cut = await start({ count: 5 });
+    check('an answer cut short keeps the openings that came whole, and says so', cut.ok && cut.openers.length === 3 && cut.errors.length === 1 && /cut short: 3 of the 5 openings came whole/.test(cut.errors[0]) && cut.when && cut.when.date === 'Day 9', JSON.stringify([cut.openers.length, cut.errors]));
+    hub.cancelStart();
+    answer = async () => JSON.stringify(five(6));
+
+    // A Start that does not wait for good (D220).
+    hub.__setHubTiming({ startMaxMs: 80, readMaxMs: 80 });
+    answer = never;
+    let t0 = Date.now();
+    const late = await start({});
+    check('a request for the openings that never answers is given up on: the sheet gets no opening and is told why', late.ok && late.openers.length === 0 && /The request for the openings did not answer in/.test(late.errors.join(' ')) && Date.now() - t0 < 2000, JSON.stringify([late.ok, late.reason, late.errors]));
+    check('the line is let go of: the request after it is not held by the one that never came back', api.backgroundHolder() === '');
+    answer = async () => JSON.stringify(five(3));
+    const after = await hub.askOpenersAgain(late.token);
+    check('…and asking again works', after.ok && after.openers.length === 3);
+    hub.cancelStart();
+    // The world moved on first, by a request that never answers: the Start goes on without it.
+    const endFirst = async () => { const p = await start({}); const c = p.ok ? await hub.commitScene(p.token, { choice: 0 }) : p; chat.push(user('On.')); chat.push({ is_user: false, name: 'Narrator', mes: 'On it goes.', extra: {} }); const e = await hub.endScene({ skipWorld: true }); return { c, e }; };
+    const s1 = await endFirst();
+    gapAnswer = never;
+    const gapSteps = [];
+    const moved = await start({ gap: { id: 'when', words: 'the next week' }, onStep: (x) => gapSteps.push(x.step === 'gap' ? `gap:${x.words}` : x.step) });
+    check('(a scene was played and ended, so the world has a memory to move)', s1.c.ok && s1.e.ok, JSON.stringify([s1.c.ok, s1.c.reason, s1.e.ok, s1.e.reason]));
+    check('a request to move the world on that never answers is given up on, and the openings are still written', moved.ok && moved.openers.length === 3 && moved.notes.some(x => /did not move for the gap/.test(x) && /did not answer in/.test(x)) && gapSteps[1] === 'gap:the next week' && gapSteps[gapSteps.length - 1] === 'openers', JSON.stringify([moved.ok, moved.notes, gapSteps]));
+    hub.cancelStart();
+    gapAnswer = async () => '{"elapsed":"a week","now":{"date":"Day 16","time":"dawn"},"clocks":{},"moved":[],"blurb":"x","heard":[]}';
+    // Stop.
+    hub.__setHubTiming({ startMaxMs: 60000, readMaxMs: 60000 });
+    answer = never;
+    t0 = Date.now();
+    const waiting = start({});
+    await soon(30);
+    hub.cancelStart();
+    const stopped = await waiting;
+    check('Stop while the openings are waited for: the Start comes back at once, nothing is kept, and the line is free', stopped.ok === false && stopped.reason === 'cancelled' && hub.pendingStart() === null && Date.now() - t0 < 2000 && api.backgroundHolder() === '', JSON.stringify([stopped, Date.now() - t0]));
+    answer = async () => JSON.stringify(five(3));
+    const held = await start({});
+    answer = never;
+    const againWait = hub.askOpenersAgain(held.token);
+    await soon(30);
+    hub.stopStartWait();
+    const againStopped = await againWait;
+    check('Stop while asking again: the openings from before stay', againStopped.ok === false && againStopped.reason === 'stopped' && hub.pendingStart() && hub.pendingStart().openers.length === 3 && api.backgroundHolder() === '');
+    hub.cancelStart();
+    answer = async () => { throw new Error('the connection dropped'); };
+    const failed = await start({});
+    check('a request that fails is said, and the sheet is not left waiting', failed.ok && failed.openers.length === 0 && /the connection dropped/.test(failed.errors.join(' ')));
+    hub.cancelStart();
+    check('in words for the sheet: a step that did not answer, something that went wrong', /did not answer in 5 minutes\. Nothing was started, and your words are kept/.test(hubUtils.describeStartResult({ ok: false, reason: 'timeout', error: 'The world did not answer in 5 minutes' })) && /Something went wrong while the scene was prepared \(boom\)/.test(hubUtils.describeStartResult({ ok: false, reason: 'error', error: 'boom' })));
+    hub.__setHubTiming({ startMaxMs: 300000, readMaxMs: 20000 });
+    answer = async () => JSON.stringify(five(3));
+
+    // What happened in between is kept with the scene it opens (D222).
+    const between = 'Isabella and I spend the next week together, and I meet her mother. The story starts on our first day back.';
+    let recapAsked = null;
+    hub.__setRecapTransport(async (prompt) => { recapAsked = prompt; return '{"recap":"After a week together, they went back to work.","people":[],"threads":{"closed":[],"opened":[]}}'; });
+    let canonAsked = null;
+    cn.__setCanonTransport(async (prompt) => { canonAsked = prompt; return '{"add":[],"drop":[]}'; });
+    const p2 = await start({ note: between, gap: { id: 'when', words: 'the next week' } });
+    const c2 = p2.ok ? await hub.commitScene(p2.token, { choice: 0 }) : p2;
+    const rec2 = () => hub.worldEntry(W).scenes.find(x => x.id === 's2');
+    check('a scene started with the player\'s words keeps them with its record', c2.ok && rec2().note === between, JSON.stringify([c2.ok, c2.reason, rec2() && rec2().note]));
+    chat.push(user('Back to work, then.'));
+    chat.push({ is_user: false, name: 'Narrator', mes: 'The office smells of old coffee.', extra: {} });
+    const pe = await hub.prepareEnd();
+    check('its record is told what the player said had happened before it opened, and that what had happened by then did happen', pe.ok && pe.before === true && recapAsked.user.includes(`Before this scene opened, Jordan said this of what had happened since the scene before and of how this one should open (their own words):\n${between}\n`) && /did happen, off the page, and the record tells it/.test(recapAsked.system) && /What it only asks for, plans or expects is not part of the story unless the scene shows it/.test(recapAsked.system), recapAsked.user.slice(0, 400));
+    const e2 = await hub.commitEnd({ recap: pe.recap, skipWorld: true });
+    check('the ledger reads it with the scene', e2.ok && !!canonAsked && canonAsked.user.includes(`Before this scene opened, Jordan said this of what had happened since the scene before`) && canonAsked.user.includes(between), JSON.stringify([e2.ok, e2.reason]));
+    const p3 = await start({});
+    const c3 = p3.ok ? await hub.commitScene(p3.token, { choice: 0 }) : p3;
+    chat.push(user('On.'));
+    chat.push({ is_user: false, name: 'Narrator', mes: 'On it goes.', extra: {} });
+    canonAsked = null;
+    const pe3 = await hub.prepareEnd();
+    const e3 = await hub.commitEnd({ recap: pe3.recap, skipWorld: true });
+    check('a scene started with nothing said keeps none, and its record and the ledger are told none', c3.ok && e3.ok && hub.worldEntry(W).scenes.find(x => x.id === 's3').note === undefined && pe3.before === false && !recapAsked.user.includes('Before this scene opened') && !!canonAsked && !canonAsked.user.includes('Before this scene opened'));
+
+    // New faces from the lorebooks (D223).
+    extensionSettings.lorebook = { enabled: true, campaigns: { faces: { id: 'faces', name: 'Faces', books: ['Faces of the City'] } }, campaignOrder: ['faces'], activeCampaignId: 'faces' };
+    extensionSettings.hub.worlds[W].campaign = 'faces';
+    const bookOfFaces = { entries: {
+        1: { uid: 1, key: ['Isabella'], comment: 'Isabella — who she is', content: 'Isabella is a singer with dark hair. She is in the story already.' },
+        2: { uid: 2, key: ['Mira', 'Mira Okonkwo'], comment: 'Mira Okonkwo — who she is', content: 'Mira is a courier, twenty-six years old, with cropped red hair. She talks fast and she never sits with her back to a door.' },
+        3: { uid: 3, key: ['Lantern House'], comment: 'The Lantern House', content: 'A tea house by the canal. It is named in the story already.' },
+        4: { uid: 4, key: ['Sable'], comment: 'Sable (the forger)', content: 'Sable forges papers. She has grey eyes and her voice is soft; she is owed a favour by half the docks.' },
+        5: { uid: 5, key: ['canal', 'canals'], comment: 'The Canals', content: 'Black water between the towers, crossed by iron bridges.' },
+        6: { uid: 6, key: [], comment: 'STORY CANON', content: 'Always on: the standing notes.', constant: true },
+        7: { uid: 7, key: ['Old Tom'], comment: 'Old Tom', content: 'Tom keeps the ferry. He is sixty years old and his beard is white; he has never missed a crossing.' },
+    } };
+    hub.__setLoreReader(async (book) => (book === 'Faces of the City' ? bookOfFaces : null));
+    const who = (i, name) => ({ ...five(3), openers: five(3).openers.map((o, k) => (k === i ? { ...o, who: [name] } : o)) });
+    answer = async () => JSON.stringify(who(0, 'Mira Okonkwo'));
+    const plainStart = await start({ note: 'We go back to work the next day.' });
+    check('words that do not name the lorebooks: the openings are given no one new', plainStart.ok && !asked.user.includes('From the lorebooks, not in the story yet') && plainStart.lore.fresh === undefined);
+    hub.cancelStart();
+    const wish = 'Each of the openings should lead to one of the unexplored girls in the lore books. They should be meeting me to accomplish something.';
+    const fresh = await start({ note: wish });
+    const block = fresh.ok && asked.user.includes('From the lorebooks, not in the story yet') ? asked.user.slice(asked.user.indexOf('From the lorebooks, not in the story yet')).split('\nThe last lines')[0] : '';
+    check('words that name the lorebooks: the openings are given the entries the story has not touched', fresh.ok && block.includes('[Mira Okonkwo] Mira is a courier') && block.includes('[Sable] Sable forges papers') && block.includes('[Old Tom]'), block.slice(0, 500));
+    check('…and not the ones in the story already (one of its people, a place its record names) nor the ones that are always on', !block.includes('[Isabella]') && !block.includes('[The Lantern House]') && !block.includes('STORY CANON') && !block.includes('Always on'), block.slice(0, 500));
+    check('people come before places, and the kind the words ask for before the other', block.indexOf('[Mira Okonkwo]') < block.indexOf('[Old Tom]') && block.indexOf('[Sable]') < block.indexOf('[Old Tom]') && block.indexOf('[Old Tom]') < block.indexOf('[The Canals]'), block.slice(0, 700));
+    check('the request is told to bring them in as the words ask, a different one in each opening, met for the first time', /because Jordan's words ask for someone or something out of them: bring them in as those words ask, a different one in each opener/.test(asked.system) && /met here for the first time/.test(asked.system));
+    check('the Start knows who the openings were given', same([...fresh.lore.fresh].sort(), ['Mira Okonkwo', 'Old Tom', 'Sable', 'The Canals']) && fresh.lore.unmet === 4 && same(hub.pendingStart().lore.fresh, fresh.lore.fresh), JSON.stringify(fresh.lore));
+    check('an opening may name one of them among its people', same(fresh.openers[0].who, ['Mira Okonkwo']), JSON.stringify(fresh.openers[0]));
+    const c4 = await hub.commitScene(fresh.token, { choice: 0 });
+    const head4 = c4.ok ? files.get(c4.file).header.chat_metadata : {};
+    check('started with that opening shown first, she is one of the scene\'s people: on its record, its mark, and in its brief by the head of her entry', c4.ok && hub.worldEntry(W).scenes.find(x => x.id === 's4').cast.includes('Mira Okonkwo') && head4.dooms_hub.cast.includes('Mira Okonkwo') && /Mira Okonkwo: Mira is a courier/.test(head4.dooms_hub.brief), JSON.stringify([c4.ok, c4.reason, head4.dooms_hub && head4.dooms_hub.cast]));
+    chat.push(user('I shake her hand.'));
+    chat.push({ is_user: false, name: 'Narrator', mes: 'Mira grins.', extra: {} });
+    const e4 = await hub.endScene({ skipWorld: true });
+    answer = async () => JSON.stringify(who(1, 'Sable'));
+    const later = await start({ note: wish });
+    const block2 = later.ok ? asked.user.slice(asked.user.indexOf('From the lorebooks, not in the story yet')).split('\nThe last lines')[0] : '';
+    check('once she is in the story she is not offered as someone new again', e4.ok && later.ok && !block2.includes('[Mira Okonkwo]') && block2.includes('[Sable]') && same([...later.lore.fresh].sort(), ['Old Tom', 'Sable', 'The Canals']), block2.slice(0, 300));
+    const c5 = await hub.commitScene(later.token, { choice: 0 });
+    check('an opening that is not shown first brings no one into the scene\'s people', c5.ok && !hub.worldEntry(W).scenes.find(x => x.id === 's5').cast.includes('Sable'));
+    chat.push(user('On.'));
+    chat.push({ is_user: false, name: 'Narrator', mes: 'On it goes.', extra: {} });
+    await hub.endScene({ skipWorld: true });
+    hub.__setLoreReader(async () => ({ entries: { 1: bookOfFaces.entries[1], 6: bookOfFaces.entries[6] } }));
+    const none = await start({ note: wish });
+    check('with no entry the story has not touched, the sheet is told so and the openings are written as before', none.ok && same(none.lore.fresh, []) && none.lore.unmet === 0 && !asked.user.includes('From the lorebooks, not in the story yet'));
+    hub.cancelStart();
+
+    hub.__setLoreReader(null);
+    cn.__setCanonTransport(null);
+    extensionSettings.lorebook = loreWas;
+    extensionSettings.liveWorld.pack = packWas;
+    extensionSettings.hub.sceneCards = cardsWas;
+    extensionSettings.hub.openers = openersWas;
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+    hub.__setRecapTransport(null);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

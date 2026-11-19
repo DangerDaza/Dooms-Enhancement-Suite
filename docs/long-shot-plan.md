@@ -1956,3 +1956,151 @@ with; ended: kept, the ledger's read given them; the next scene's
 openings; a scene ended with none); `tools/atlas-browser-test.mjs` §5i
 (the box above the record, nothing to write in, typed, written in,
 while writing, ended).
+
+## 59. A Start that does not wait for good (2026-11-19, D220)
+
+The owner, with a picture of the Start sheet on a phone (Scene 2,
+"Writing three ways it could open…", a bar two thirds full, nothing
+else on the screen): "Screen got caught here." The sheet had been
+opened with a paragraph in What happens next (D218) that began "Isabella
+and Jack spend the next week together".
+
+What the code showed. That screen was one line and a bar drawn at a
+fixed 60%: it measured nothing, and there was nothing on it to press.
+Behind it a Start does up to six things one after another: the world
+read, the world moved on by a request where time has passed (here "the
+next week", read out of the words), the lorebooks read, the continuity
+book read, the last lines of the scene before read from its file, and
+the openings asked for by a second request. None of them had a limit.
+A request that never answers (a connection dropped while a phone's
+screen is off is one way) held the sheet for good, and held the line
+every other background request waits on with it. Which step it was on
+the owner's machine was not seen: nothing on the screen said, which is
+the first thing put right.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D220 | The sheet that waits says the step it is at and how long it has waited, has a Stop, and gives up on a request after five minutes; nothing leaves it waiting, and what was typed is kept | **Held.** **What it says**: the step in words as the engine comes to it ("Reading the world…", "Moving the world on (the next week)…", "Reading the lorebooks…", "Reading where the people stand…", "Reading the last lines of the scene before…", "Waiting for another request to finish…", "Writing five ways it could open…"), and under the bar the time waited, counted a second at a time. The bar moves and measures nothing. After three quarters of a minute it adds that a slow model can take a few minutes. **Stop** goes back to the sheet as it was typed (asked again: to the openings there were), and the request is given up on. **A limit** (the owner's choice: five minutes for one request, of three offered): the request that moves the world on is given up on and the Start goes on without it, saying so; the request for the openings is given up on and the sheet comes back with no opening, why, and Ask again, the player's own, or Back; a file or a lorebook that does not answer in twenty seconds is passed over as one that cannot be read. **The line is let go of** when a request is given up on or stopped (`limited`, inside what `withBackgroundProfile` runs), so the next one is not held by one that never came back. **Nothing throws through**: whatever goes wrong while a Start is prepared comes back as its reason, and the sheet returns to the form with it. **What was typed is kept** in this browser from the first letter until a scene is started with it (one draft, for its story): a sheet that had to be left, or a page loaded again, opens with the words and says they were kept. |
+
+What it does not do. A request given up on is not cancelled where it
+was sent: SillyTavern hands an extension no way to stop a background
+request, so it is left to finish by itself and its answer goes nowhere
+(what it costs is still spent). The step that writes the scene's file
+and opens its chat has no Stop: it is no request. The End sheet's own
+requests (the record, the ledger, the world after a scene) have no
+limit from this. The draft is this browser's: another device does not
+have it. Run in the real SillyTavern at a phone's width, with the
+owner's own paragraph: requests that never answer (the step said, the
+time counting, Stop: the sheet back with all 599 characters, the line
+free, nothing pending); the page loaded again while it waited (the
+words there, said to be kept); a limit of four seconds in place of five
+minutes (the world's request given up on, then the openings', the
+sheet back with why and Ask again); asked again with requests that
+answer.
+
+Tests: `tools/hub-test.mjs` (each step in words, the time waited, a
+Start that did not come back in words); `tools/hub-flow-test.mjs` §36
+(the steps told in order; a request for the openings that never
+answers, and one that moves the world on; the line free after; Stop
+while preparing and while asking again; a request that fails);
+`tools/atlas-browser-test.mjs` §5h (the step, the time, the bar moving,
+Stop, the hint after a while, the words kept).
+
+## 60. As many openings as chosen (2026-11-19, D221)
+
+The owner, in the same message: "Also let's add a way to choose how
+many intros are made instead of a static 3". Asked where and up to how
+many: on the Start sheet, one to six.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D221 | The number of openings is chosen beside the button, one to six; the last choice is the one offered next time | **Held.** **The Start sheet** has Openings beside the button, which says the number ("Write five openings", "Write the opening"), as does the line under it. **The openings' sheet** has it beside Ask again: asked again for another number. The number chosen is kept with the hub's settings (`openers`) and is what a Start with no sheet asks for (End and start the next scene, End and continue here, which takes the first as it comes). All of them are swipes of the scene's first message, as three were (D207). **An answer cut short**: more openings is a longer answer, and one that runs out before its end closed no outer object and was thrown away whole. The openings that came whole are kept, with the date and the place written before the cut, and the sheet says how many of how many came and that a longer response limit or fewer openings avoids it. |
+
+What it does not do. It does not raise the connection's response limit:
+six long openings need room the preset has to give. The number is one
+setting for every world.
+
+Tests: `tools/hub-test.mjs` (the range, the setting, as many kept as
+asked for, an answer cut short, a whole one not said to be cut);
+`tools/hub-flow-test.mjs` §36 (three unless chosen, five, asked again
+for two, the number kept for the next Start, an answer cut short);
+`tools/atlas-browser-test.mjs` §5h (the chooser, the button's words,
+five to mark, the chooser beside Ask again).
+
+## 61. What happened in between is kept with the scene it opens (2026-11-19, D222)
+
+The owner, of the same paragraph: "this is how I am using that feature,
+does that align with its intended use?" It did three things. It said
+where the next scene starts (the first day back; Isabella about to tell
+Finch; Jack about to meet a client): the intended use. It said what had
+happened since the scene before (a week together, Jack met her mother,
+Isabella drove the car). And it told the writer what the openings
+should do (each lead to one of the unexplored girls in the lore books:
+§62). The second was half served: the openings were written knowing it
+and the scene's brief carried it, but nothing made it part of the
+story's memory. After that scene, that Jack had met her mother was
+known only if it came up in play. Asked whether it should be kept, and
+when: yes, with the new scene.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D222 | What the player said happens next is kept with the scene started with it, and that scene's record and the ledger are told it at its End | **Held.** The words are kept on the scene's record (`note`). At the scene's End the request that writes its record is given them before the scene, as the player's own words, and told: what they say had already happened by the time the scene opened (time that passed, what was done in it, who was met) did happen, off the page, and the record tells it in a sentence or two before what the scene shows; where the people stand takes it into account; what they only ask for, plan or expect is not part of the story unless the scene shows it. Canon's read of the scene is given them the same way (`updateCanon`'s `before`), so the ledger has what they establish. No request of its own. The End sheet says the record was written knowing them. A long scene's record, written in parts, is told them with its first part. |
+
+What it does not do. It is done at the End: a scene started and never
+ended leaves what was said in its brief and nowhere else. Which of the
+words say what happened and which only ask is the model's reading of
+them, on the rule above. A scene started before this kept none. How it
+ended, on the End sheet (D219), is still the place to say what happened
+after a scene's last line; this is for what is said when the next one
+is started.
+
+Tests: `tools/hub-test.mjs` (kept with the record, the record's request
+with and without them, with how it ended too, a later part not told
+again); `tools/hub-flow-test.mjs` §36 (kept; the record's request and
+the ledger's told; a scene started with nothing said keeps none).
+
+## 62. New faces from the lorebooks (2026-11-19, D223)
+
+The owner's paragraph ended: "Each of the openings should lead to one
+of the unexplored girls in the lore books. They should be meeting jack
+to accomplish something." It could not be done as asked. A background
+request sees no lorebook but what it is given (D177), and the openings
+were given the entries of the scene's own people and the ones that are
+always on: of who else the lorebooks hold, nothing. Asked whether to
+give it the entries the story has not touched: when my words say so,
+"but how are you going to determine that?"
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D223 | Where the player's words name the lorebooks, the openings are given entries the story has not touched, people first, and whoever the opening shown first brings in joins the scene | **Held.** **That the words ask** is read as they are typed, with no request: they name the lorebooks ("lore books", "lorebook", "lore-books"). The line under the box says so ("new faces from the lorebooks"); words that do not are sent as before. **Which entries the story has not touched**: of the lorebooks the scene reads (its campaign's, D177), leaving out the ones that are always on (the standing notes, given already) and the ones switched off, an entry is in the story already when one of the story's people is its person (the people of every scene, the ones the world knows, the ones the continuity keeps, the player; matched by the whole name, by the name before what is said of them, or by a first name that is a name: "The Canals" is not the entry of "The Baron") or when the story's own text names it or one of its keys as a word of its own (the scenes' records and how they ended, the ledger, where the people stand, the open threads). The rest are untouched (`untouchedLore`). **Which are given**: people first (an entry with a card in the Workshop, then one that reads as a person: she, he, hair, age), the kind the words ask for before the other ("girls": the ones written of as she), ties in an order drawn afresh each time; about twice as many as openings asked for, six at the least and fourteen at the most, each cut to 900 characters. Up to sixty are kept in turn for the Start, and Ask again draws the next ones. **The request** is given them under their names after the player's words, and told to bring them in as those words ask, a different one in each opening, each written as their entry says and met for the first time, and to name whoever is in an opening among its people. **The sheet** says who the openings were given, of how many, or that there was no one to give. **Started**, whoever the opening shown first brings in is one of the scene's people: on its record and its mark, and in its brief by their Workshop line, else by the head of their entry. |
+
+What it does not do. It cannot tell a girl from anyone else for
+certain: it counts how an entry is written, and the writer, who has the
+player's words beside the entries, chooses. A lorebook of places and
+things only is given as it is. A name that is also a common word may
+count an entry as touched when it is not, and what was only said in a
+scene's chat, and is in no record nor in the ledger, does not count as
+touched. The other openings are swipes of the first message: swiped to
+in the chat, the brief still names the person of the one shown first.
+Run in the real SillyTavern at a phone's width, with a lorebook made
+for it (two of the story's people, a place, an always-on note, six
+entries the story had not met) and the owner's own paragraph: the line
+under the box ("with Finch, Isabella · the next week · new faces from
+the lorebooks"); five openings asked for and written, the request given
+the six untouched entries (the four written of as she first, then Old
+Tom, then the canals) and neither Isabella, Finch nor the always-on
+note; the sheet saying who; the second opening marked and started, its
+person among the scene's people and in its brief; the scene ended, its
+record and the ledger told what had been said to have happened before
+it opened.
+
+Tests: `tools/hub-test.mjs` (the words that name the lorebooks; the
+name an entry goes by; touched by a person, by the story's text, by
+neither; a word names begin with; people first, the kind asked for,
+the Workshop's; the order drawn afresh; the lengths; taken in turn; the
+request with and without them); `tools/hub-flow-test.mjs` §36 (given
+only when the words ask; which are given and which are not; the order;
+who the Start says it gave; started with one shown first, and with one
+not; not offered again once in the story; none to give);
+`tools/atlas-browser-test.mjs` §5h (the sheet's line, with and without
+anyone to give).

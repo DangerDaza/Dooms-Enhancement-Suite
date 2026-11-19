@@ -29,7 +29,8 @@ export const HUB_META_KEY = 'dooms_hub';
 export const HUB_KEYS = Object.freeze(['dooms_tracker', 'dooms_inventory', 'dooms_quests_done', 'dooms_world', 'dooms_canon', 'dooms_hooks', 'dooms_atlas']);
 export const ADOPTED_ID = 's0';        // the chat a world's scenes began from (D131, D172): "scene 0"
 export const ADOPTED_TITLE = 'Before the scenes';
-export const OPENERS = 3;
+export const OPENERS = 3;             // the openings a Start asks for unless the player chose another number (D221)
+export const MAX_OPENERS = 6;         // the most that can be asked for in one request
 export const MAX_OPENER_TITLE = 60;
 export const MAX_OPENER_TEXT = 4000;    // an opening may be as long as one of the narrator's own messages (D205); it was 1500
 export const MAX_BRIEF = 3600;         // the brief carries where the scene's people stand and the open threads too (D188)
@@ -75,6 +76,7 @@ const CONFIG_DEFAULTS = Object.freeze({
     nudgeAt: 60,           // messages after which a scene suggests going on in a fresh chat (D181); 0 never
     strip: false,          // the strip above a scene's chat (D121): off, the scene's options are in the Doom button's menu (the owner, D200)
     sceneCards: true,      // every scene gets a narrator card of its own, its openings the card's greetings (the owner, D209); off: every scene is a chat on the world's one narrator card (D114)
+    openers: OPENERS,      // how many openings a Start asks for, as last chosen on the Start sheet (the owner, D221)
 });
 
 export function defaultHubConfig() {
@@ -95,8 +97,18 @@ export function hubConfig(settings) {
         // (A knock that opens the fly-out reaches it with no button at all, D201.)
         strip: typeof h.strip === 'boolean' ? h.strip : !!(settings && isObj(settings.fab) && settings.fab.knock !== 'menu' && (settings.fab.hidden === true || settings.fab.bypassFlyout === true)),
         sceneCards: typeof h.sceneCards === 'boolean' ? h.sceneCards : CONFIG_DEFAULTS.sceneCards,
+        openers: openersCount(h.openers),
     };
 }
+
+/** How many openings to ask for: a whole number from one to MAX_OPENERS, three where none was chosen. */
+export function openersCount(n) {
+    const v = Math.round(Number(n));
+    return Number.isFinite(v) && v >= 1 ? Math.min(MAX_OPENERS, v) : OPENERS;
+}
+
+/** A small number in words, as the sheet says it ("three ways it could open"). */
+export const countWord = (n) => ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] || String(n);
 
 /**
  * The scene in front as the Doom button's menu shows it (D200): one entry,
@@ -231,6 +243,7 @@ export function normalizeScene(raw, seq = 0) {
         gone: r.gone === true,
         noRecap: r.noRecap === true,
         ...(clean(r.wrap, MAX_WRAP) ? { wrap: clean(r.wrap, MAX_WRAP) } : {}),    // how the player said it ended, where the chat stops short of it (D219); absent when they said nothing
+        ...(clean(r.note, MAX_NOTE) ? { note: clean(r.note, MAX_NOTE) } : {}),    // what the player said happens next when they started it (D218), kept for its record to be told what had happened in between (D222)
         ...(r.ownCard === true ? { ownCard: true } : {}),    // its card was made for it (D209) and goes when it does; absent for a scene on the world's narrator card or on the player's own
         ...(r.log ? { log: clean(r.log, 160) } : {}),    // the file that holds what its End changed in the world (D206); absent for a scene ended before that was kept
         ...(conflicts.length ? { conflicts } : {}),    // what the scene's record found against what was established (D190); absent when it found nothing
@@ -688,6 +701,120 @@ export function standingLore(entries, { max = LORE_STANDING } = {}) {
     return parts.join('\n\n');
 }
 
+// ─── Who the lorebooks hold that the story has not met (D223) ───────────
+//
+// A player's words for the next scene may ask for someone out of the
+// lorebooks ("each opening should lead to one of the unexplored girls in
+// the lore books"). The openings' request sees no lorebook but what it is
+// given (D177), and it was given the entries of the scene's own people:
+// nobody the story had not met. Where the words name the lorebooks, it is
+// also given entries the story has not touched, people first.
+
+export const LORE_FRESH_EACH = 900;      // characters of one entry the story has not touched, as an opening is given it
+export const LORE_FRESH_TOTAL = 10000;   // of all the ones given to one request
+export const LORE_FRESH_POOL = 60;       // of them kept in turn for one Start (Ask again draws the next ones)
+
+/** Words a name may begin with that are not the name: two entries that share one are not the same person's. */
+const NOT_A_NAME = new Set(['the', 'old', 'young', 'little', 'big', 'doc', 'doctor', 'lord', 'lady', 'miss', 'mister', 'madam', 'madame', 'sir', 'dame', 'captain', 'father', 'mother', 'sister', 'brother', 'uncle', 'aunt', 'king', 'queen', 'prince', 'princess', 'master', 'mistress', 'saint']);
+
+/** Whether a player's words for the next scene name the lorebooks ("lore books", "lorebook", "lore-books"). Read with no request. */
+export function asksForLore(text) {
+    return /\blore[\s-]?books?\b/i.test(String(text || ''));
+}
+
+/** The name an entry goes by: its title before what is said of it ("Kiyoha — who she is", "Rogue (fixer)", "Character: Mira"), else its first key. */
+export function loreEntryName(entry) {
+    const title = clean(entry && entry.title, 200);
+    let head = title.split(/\s+[—–-]\s+|[([|/]/)[0].trim();
+    if (head.includes(':')) {
+        const parts = head.split(':').map(x => x.trim()).filter(Boolean);
+        head = parts.length > 1 && /^(?:character|char|npc|person|people|girl|woman|man|oc|profile|bio|lore|entry|cast)s?$/i.test(parts[0]) ? parts[1] : (parts[0] || '');
+    }
+    const key = entry && Array.isArray(entry.keys) && entry.keys.length ? entry.keys[0] : '';
+    return clean(head || key, 60);
+}
+
+/**
+ * The entries of the lorebooks that the story has not touched, the likeliest
+ * people first: for the openings, where the player's words ask for someone
+ * new. An entry is in the story already when one of the story's people is
+ * its person (matched as a scene's people are matched to their entries),
+ * or when the story's own text (its records, its ledger, where its people
+ * stand, its open threads) names it or one of its keys. Entries that are
+ * always on are the standing notes, given already, and are left out.
+ * Among the rest, an entry with a card in the Workshop or that reads as a
+ * person (she, he, hair, age) comes before one that does not, and the
+ * kind the words ask for ("girls") before the other; ties in an order
+ * drawn afresh each time.
+ * @param {Array} entries          loreEntries() of every book read
+ * @param {{ people?: string[], text?: string, workshop?: string[], words?: string, rand?: () => number, pool?: number, perEntry?: number }} o
+ * @returns {Array<{ name: string, title: string, book: string, text: string, person: boolean }>}
+ */
+export function untouchedLore(entries, { people = [], text = '', workshop = [], words = '', rand = Math.random, pool = LORE_FRESH_POOL, perEntry = LORE_FRESH_EACH } = {}) {
+    // The story's people by their whole name, by the name before what is said of them ("Doc Imura, the back-alley
+    // ripperdoc"), and by a first name where it is a name (four letters or more, and not a word names begin with:
+    // "The Canals" is not the entry of "The Baron", nor "Old Tom" of "Old Marit").
+    const known = [];
+    const firsts = [];
+    for (const raw of Array.isArray(people) ? people : []) {
+        const whole = loreName(raw);
+        if (!whole) continue;
+        const head = loreName(String(raw).split(/[,(]/)[0]) || whole;
+        for (const n of [whole, head]) if (!known.includes(n)) known.push(n);
+        const first = head.split(' ')[0];
+        if (first !== head && first.length >= 4 && !NOT_A_NAME.has(first) && !firsts.includes(first)) firsts.push(first);
+    }
+    const story = String(text || '');
+    const cards = (Array.isArray(workshop) ? workshop : []).map(loreName).filter(Boolean);
+    const said = String(words || '');
+    const wantShe = /\b(?:girls?|wom[ae]n|females?|lad(?:y|ies))\b/i.test(said);
+    const wantHe = /\b(?:boys?|m[ae]n|males?|guys?)\b/i.test(said);
+    const out = [];
+    const seen = new Set();
+    for (const x of Array.isArray(entries) ? entries : []) {
+        if (!isObj(x) || x.constant || typeof x.content !== 'string' || !x.content.trim()) continue;
+        const name = loreEntryName(x);
+        const key = loreName(name);
+        if (key.length < 2 || seen.has(key)) continue;
+        const title = loreName(x.title);
+        const keys = (Array.isArray(x.keys) ? x.keys : []).map(loreName).filter(Boolean);
+        const ofPerson = known.some(n => key === n || title === n || title.startsWith(`${n} `) || keys.includes(n) || ` ${title} `.includes(` ${n} `))
+            || firsts.some(f => key === f || key.split(' ')[0] === f || keys.includes(f));
+        const named = [name, ...(Array.isArray(x.keys) ? x.keys : [])].some(k => clean(k, 80).length >= 4 && namedIn(story, k));
+        seen.add(key);
+        if (ofPerson || named) continue;
+        const body = x.content;
+        const she = (body.match(/\b(?:she|her|hers|herself)\b/gi) || []).length;
+        const he = (body.match(/\b(?:he|him|his|himself)\b/gi) || []).length;
+        const traits = /\b(?:age|aged|years?\s+old|hair|eyes|personality|appearance|occupation|height|born|wears?|voice)\b/i.test(body);
+        const card = cards.some(c => c === key || c.startsWith(`${key} `) || key.startsWith(`${c} `));
+        let score = (card ? 4 : 0) + Math.min(2, she + he) + (traits ? 1 : 0);
+        if (wantShe && !wantHe && she > he) score += 2;
+        if (wantHe && !wantShe && he > she) score += 2;
+        out.push({ name, title: clean(x.title, 200), book: clean(x.book, 200), text: cutText(body, perEntry), score, tie: Number(rand()) || 0 });
+    }
+    out.sort((a, b) => b.score - a.score || a.tie - b.tie);
+    return out.slice(0, Math.max(1, pool | 0)).map(({ tie, score, ...rest }) => ({ ...rest, person: score >= 2 }));
+}
+
+/** How many of them one request is given: about twice the openings asked for, so that each opening can have its own and there is a choice. */
+export const freshCount = (openers) => Math.min(14, Math.max(6, 2 * openersCount(openers) + 2));
+
+/** The ones given to a request: `count` of the pool from `from` on (round again past its end), within a total length. */
+export function loreSample(pool, { from = 0, count = 8, total = LORE_FRESH_TOTAL } = {}) {
+    const list = Array.isArray(pool) ? pool.filter(x => isObj(x) && x.name && x.text) : [];
+    const out = [];
+    let left = total;
+    for (let k = 0; k < Math.min(list.length, Math.max(1, count | 0)); k++) {
+        if (left < 200) break;
+        const x = list[(Math.max(0, from | 0) + k) % list.length];
+        const text = x.text.length > left ? cutText(x.text, left) : x.text;
+        left -= text.length;
+        out.push({ name: x.name, text });
+    }
+    return out;
+}
+
 // ─── The brief ──────────────────────────────────────────────────────────
 
 const noStop = (s) => String(s || '').replace(/[.;,\s]+$/, '');
@@ -748,7 +875,7 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
  * the narrator's template; and the exact JSON asked for.
  * @returns {{ system: string, user: string }}
  */
-export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [], tail = '', then = null, now = null, thenPeople = [], voices = [], wrap = '' } = {}) {
+export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [], tail = '', then = null, now = null, thenPeople = [], voices = [], wrap = '', fresh = [] } = {}) {
     const name = clean(world.name, 80) || 'the world';
     // What the player says happens next (D218) is the main word on the scene: it outranks the place, the people and the time
     // given beside it. How they said the scene before ended (D219) is where this one opens from.
@@ -772,7 +899,9 @@ export function buildOpenersPrompt({ world = {}, place = '', region = '', weathe
     const standNow = (Array.isArray(stand) ? stand : []).filter(p => p && p.name && p.now).slice(0, MAX_CAST).map(p => `- ${clean(p.name, 60)}: ${clean(p.now, CONT.personChars)}`);
     const open = (Array.isArray(threads) ? threads : []).map(t => clean(t, CONT.threadChars)).filter(Boolean).slice(0, CONT.briefThreads + 2);
     const who = clean(player, 60) || 'the player';
-    const n = Math.min(OPENERS, Math.max(1, count | 0));
+    const n = openersCount(count);    // as many as the player chose (D221)
+    // Entries of the lorebooks the story has not touched (D223), where the player's words ask for someone out of them.
+    const unmet = (Array.isArray(fresh) ? fresh : []).filter(l => isObj(l) && l.name && l.text).map(l => ({ name: clean(l.name, 60), text: clean(l.text, LORE_FRESH_EACH + 20) }));
     // The people's own notes and the story's standing notes, from the lorebooks (D177): a background request sees no lorebook unless it is put in.
     const notes = (Array.isArray(lore) ? lore : []).filter(l => l && l.name && l.text).map(l => ({ name: clean(l.name, 60), text: clean(l.text, LORE_PER_PERSON) }));
     const standingText = clean(standing, LORE_STANDING + 400);
@@ -791,7 +920,7 @@ Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording
             : `The last lines of the scene before are given as they were played, so that you know how things were left. This scene opens ${clean(gapWords, 80)} after them: do not carry that conversation on. Each opener is a new moment that follows from how things were left: the place as ${who} finds it now, who is there, the first thing that happens, and it stops with the first move still ${who}'s. `)
         : `Each opener: the place as ${who} finds it, who is there, the first thing that happens, and it stops with the first move still ${who}'s; `}${lastLines
         ? `Write as the narrator wrote in those lines: the same person and tense, speech set out the same way (its marks and any colour tags), about as long as one of the narrator's own messages there; no headings, no dice, no tracker or status block, nothing resolved or decided. Make nothing up that those lines, the record or the notes do not give you: where you do not know, stay with what is there. `
-        : 'a paragraph or two, plain prose, no markup, no headings, no dice, nothing resolved or decided. '}Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${wish ? `What ${who} says happens next is given in their own words, and it comes first: open the scene the way it asks. Where it names the place, says who is there, or says how much time has passed, follow it over the place, the people and the time given elsewhere here; what it leaves unsaid is as given. "where" is the place the scene opens in by that. ` : ''}${ended ? `Where it is given how the scene before ended in ${who}'s own words, that happened, after its last lines: this scene opens from that end, not from the lines, and nothing in it is undone. ` : ''}${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standNow.length ? 'Where it is said how a person stands now, that is how the story left them: they pick up from there, and it holds over older notes where the two differ. ' : ''}${speak.length ? 'Where example lines are given for a person, they show that person\'s voice (their words, their rhythm, their manner): write what they say in it. The lines are examples and were never said in this story: do not repeat or quote them. ' : ''}${asTracked.length ? `Where it is said how the tracker had a person when the scene before stopped, they are still so as this scene opens: dressed as they were, in the state they were in${gapWords ? ', unless the time that has passed would have changed it' : ''}. What was on a person's mind is theirs: it shapes what they do and is not said aloud. ` : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${law ? `${law} ` : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
+        : 'a paragraph or two, plain prose, no markup, no headings, no dice, nothing resolved or decided. '}Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${wish ? `What ${who} says happens next is given in their own words, and it comes first: open the scene the way it asks. Where it names the place, says who is there, or says how much time has passed, follow it over the place, the people and the time given elsewhere here; what it leaves unsaid is as given. "where" is the place the scene opens in by that. ` : ''}${ended ? `Where it is given how the scene before ended in ${who}'s own words, that happened, after its last lines: this scene opens from that end, not from the lines, and nothing in it is undone. ` : ''}${unmet.length ? `Entries of the lorebooks that are not in the story yet are given, because ${who}'s words ask for someone or something out of them: bring them in as those words ask${n > 1 ? ', a different one in each opener' : ''}, each written as their entry says and met here for the first time (${who} does not know them). Whoever of them is in an opener is named in its "who", by the name in brackets. ` : ''}${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standNow.length ? 'Where it is said how a person stands now, that is how the story left them: they pick up from there, and it holds over older notes where the two differ. ' : ''}${speak.length ? 'Where example lines are given for a person, they show that person\'s voice (their words, their rhythm, their manner): write what they say in it. The lines are examples and were never said in this story: do not repeat or quote them. ' : ''}${asTracked.length ? `Where it is said how the tracker had a person when the scene before stopped, they are still so as this scene opens: dressed as they were, in the state they were in${gapWords ? ', unless the time that has passed would have changed it' : ''}. What was on a person's mind is theirs: it shapes what they do and is not said aloud. ` : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${law ? `${law} ` : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
     const people = cast.length ? cast.map(c => (typeof c === 'string' ? clean(c, 260) : personLine(c.name, c))).join('\n- ') : 'no one in particular';
     const q = [quests && quests.main && quests.main !== 'None' ? `Main: ${clean(quests.main, 200)}` : '', ...((quests && Array.isArray(quests.optional)) ? quests.optional.map(x => clean(x, 200)).filter(Boolean).slice(0, 6) : [])].filter(Boolean);
     const user = `World: ${name}${world.blurb ? `. ${clean(world.blurb, 600)}` : ''}
@@ -803,7 +932,7 @@ ${!gapWords ? (t.back ? 'This scene opens right after the last lines: the time o
 People here:
 - ${people}
 ${asTracked.length ? `How the tracker had them when the scene before stopped:\n${asTracked.join('\n')}\n` : ''}${notes.length ? `Their own notes:\n${notes.map(l => `[${l.name}] ${l.text}`).join('\n')}\n` : ''}${speak.length ? `How they speak (example lines, not to be repeated):\n${speak.join('\n')}\n` : ''}${standNow.length ? `Where they stand now:\n${standNow.join('\n')}\n` : ''}${standingText ? `The story's standing notes:\n${standingText}\n` : ''}What brought us here: ${clean(seed, MAX_SEED) || 'nothing in particular; the world as it is'}
-${canonBlock ? `What the story has established:\n${clean(canonBlock, 1200)}\n` : ''}${recaps.length ? `Last time:\n${recaps.map(r => clean(r, 700)).filter(Boolean).slice(0, 2).map((r, i) => `${i ? 'Before that' : 'Last scene'}: ${r}`).join('\n')}\n` : ''}${q.length ? `Open quests: ${q.join('; ')}\n` : ''}${open.length ? `Left open by the story so far (a scene may pick one up; none has to be):\n${open.map(t => `- ${t}`).join('\n')}\n` : ''}${wish ? `What ${who} says happens next (their own words; they come first):\n${wish}\n` : ''}${lastLines ? `The last lines of the scene before, as they were played (${rightAfter ? 'this scene carries straight on from the last of them' : `this scene opens ${clean(gapWords, 80)} after them`}):\n${lastLines}\n` : ''}${ended ? `How the scene before ended, in ${who}'s own words (it happened after ${lastLines ? 'those lines' : 'what its record tells'}):\n${ended}\n` : ''}The player: ${who} (never written for).
+${canonBlock ? `What the story has established:\n${clean(canonBlock, 1200)}\n` : ''}${recaps.length ? `Last time:\n${recaps.map(r => clean(r, 700)).filter(Boolean).slice(0, 2).map((r, i) => `${i ? 'Before that' : 'Last scene'}: ${r}`).join('\n')}\n` : ''}${q.length ? `Open quests: ${q.join('; ')}\n` : ''}${open.length ? `Left open by the story so far (a scene may pick one up; none has to be):\n${open.map(t => `- ${t}`).join('\n')}\n` : ''}${wish ? `What ${who} says happens next (their own words; they come first):\n${wish}\n` : ''}${unmet.length ? `From the lorebooks, not in the story yet (${who} has not met them):\n${unmet.map(l => `[${l.name}] ${l.text}`).join('\n')}\n` : ''}${lastLines ? `The last lines of the scene before, as they were played (${rightAfter ? 'this scene carries straight on from the last of them' : `this scene opens ${clean(gapWords, 80)} after them`}):\n${lastLines}\n` : ''}${ended ? `How the scene before ended, in ${who}'s own words (it happened after ${lastLines ? 'those lines' : 'what its record tells'}):\n${ended}\n` : ''}The player: ${who} (never written for).
 
 Answer with the JSON object only.`;
     return { system, user };
@@ -812,13 +941,27 @@ Answer with the JSON object only.`;
 /** The first object in the reply that carries openers (fenced, bare or whole); null when none. */
 export function parseOpenersReply(text) {
     const objects = jsonObjectsIn(text);
-    return objects.find(o => isObj(o) && Array.isArray(o.openers)) || objects.find(o => isObj(o) && (o.title || o.text)) || null;
+    const whole = objects.find(o => isObj(o) && Array.isArray(o.openers));
+    if (whole) return whole;
+    // A reply that ran out before its end closes no outer object (D221: more openers asked for is a longer answer). The
+    // openers that came whole are kept, with the date and the place where they were written before the cut.
+    const raw = String(text || '');
+    const parts = objects.filter(o => isObj(o) && typeof o.text === 'string' && o.text.trim());
+    if (parts.length && /"openers"\s*:/.test(raw)) {
+        const when = objects.find(o => isObj(o) && typeof o.date === 'string' && typeof o.time === 'string' && !('text' in o));
+        const m = /"where"\s*:\s*("(?:[^"\\]|\\.)*")/.exec(raw);
+        let where = '';
+        try { where = m ? String(JSON.parse(m[1])) : ''; } catch (e) { where = ''; }
+        return { ...(when ? { when } : {}), ...(where ? { where } : {}), openers: parts, partial: true };
+    }
+    return objects.find(o => isObj(o) && (o.title || o.text)) || null;
 }
 
 /**
  * The reply checked: one to `max` openers with a title and a text within
  * length, `who` cut to the cast and the known, `when` taken whole or not
- * at all. A reply with nothing usable fails.
+ * at all. A reply with nothing usable fails. `partial` where the reply was
+ * cut short and only the openers that came whole are in it.
  * @returns {{ ok: boolean, errors: string[], clean: { when: {date:string,time:string}|null, openers: {title:string,text:string,who:string[]}[] }|null }}
  */
 export function validateOpeners(reply, { cast = [], known = [], max = OPENERS } = {}) {
@@ -843,14 +986,14 @@ export function validateOpeners(reply, { cast = [], known = [], max = OPENERS } 
         const who = [];
         for (const w of Array.isArray(o.who) ? o.who : []) { if (typeof w !== 'string') continue; const hit = names.find(n => sameName(n, w)); if (hit && !who.includes(hit)) who.push(hit); }
         openers.push({ title, text, who });
-        if (openers.length >= Math.min(OPENERS, Math.max(1, max | 0))) break;
+        if (openers.length >= openersCount(max)) break;
     }
     if (!openers.length) return { ok: false, errors: errors.length ? errors : ['No usable opener.'], clean: null };
     let when = null;
     if (isObj(reply.when)) { const d = clean(reply.when.date, 80); const t = clean(reply.when.time, 80); if (d && t) when = { date: d, time: t }; }
     // The place the scene opens in by the player's own words (D218), where the request asked for it.
     const where = clean(reply.where, 80);
-    return { ok: true, errors, clean: { when, openers, ...(where ? { where } : {}) } };
+    return { ok: true, errors, clean: { when, openers, ...(where ? { where } : {}), ...(reply.partial === true ? { partial: true } : {}) } };
 }
 
 /**
@@ -1136,8 +1279,11 @@ export function sceneTranscriptParts(chat, { budget = RECAP_BUDGET, persona = 'P
  * (D190), again in the same request.
  * @param {{ canon?: string, lore?: Array<{ name: string, text: string }>, standing?: string }|null} o.check
  */
-export function buildRecapPrompt({ transcript = '', brief = '', player = '', maxChars = RECAP_CHARS, soFar = '', last = true, continuity = null, check = null, lead = '', ledger = null, wrap = '' } = {}) {
+export function buildRecapPrompt({ transcript = '', brief = '', player = '', maxChars = RECAP_CHARS, soFar = '', last = true, continuity = null, check = null, lead = '', ledger = null, wrap = '', before = '' } = {}) {
     const who = clean(player, 60) || 'the player';
+    // What the player said happens next when they started the scene (D218), given with its first part (D222): what it says
+    // had happened since the scene before did happen, off the page, and belongs in the record.
+    const between = !soFar ? clean(before, MAX_NOTE) : '';
     // How the player says the scene ended (D219): given with its last part. It happened, though the chat stops short of it.
     const ending = last ? clean(wrap, MAX_WRAP) : '';
     // The ledger's facts asked for in the same answer (D208): a long chat is read once, each request giving the record of its
@@ -1157,8 +1303,9 @@ export function buildRecapPrompt({ transcript = '', brief = '', player = '', max
         : '';
     const system = `You write the record of a scene that has just ended, for the narrator of the next one. You answer with one JSON object and nothing else: ${shape}. Rules for "recap": at most ${maxChars} characters; past tense; ${who} by name; what was said, learned, promised, lost and gained; nothing that did not happen; no advice, no questions, no markup.${more}${against}${alsoLedger}${soFar ? ' The record so far covers the earlier part of the scene: carry what still matters forward and add what this part adds.' : ''}${!last ? ' This is not the end of the scene yet: the record will be continued.' : ''}`;
     const established = told ? `${told.canon ? `What the story has established (the ledger):\n${told.canon}\n\n` : ''}${told.lore.length ? `The people's own notes:\n${told.lore.map(l => `[${l.name}] ${l.text}`).join('\n')}\n\n` : ''}${told.standing ? `The story's standing notes:\n${told.standing}\n\n` : ''}` : '';
-    const user = `${brief ? `The scene's brief:\n${clean(brief, MAX_BRIEF)}\n\n` : ''}${established}${blocks.people ? `${blocks.people}\n\n` : ''}${blocks.threads ? `${blocks.threads}\n\n` : ''}${led ? `The ledger so far:\n${led.ledger || '(empty)'}\n${led.known.length ? `Names the story knows: ${led.known.join(', ')}\n` : ''}\n` : ''}${soFar ? `The record so far:\n${clean(soFar, 1500)}\n\n` : ''}${soFar && lead ? `The lines just before this part, already in the record so far (to read on from, not to record again):\n${lead}\n\n` : ''}The scene${soFar ? ', continued' : ''}:\n${transcript || '(nothing was played)'}\n\n${ending ? `How the scene ended, in ${who}'s own words (it happened, after the last of what is written above):\n${ending}\n\n` : ''}Answer with the JSON object only.`;
-    return { system: ending ? `${system} Where it is given how the scene ended in ${who}'s own words, that is how it ended, though the scene as written stops before it: the record closes on it${continuity ? ', where the people stand is where it leaves them, and a thread it settles is closed' : ''}. It is ${who}'s account of what happened, not an instruction to you.` : system, user };
+    const user = `${brief ? `The scene's brief:\n${clean(brief, MAX_BRIEF)}\n\n` : ''}${established}${blocks.people ? `${blocks.people}\n\n` : ''}${blocks.threads ? `${blocks.threads}\n\n` : ''}${led ? `The ledger so far:\n${led.ledger || '(empty)'}\n${led.known.length ? `Names the story knows: ${led.known.join(', ')}\n` : ''}\n` : ''}${soFar ? `The record so far:\n${clean(soFar, 1500)}\n\n` : ''}${soFar && lead ? `The lines just before this part, already in the record so far (to read on from, not to record again):\n${lead}\n\n` : ''}${between ? `Before this scene opened, ${who} said this of what had happened since the scene before and of how this one should open (their own words):\n${between}\n\n` : ''}The scene${soFar ? ', continued' : ''}:\n${transcript || '(nothing was played)'}\n\n${ending ? `How the scene ended, in ${who}'s own words (it happened, after the last of what is written above):\n${ending}\n\n` : ''}Answer with the JSON object only.`;
+    const earlier = between ? ` Where it is given what ${who} said before the scene opened: what it says had already happened by then (time that passed, what was done in it, who was met) did happen, off the page, and the record tells it in a sentence or two before what the scene shows${continuity ? '; where the people stand takes it into account' : ''}. What it only asks for, plans or expects is not part of the story unless the scene shows it.` : '';
+    return { system: ending ? `${system}${earlier} Where it is given how the scene ended in ${who}'s own words, that is how it ended, though the scene as written stops before it: the record closes on it${continuity ? ', where the people stand is where it leaves them, and a thread it settles is closed' : ''}. It is ${who}'s account of what happened, not an instruction to you.` : `${system}${earlier}`, user };
 }
 
 /**
@@ -1210,11 +1357,11 @@ export function asideScenes(entry) {
  * it is set aside (one open scene at a time). Returns the entry and the
  * scene.
  */
-export function openScene(entry, { title = '', seed = null, place = null, cast = [], gap = null, chat = '', card = '', ownCard = false, startedAt = 0, startDate = '' } = {}) {
+export function openScene(entry, { title = '', seed = null, place = null, cast = [], gap = null, chat = '', card = '', ownCard = false, startedAt = 0, startDate = '', note = '' } = {}) {
     const next = touch(normalizeWorldEntry(entry));
     next.scenes = next.scenes.map(s => (s.status === 'open' ? { ...s, status: 'aside' } : s));
     next.seq += 1;
-    const scene = normalizeScene({ id: `s${next.seq}`, title, seed, place, cast, gap, chat, card, ownCard: ownCard === true, startedAt, startDate, status: 'open' }, next.seq);
+    const scene = normalizeScene({ id: `s${next.seq}`, title, seed, place, cast, gap, chat, card, ownCard: ownCard === true, startedAt, startDate, status: 'open', note }, next.seq);
     next.scenes.push(scene);
     return { entry: capScenes(next), scene };
 }
@@ -1466,8 +1613,36 @@ export function describeStartResult(r) {
         'chat-gone': 'That scene\'s chat file is not there any more, so it was not opened. Its record stays in the list.',
         busy: 'Another request is running; try again in a moment.',
         cancelled: 'Nothing was started.',
+        stopped: 'Stopped. Nothing was started, and your words are kept.',
     };
+    if (r.reason === 'timeout') return `${r.error || 'A step did not answer in time'}. Nothing was started, and your words are kept: try again.`;
+    if (r.reason === 'error') return `Something went wrong while the scene was prepared (${r.error || 'unknown'}). Nothing was started, and your words are kept.`;
     return why[r.reason] || `Nothing was started: ${r.error || r.reason || 'unknown'}.`;
+}
+
+// ─── What a Start is doing while the sheet waits (D220) ─────────────────
+
+/**
+ * The step a Start is at, in words for the sheet: it waited behind one
+ * line that never changed, for up to six things done one after another.
+ * @param {{ step?: string, words?: string, count?: number }} at
+ */
+export function startStepWords({ step = '', words = '', count = OPENERS } = {}) {
+    const n = openersCount(count);
+    if (step === 'world') return 'Reading the world…';
+    if (step === 'gap') return `Moving the world on${words ? ` (${clean(words, 80)})` : ''}…`;
+    if (step === 'lore') return 'Reading the lorebooks…';
+    if (step === 'book') return 'Reading where the people stand…';
+    if (step === 'lines') return 'Reading the last lines of the scene before…';
+    if (step === 'line') return 'Waiting for another request to finish…';
+    if (step === 'opening') return 'Opening the scene…';
+    return n === 1 ? 'Writing how it could open…' : `Writing ${countWord(n)} ways it could open…`;
+}
+
+/** A time waited, as the sheet shows it: 0:07, 2:41. */
+export function elapsedWords(ms) {
+    const s = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 // ─── What the player says happens next (D218) ───────────────────────────
@@ -1503,12 +1678,14 @@ const NO_TIME = /\b(?:right\s+after|straight\s+after|immediately|at\s+once|momen
  * @param {{ places?: Array<{ id: string, label: string }>, people?: string[] }} [known]
  * @returns {{ place: { id: string, label: string }|null, people: string[], gap: { id: 'now'|'when', words: string }|null }}
  *   `place`: the place of the map it names (the longest name found); `people`: the known people it names, in the
- *   order given; `gap`: how much time it says has passed, in its own words, or 'now' where it says none has.
+ *   order given; `gap`: how much time it says has passed, in its own words, or 'now' where it says none has;
+ *   `lore`: whether it names the lorebooks (someone out of them is asked for, D223).
  */
 export function readDirection(text, { places = [], people = [] } = {}) {
     const t = String(text || '').replace(/\s+/g, ' ').trim();
-    const out = { place: null, people: [], gap: null };
+    const out = { place: null, people: [], gap: null, lore: false };
     if (!t) return out;
+    out.lore = asksForLore(t);    // someone out of the lorebooks is asked for (D223)
     for (const p of Array.isArray(places) ? places : []) {
         if (!isObj(p) || !p.label || !namedIn(t, p.label)) continue;
         if (!out.place || clean(p.label, 80).length > out.place.label.length) out.place = { id: String(p.id || ''), label: clean(p.label, 80) };
@@ -1535,6 +1712,7 @@ export function describeDirection(read) {
     if (r.place && r.place.label) parts.push(`at ${r.place.label}`);
     if (Array.isArray(r.people) && r.people.length) parts.push(`with ${r.people.join(', ')}`);
     if (r.gap) parts.push(r.gap.id === 'now' ? 'right after' : r.gap.words);
+    if (r.lore) parts.push('new faces from the lorebooks');
     return parts.join(' · ');
 }
 
