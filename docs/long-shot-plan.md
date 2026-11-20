@@ -2138,3 +2138,42 @@ chosen, a length chosen, asked again for another and with none, the
 length kept for the next Start); `tools/atlas-browser-test.mjs` §5h
 (the chooser on the sheet and beside Ask again, the row above the
 buttons).
+
+## 64. Whether the openings chosen will fit in the answer (2026-11-20, D225)
+
+The owner, after D224: "it should tell the user that their text will
+get cut off if they dont have the right reply length otherwise stay as
+is". The openings come back in one answer, and a connection gives an
+answer so many tokens and no more (SillyTavern's own default for a chat
+completion is 300). Five long openings need some 4,800. D221 keeps the
+openings that came whole from an answer cut short and says so, after
+the request is spent; nothing said it beforehand.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D225 | Where the openings chosen will not fit in the answer the connection gives, the sheet says so under the choosers before anything is asked for; nothing else changes | **Held.** **What they need** is counted with no request (`openersTokens`): the words one opening may run to (a size's upper bound: 120, 320, 650; as the narrator writes, the average length of the narrator's last five messages in the chat in front, a paragraph or two where there are none, within what one opening may hold), a word at about 1.4 tokens, what stands around each opener in the answer, and the date and the place. **How long an answer may be** is read as the request will be made (`replyLimit`): Max Tokens of the External API where that is used; the response length in the preset of the tracker's connection profile where one is set, names a preset and is not the profile in use already; else SillyTavern's response length as it stands (a chat completion's, a text completion's). **The sheet** says it in one line under Openings and Length, on the Start sheet and beside Ask again, as either chooser is changed: "Three long openings need about 2,900 tokens, but the response length here is 300: the answer is likely to be cut off. Raise the response length in SillyTavern's AI Response Configuration, or choose fewer or shorter openings." It names the place the limit is raised by which of the three it is. Where they fit, and where how long an answer may be cannot be told, it says nothing, and the sheet is as it was. Nothing is held back: Write still writes. |
+
+What it does not do. It changes no setting: the response length is the
+player's to raise. It is an estimate: a size is a target and an upper
+bound, so an answer said to be likely to be cut off may fit, and with a
+model that spends part of its answer thinking, one said to fit may not
+(what comes back cut is still kept as far as it came whole, and said,
+D221). It reads the response length at the moment the sheet is opened
+or a chooser is changed, not as it is changed elsewhere while the sheet
+stands open. Run in the real SillyTavern at a phone's width, with
+SillyTavern's own response length set through its own control: at 300,
+three as the narrator writes and three long said not to fit, one short
+saying nothing; on the openings' sheet, nothing for what was written
+and the line for four medium chosen beside Ask again; at 2,000, three
+medium saying nothing and six long said not to fit; the setting put
+back.
+
+Tests: `tools/hub-test.mjs` (the words an opening may run to, the
+tokens an answer needs, what fits and what does not, one opening, as
+the narrator writes, the three places a limit is raised, a limit not
+known); `tools/hub-flow-test.mjs` §36 (the limit read from a chat
+completion, a text completion, the narrator's messages in the chat in
+front, a connection profile's preset, the profile in use, one with no
+preset, one that is gone, the External API, none to read);
+`tools/atlas-browser-test.mjs` §5h (the line under the choosers, on the
+sheet and beside Ask again; there and empty when they fit).

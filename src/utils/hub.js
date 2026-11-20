@@ -128,6 +128,56 @@ export function openerLength(id) {
     return OPENER_LENGTHS.some(x => x.id === id) ? id : 'narrator';
 }
 
+// ─── Whether the answer will fit (D225) ─────────────────────────────────
+//
+// The openings come back in one answer, and a connection gives an answer
+// so many tokens and no more (SillyTavern's own default is 300). Several
+// long openings do not fit in that, and the answer comes back cut (D221
+// keeps what came whole). The sheet says so before the request is made.
+
+/** The words one opening may run to: a size's upper bound; as the narrator writes, as long as the narrator's messages have been (a paragraph or two, 160, where that is not known), within what one opening may hold. */
+export function openerWords(length, narratorWords = 0) {
+    const id = openerLength(length);
+    if (id === 'short') return 120;
+    if (id === 'medium') return 320;
+    if (id === 'long') return 650;
+    const n = Math.round(Number(narratorWords));
+    return Math.min(700, Math.max(40, Number.isFinite(n) && n > 0 ? n : 160));
+}
+
+/** The tokens an answer of that many openings of that length needs, about: its words (a word is about 1.4 tokens), what stands around each opener (its title, its people, the marks of the answer's shape) and the date and the place. */
+export function openersTokens({ count = OPENERS, length = 'narrator', narratorWords = 0 } = {}) {
+    const n = openersCount(count);
+    return Math.ceil(n * (openerWords(length, narratorWords) * 1.4 + 45) + 50);
+}
+
+/**
+ * What the sheet says when the openings chosen will not fit in the answer
+ * the connection gives: how long an answer may be, how much these need,
+ * and where it is raised. '' when they fit, and when how long an answer
+ * may be is not known.
+ * @param {{ count?: number, length?: string, narratorWords?: number, limit?: { tokens: number, where?: 'sillytavern'|'profile'|'external', name?: string }|null }} o
+ */
+export function replyWarning({ count = OPENERS, length = 'narrator', narratorWords = 0, limit = null } = {}) {
+    const max = isObj(limit) ? Math.floor(Number(limit.tokens)) : 0;
+    if (!(max > 0)) return '';
+    const need = openersTokens({ count, length, narratorWords });
+    if (need <= max) return '';
+    const n = openersCount(count);
+    const id = openerLength(length);
+    const what = n === 1 ? `${id === 'narrator' ? 'An opening' : `A ${id} opening`}${id === 'narrator' ? ' as long as the narrator writes' : ''} needs` : `${countWord(n).replace(/^./, c => c.toUpperCase())} ${id === 'narrator' ? 'openings as long as the narrator writes' : `${id} openings`} need`;
+    const round = (v) => (v >= 1000 ? Math.round(v / 100) * 100 : Math.round(v / 10) * 10).toLocaleString('en-US');
+    const max2 = max.toLocaleString('en-US');
+    const name = clean(limit.name, 80);
+    const [has, fix] = limit.where === 'external' ? [`Max Tokens for the External API is ${max2}`, 'Raise it in the extension\'s settings']
+        : limit.where === 'profile' ? [`the response length of the connection profile${name ? ` "${name}"` : ''} is ${max2}`, 'Raise it in that profile\'s preset']
+        : [`the response length here is ${max2}`, 'Raise the response length in SillyTavern\'s AI Response Configuration'];
+    return `${what} about ${round(need)} tokens, but ${has}: the answer is likely to be cut off. ${fix}, or choose ${n > 1 ? 'fewer or shorter openings' : 'a shorter opening'}.`;
+}
+
+/** The words of a text, counted. */
+export const wordCount = (text) => { const t = String(text || '').trim(); return t ? t.split(/\s+/).length : 0; };
+
 /** A small number in words, as the sheet says it ("three ways it could open"). */
 export const countWord = (n) => ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] || String(n);
 

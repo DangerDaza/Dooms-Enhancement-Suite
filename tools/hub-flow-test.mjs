@@ -43,6 +43,7 @@ const patched = before
     .replace('export const getRequestHeaders = anything;', 'export const getRequestHeaders = () => ({});')
     .replace('export const user_avatar = anything;', "export const user_avatar = 'jordan.png';")
     + '\nexport let is_send_press = false;\nexport const __setSendPress = (v) => { is_send_press = v; };\n'
+    + '\nexport let amount_gen = 350;\nexport const __setAmountGen = (v) => { amount_gen = v; };\n'
     // SillyTavern's own record of the card in front (what a reload comes back to), told by name (D202).
     + 'export const setActiveCharacter = (a) => { (globalThis.__DES_ACTIVE__ = globalThis.__DES_ACTIVE__ || []).push(a); };\n'
     + 'export const closeCurrentChat = async () => (typeof globalThis.__DES_CLOSE_CHAT__ === "function" ? globalThis.__DES_CLOSE_CHAT__() : false);\n';
@@ -3031,6 +3032,62 @@ console.log('\n§36 a Start that does not wait for good, as many openings as cho
     check('…medium', medium.ok && medium.length === 'medium' && /each opener two or three paragraphs, about 180 to 320 words long/.test(asked.system));
     hub.cancelStart();
     hub.setOpenerLengthWanted('narrator');
+    // Whether what is chosen will fit in the answer the connection gives (D225).
+    {
+        const modeWas = extensionSettings.generationMode;
+        const profileWas = extensionSettings.connectionProfile;
+        const extWas = extensionSettings.externalApiSettings;
+        extensionSettings.generationMode = 'separate';
+        extensionSettings.connectionProfile = '';
+        ctxTarget.mainApi = 'openai';
+        ctxTarget.chatCompletionSettings = { openai_max_tokens: 300 };
+        check('how long an answer may be is SillyTavern\'s response length as it stands: a chat completion\'s', same(hub.replyLimit(), { tokens: 300, where: 'sillytavern' }), JSON.stringify(hub.replyLimit()));
+        check('three long openings do not fit in it, and the sheet is told so, with where it is raised', /^Three long openings need about 2,900 tokens, but the response length here is 300: the answer is likely to be cut off\. Raise the response length in SillyTavern's AI Response Configuration, or choose fewer or shorter openings\.$/.test(hub.openersWarning({ count: 3, length: 'long' })), hub.openersWarning({ count: 3, length: 'long' }));
+        check('one short one does, and nothing is said', hub.openersWarning({ count: 1, length: 'short' }) === '');
+        ctxTarget.chatCompletionSettings = { openai_max_tokens: 8000 };
+        check('with room for them nothing is said', hub.openersWarning({ count: 6, length: 'long' }) === '');
+        ctxTarget.mainApi = 'textgenerationwebui';
+        check('a text completion\'s', same(hub.replyLimit(), { tokens: 350, where: 'sillytavern' }), JSON.stringify(hub.replyLimit()));
+        // As the narrator writes: as long as the narrator's messages in the chat in front have been.
+        ctxTarget.mainApi = 'openai';
+        ctxTarget.chatCompletionSettings = { openai_max_tokens: 1200 };
+        const kept = chat.splice(0, chat.length);
+        chat.push({ is_user: false, name: 'Narrator', mes: 'word '.repeat(40).trim(), extra: {} });
+        const shortTalk = hub.openersWarning({ count: 3, length: 'narrator' });
+        chat.push({ is_user: false, name: 'Narrator', mes: 'word '.repeat(900).trim(), extra: {} });
+        const longTalk = hub.openersWarning({ count: 3, length: 'narrator' });
+        check('as the narrator writes is counted by how long the narrator\'s messages in the chat in front have been', shortTalk === '' && /^Three openings as long as the narrator writes need about [\d,]+ tokens, but the response length here is 1,200/.test(longTalk), JSON.stringify([shortTalk, longTalk]));
+        chat.splice(0, chat.length, ...kept);
+        // The tracker's connection profile: its preset's, unless it is the profile in use already.
+        ctxTarget.extensionSettings = { connectionManager: { selectedProfile: 'p-main', profiles: [{ id: 'p-main', name: 'Main', mode: 'cc', preset: 'Big' }, { id: 'p-side', name: 'Tracker', mode: 'cc', preset: 'Small' }, { id: 'p-text', name: 'Local', mode: 'tc', preset: 'Kobold' }, { id: 'p-bare', name: 'Bare', mode: 'cc' }] } };
+        const presets = { openai: { names: ['Big', 'Small'], list: [{ openai_max_tokens: 4000 }, { openai_max_tokens: 500 }] }, textgenerationwebui: { names: { Kobold: 0 }, list: [{ genamt: 250 }] } };
+        ctxTarget.getPresetManager = (api) => ({ getPresetList: () => ({ presets: presets[api].list, preset_names: presets[api].names }), getCompletionPresetByName: (n) => { const k = presets[api].names; return Array.isArray(k) ? presets[api].list[k.indexOf(n)] : presets[api].list[k[n]]; } });
+        extensionSettings.connectionProfile = 'Tracker';
+        check('with a connection profile set for background requests: its preset\'s response length, said by the profile\'s name', same(hub.replyLimit(), { tokens: 500, where: 'profile', name: 'Tracker' }) && /but the response length of the connection profile "Tracker" is 500: the answer is likely to be cut off\. Raise it in that profile's preset, or/.test(hub.openersWarning({ count: 3, length: 'medium' })), JSON.stringify(hub.replyLimit()));
+        extensionSettings.connectionProfile = 'Local';
+        check('a text completion profile\'s', same(hub.replyLimit(), { tokens: 250, where: 'profile', name: 'Local' }));
+        extensionSettings.connectionProfile = 'Main';
+        check('the profile in use already: the response length as it stands', same(hub.replyLimit(), { tokens: 1200, where: 'sillytavern' }));
+        extensionSettings.connectionProfile = 'Bare';
+        check('a profile that names no preset keeps the one in place', same(hub.replyLimit(), { tokens: 1200, where: 'sillytavern' }));
+        extensionSettings.connectionProfile = 'Gone';
+        check('a profile that is not there any more: as it stands', same(hub.replyLimit(), { tokens: 1200, where: 'sillytavern' }));
+        // The external API.
+        extensionSettings.generationMode = 'external';
+        extensionSettings.externalApiSettings = { baseUrl: 'x', model: 'y', maxTokens: 1024 };
+        check('the external API: its Max Tokens, and what it sends where none is set', same(hub.replyLimit(), { tokens: 1024, where: 'external' }) && /but Max Tokens for the External API is 1,024: .* Raise it in the extension's settings, or/.test(hub.openersWarning({ count: 5, length: 'long' })) && (extensionSettings.externalApiSettings = { baseUrl: 'x', model: 'y' }, hub.replyLimit().tokens === 2048));
+        extensionSettings.generationMode = modeWas;
+        extensionSettings.connectionProfile = profileWas;
+        extensionSettings.externalApiSettings = extWas;
+        delete ctxTarget.chatCompletionSettings;
+        delete ctxTarget.extensionSettings;
+        delete ctxTarget.getPresetManager;
+        check('where it cannot be told (a chat completion with no response length to read), nothing is said', hub.replyLimit() === null && hub.openersWarning({ count: 6, length: 'long' }) === '');
+        delete ctxTarget.mainApi;
+        hub.__setReplyLimit(() => ({ tokens: 200, where: 'sillytavern' }));
+        check('(the test\'s own limit can be set)', /response length here is 200/.test(hub.openersWarning({ count: 2, length: 'short' })));
+        hub.__setReplyLimit(null);
+    }
     // An answer that ran out before its end.
     answer = async () => JSON.stringify(five(5)).replace(/\{"title":"T4".*$/, '{"title":"T4","text":"Opening num');
     const cut = await start({ count: 5 });

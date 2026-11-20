@@ -24,7 +24,7 @@ import {
     ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, activeCampaignWorldId, worldsByCampaign, loreLibraryOn,
     STORY_SEP, packOf, entryUntouched, storyIdsOf, nextStoryId, storyOfChat, storyPlayedAt, lastStoryOf, storiesOf,
     MAX_NOTE, BRIEF_NOTE, MAX_WRAP, readDirection, describeDirection,
-    MAX_OPENERS, openersCount, countWord, startStepWords, elapsedWords, asksForLore, loreEntryName, untouchedLore, loreSample, freshCount, LORE_FRESH_EACH, OPENER_LENGTHS, openerLength,
+    MAX_OPENERS, openersCount, countWord, startStepWords, elapsedWords, asksForLore, loreEntryName, untouchedLore, loreSample, freshCount, LORE_FRESH_EACH, OPENER_LENGTHS, openerLength, openerWords, openersTokens, replyWarning, wordCount,
 } from '../src/utils/hub.js';
 import { normalizePack, seedWorldState, countMessage, applyAdvance, reconcileWithChat, seenInScene } from '../src/utils/liveWorld.js';
 import { visitPlace, reconcileVisited } from '../src/utils/worldMap.js';
@@ -837,6 +837,21 @@ console.log('\n§ how long an opening is (D224)');
     check('a size chosen, after a scene: said outright, whatever the length of the narrator\'s messages; the rest of how the narrator wrote still holds', /the same person and tense, speech set out the same way \(its marks and any colour tags\), and each opener four to six paragraphs, about 450 to 650 words long, whatever the length of the narrator's messages there; no headings/.test(long) && !/about as long as one of the narrator's own messages/.test(long));
     check('a size chosen, with no scene before: in place of a paragraph or two', /still Jack's; one paragraph, about 60 to 120 words, plain prose/.test(buildOpenersPrompt({ player: 'Jack', length: 'short' }).system) && /still Jack's; two or three paragraphs, about 180 to 320 words, plain prose/.test(buildOpenersPrompt({ player: 'Jack', length: 'medium' }).system) && !/a paragraph or two/.test(buildOpenersPrompt({ player: 'Jack', length: 'medium' }).system));
     check('the length changes nothing else of the request', buildOpenersPrompt({ player: 'Jack', tail: lines, length: 'long' }).user === asIs.user);
+}
+
+console.log('\n§ whether the openings chosen will fit in the answer (D225)');
+{
+    check('the words one opening may run to: a size\'s upper bound', openerWords('short') === 120 && openerWords('medium') === 320 && openerWords('long') === 650);
+    check('as the narrator writes: as long as the narrator\'s messages have been, a paragraph or two where that is not known, within what one opening may hold', openerWords('narrator', 240) === 240 && openerWords('narrator') === 160 && openerWords('narrator', 0) === 160 && openerWords('narrator', 5000) === 700 && openerWords('narrator', 3) === 40 && openerWords('nonsense', 90) === 90);
+    check('the tokens an answer needs grow with the number and the length', openersTokens({ count: 1, length: 'short' }) < openersTokens({ count: 3, length: 'short' }) && openersTokens({ count: 3, length: 'short' }) < openersTokens({ count: 3, length: 'long' }) && openersTokens({ count: 3, length: 'long' }) === Math.ceil(3 * (650 * 1.4 + 45) + 50) && openersTokens({ count: 99, length: 'long' }) === openersTokens({ count: 6, length: 'long' }));
+    const st = (tokens) => ({ tokens, where: 'sillytavern' });
+    check('what fits says nothing', replyWarning({ count: 1, length: 'short', limit: st(300) }) === '' && replyWarning({ count: 3, length: 'medium', limit: st(2000) }) === '' && replyWarning({ count: 6, length: 'long', limit: st(8192) }) === '');
+    check('what does not: how much it needs, how long an answer may be, that it is likely to be cut off, and what to do', replyWarning({ count: 3, length: 'long', limit: st(300) }) === 'Three long openings need about 2,900 tokens, but the response length here is 300: the answer is likely to be cut off. Raise the response length in SillyTavern\'s AI Response Configuration, or choose fewer or shorter openings.');
+    check('one opening is said as one', replyWarning({ count: 1, length: 'long', limit: st(800) }) === 'A long opening needs about 1,000 tokens, but the response length here is 800: the answer is likely to be cut off. Raise the response length in SillyTavern\'s AI Response Configuration, or choose a shorter opening.');
+    check('as the narrator writes is said so', /^Three openings as long as the narrator writes need about 1,900 tokens, but the response length here is 1,500:/.test(replyWarning({ count: 3, length: 'narrator', narratorWords: 400, limit: st(1500) })) && /^An opening as long as the narrator writes needs about /.test(replyWarning({ count: 1, length: 'narrator', narratorWords: 600, limit: st(300) })));
+    check('where the limit is a connection profile\'s preset, or the external API\'s, it says where that is raised', /but the response length of the connection profile "Tracker" is 800: the answer is likely to be cut off\. Raise it in that profile's preset, or choose fewer or shorter openings\.$/.test(replyWarning({ count: 3, length: 'long', limit: { tokens: 800, where: 'profile', name: 'Tracker' } })) && /but Max Tokens for the External API is 1,024: the answer is likely to be cut off\. Raise it in the extension's settings, or/.test(replyWarning({ count: 3, length: 'long', limit: { tokens: 1024, where: 'external' } })));
+    check('where how long an answer may be is not known, nothing is said', replyWarning({ count: 6, length: 'long', limit: null }) === '' && replyWarning({ count: 6, length: 'long', limit: { tokens: 0 } }) === '' && replyWarning({ count: 6, length: 'long', limit: { tokens: 'x' } }) === '' && replyWarning({ count: 6, length: 'long' }) === '');
+    check('words counted', wordCount('one two  three\nfour') === 4 && wordCount('') === 0 && wordCount('   ') === 0 && wordCount(null) === 0);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

@@ -215,7 +215,7 @@ export function atlasSetupHtml({ step = 'notes', notes = '', reach = 'recent', c
  * @param {string} o.whereNew        a place typed in that is not on any map yet
  * @param {{ kind: string, label?: string }|null} o.from   what the scene is started from, said under the title
  */
-export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: '' }, sceneNo = 0, people = [], cast = [], extra = '', gap = { id: 'now', words: '' }, journey = '', seedText = '', note = '', error = '', pending = null, card = '', places = null, whereNew = '', from = null, chosen = 0, voices = false, listening = -1, newCard = false, readLine = '', detailsOpen = false, count = OPENERS, length = 'narrator', busy = null, kept = false } = {}) {
+export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: '' }, sceneNo = 0, people = [], cast = [], extra = '', gap = { id: 'now', words: '' }, journey = '', seedText = '', note = '', error = '', pending = null, card = '', places = null, whereNew = '', from = null, chosen = 0, voices = false, listening = -1, newCard = false, readLine = '', detailsOpen = false, count = OPENERS, length = 'narrator', busy = null, kept = false, warn = '' } = {}) {
     const known = !!(place && place.label);
     const where = known ? place.label : (pending && pending.place && pending.place.label) || 'here';
     const title = `${sceneNo ? `Scene ${sceneNo}` : 'A scene'}${known ? ` at ${e(where)}` : ''}`;
@@ -262,6 +262,7 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
             <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">Or write the opening yourself</span>
                 <textarea class="dooms-atlas-input dooms-atlas-scene-own" maxlength="4000" placeholder="The first message of the scene, in the narrator's voice."></textarea></label>
             ${openersRow({ count: p.count || list.length || count, length: p.length || length, again: true })}
+            ${openersWarnLine(warn)}
             <div class="dooms-atlas-setup-actions">
                 ${list.length ? `<button type="button" class="dooms-atlas-btn is-primary" data-act="scene-pick"><i class="fa-solid fa-play" aria-hidden="true"></i> <span>Start ${sceneNo ? `scene ${sceneNo}` : 'the scene'}</span></button>` : ''}
                 <button type="button" class="dooms-atlas-btn" data-act="scene-own"><i class="fa-solid fa-pen" aria-hidden="true"></i> <span>Open with mine</span></button>
@@ -316,6 +317,7 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
         </details>
         ${err}
         ${openersRow({ count, length })}
+        ${openersWarnLine(warn)}
         <div class="dooms-atlas-setup-actions">
             <button type="button" class="dooms-atlas-btn is-primary" data-act="scene-write"><i class="fa-solid fa-feather" aria-hidden="true"></i> <span class="dooms-atlas-scene-write-label">${e(openersLabel(count))}</span></button>
             <button type="button" class="dooms-atlas-btn" data-act="setup-close">Not now</button>
@@ -343,6 +345,9 @@ function openersRow({ count = OPENERS, length = 'narrator', again = false } = {}
                 <select class="dooms-atlas-input ${again ? 'dooms-atlas-again-length' : 'dooms-atlas-scene-length'}" aria-label="${again ? 'How long each opening is when asked again' : 'How long each opening is'}">${OPENER_LENGTHS.map(x => `<option value="${x.id}"${x.id === len ? ' selected' : ''}${x.words ? ` title="${attr(x.words)}"` : ''}>${e(x.label)}</option>`).join('')}</select></label>
         </div>`;
 }
+
+/** Said under the choosers when the openings chosen will not fit in the answer the connection gives (D225); there and empty otherwise, to be filled as they are changed. */
+const openersWarnLine = (warn) => `<p class="dooms-atlas-start-note dooms-atlas-openers-warn" role="status"${warn ? '' : ' hidden'}><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> <span>${e(warn || '')}</span></p>`;
 
 /** The Write button's words for a number of openings. */
 export const openersLabel = (count) => { const n = openersCount(count); return n === 1 ? 'Write the opening' : `Write ${countWord(n)} openings`; };

@@ -38,7 +38,7 @@ import {
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, sceneMenuModel, sceneTail, TAIL, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
     readConflicts, mergeConflicts, normalizeConflicts, MAX_WRAP, MAX_NOTE, MAX_CAST, MAX_LINE,
-    openersCount, untouchedLore, loreSample, freshCount, asksForLore, openerLength,
+    openersCount, untouchedLore, loreSample, freshCount, asksForLore, openerLength, replyWarning, wordCount,
     ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, worldsByCampaign, loreLibraryOn,
     packOf, entryUntouched, storyIdsOf, nextStoryId, storyOfChat, lastStoryOf, storiesOf, storyPlayedAt,
 } from '../../utils/hub.js';
@@ -1443,6 +1443,71 @@ export function cancelStart() {
 /** How many openings a Start asks for (D221): as last chosen on the Start sheet, three until one is. */
 export function openersWanted() {
     return cfg().openers;
+}
+
+// ─── Whether the openings chosen will fit in the answer (D225) ───────────
+
+let replyLimitHook = null;    // test hook: () => { tokens, where, name? } | null
+
+/** Test hook: how long an answer may be, or null for the connection's own. */
+export function __setReplyLimit(fn) {
+    replyLimitHook = typeof fn === 'function' ? fn : null;
+}
+
+/**
+ * How long an answer to a background request may be, in tokens, as the
+ * request will be made: the external API's Max Tokens where that is used;
+ * the preset of the tracker's connection profile where one is set, is not
+ * the one in use already and names a preset; else SillyTavern's response
+ * length as it stands. Null where it cannot be told.
+ * @returns {{ tokens: number, where: 'sillytavern'|'profile'|'external', name?: string }|null}
+ */
+export function replyLimit() {
+    try {
+        if (replyLimitHook) return replyLimitHook();
+        if (extensionSettings.generationMode === 'external') {
+            const n = Number((extensionSettings.externalApiSettings || {}).maxTokens) || 2048;    // what the request sends where none is set
+            return { tokens: n, where: 'external' };
+        }
+        const c = getContext();
+        const all = c.extensionSettings || c.extension_settings || {};
+        const cm = all.connectionManager && typeof all.connectionManager === 'object' ? all.connectionManager : null;
+        const name = extensionSettings.connectionProfile;
+        const profile = name && cm && Array.isArray(cm.profiles) ? cm.profiles.find(p => p && p.name === name) : null;
+        if (profile && profile.preset && profile.id !== cm.selectedProfile && typeof c.getPresetManager === 'function') {
+            const text = profile.mode === 'tc';
+            const pm = c.getPresetManager(text ? 'textgenerationwebui' : 'openai');
+            const list = pm && typeof pm.getPresetList === 'function' ? pm.getPresetList() : null;
+            const names = list ? list.preset_names : null;
+            const has = Array.isArray(names) ? names.includes(profile.preset) : !!(names && names[profile.preset] !== undefined);
+            const preset = has ? pm.getCompletionPresetByName(profile.preset) : null;
+            const n = preset ? Number(text ? preset.genamt : preset.openai_max_tokens) : NaN;
+            if (Number.isFinite(n) && n > 0) return { tokens: n, where: 'profile', name: String(name) };
+        }
+        const n = c.mainApi === 'openai' ? Number(c.chatCompletionSettings && c.chatCompletionSettings.openai_max_tokens) : Number(ST.amount_gen);
+        return Number.isFinite(n) && n > 0 ? { tokens: n, where: 'sillytavern' } : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/** How long the narrator's messages in the chat in front have been, in words: the last five of them, on average. 0 where there are none. */
+function narratorWordsNow() {
+    try {
+        const list = (chatArray() || []).filter(m => m && !m.is_user && !m.is_system && typeof m.mes === 'string' && m.mes.trim()).slice(-5);
+        return list.length ? Math.round(list.reduce((n, m) => n + wordCount(m.mes), 0) / list.length) : 0;
+    } catch (e) {
+        return 0;
+    }
+}
+
+/**
+ * What the Start sheet says when the openings chosen will not fit in the
+ * answer the connection gives (D225); '' when they fit or it cannot be
+ * told. Read with no request, as the choosers are changed.
+ */
+export function openersWarning({ count = 0, length = '' } = {}) {
+    return replyWarning({ count: openersCount(count || cfg().openers), length: openerLength(length || cfg().openerLength), narratorWords: narratorWordsNow(), limit: replyLimit() });
 }
 
 /** How long an opening is (D224): as last chosen on the Start sheet, as the narrator writes until one is. */
