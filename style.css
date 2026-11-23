@@ -2270,6 +2270,25 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 }
 
 
+/* A vital shown as a number or as the level it is on (D232): no bar, the
+   value in the vital's colour at the row's end. */
+.rpg-card-back-stat-level {
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    font-size: clamp(0.6rem, 0.6vw, 0.7rem);
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rpg-stat-rung {
+    opacity: 0.7;
+    font-style: italic;
+}
+
+
 /* Empty state for fields with no data */
 .rpg-card-back-empty {
     opacity: 0.4;
@@ -10491,6 +10510,32 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     transition: width 0.4s ease;
 }
 
+/* Front, for a vital shown as a number or as the level it is on (D232): a
+   small tag in the vital's colour, above the bars. */
+.dooms-pb-vital-tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px;
+    min-width: 0;
+}
+
+.dooms-pb-vital-tag {
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0 4px;
+    border: 1px solid var(--c, #888);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.45);
+    color: var(--c, #ccc);
+    font-size: 0.62em;
+    font-weight: 600;
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Back: one row per vital — icon, name, track, editable value */
 .dooms-pb-back-vitals { gap: 3px; }
 
@@ -10567,6 +10612,47 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 .dooms-pb-vital-row.is-low .dooms-pb-vital-val { color: #ff8a8a; }
+
+/* A vital shown as a number or a level (D232): the name gives way, the
+   value's own colour and weight carry it. */
+.dooms-pb-vital-row.is-percent .dooms-pb-vital-val,
+.dooms-pb-vital-row.is-level .dooms-pb-vital-val { font-weight: 700; }
+
+.dooms-pb-vital-val.is-label {
+    width: auto;
+    max-width: 58%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The level a number is on, between the name and the number. */
+.dooms-pb-vital-rung {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+    opacity: 0.7;
+}
+
+/* One step a level, lit up to the one the value is on. */
+.dooms-pb-vital-steps {
+    flex: 1 1 auto;
+    display: flex;
+    gap: 2px;
+    min-width: 14px;
+}
+
+.dooms-pb-vital-steps i {
+    flex: 1 1 0;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.dooms-pb-vital-steps i.is-on { background: var(--c, #888); }
 
 
 .dooms-pb-back-label {

@@ -203,7 +203,7 @@ import {
 import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
 import { escapeHtml } from './src/utils/html.js';
 // Vitals (Project Short Fuse): the Settings → Stats page edits the sheet
-import { vitalsConfig, defaultVitalsConfig, migrateVitalsConfig, normalizeVitalDef, vitalSlug, clampVital, isHexColor, VITAL_PRESETS, EXTRA_VITAL_COLORS, MAX_VITALS, setPlayedNamesSource, parseVitalNames } from './src/utils/vitals.js';
+import { vitalsConfig, defaultVitalsConfig, migrateVitalsConfig, normalizeVitalDef, vitalSlug, clampVital, isHexColor, VITAL_PRESETS, EXTRA_VITAL_COLORS, MAX_VITALS, setPlayedNamesSource, parseVitalNames, normalizeRungs, evenRungs, MAX_VITAL_RUNGS } from './src/utils/vitals.js';
 import { attributesConfig, migrateAttributesConfig, normalizeAttributeDef, normalizeSkills, pruneProficiencies, clampProficiency, attributeDefs, attributeSlug, ATTRIBUTE_PRESETS, DIFFICULTIES, MAX_ATTRIBUTES } from './src/utils/d20.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
@@ -311,26 +311,62 @@ const VITAL_WHO_LABELS = Object.freeze({
     named: 'Only these characters',
 });
 
+const VITAL_SHOW_LABELS = Object.freeze({
+    bar: 'A bar',
+    percent: 'A number (62%)',
+    level: 'The level it is on',
+});
+
 /** What a row's options come to, in a few words, for the row while they are closed ('' when all are as they come). */
 function vitalSummary(d) {
     const parts = [];
     if (d.who === 'player') parts.push('your character only');
     else if (d.who === 'others') parts.push('everyone but your character');
     else if (d.who === 'named') parts.push(d.names.length ? `only ${d.names.join(', ')}` : 'nobody yet (no names given)');
+    if (d.show === 'percent') parts.push('shown as a number');
+    else if (d.show === 'level') parts.push(d.rungs.length ? 'shown as its level' : 'shown as its level (no levels yet)');
+    if (d.rungs.length) parts.push(`${d.rungs.length} ${d.rungs.length === 1 ? 'level' : 'levels'}: ${d.rungs.map(r => r.label).join(', ')}`);
     return parts.join(' · ');
 }
 
-/** The options under a vital's row (D231): who it is for. */
+/** The options under a vital's row: who it is for (D231), how it is shown, what it measures and its levels (D232). */
 function vitalDetailsHtml(d) {
-    const whoOptions = Object.entries(VITAL_WHO_LABELS).map(([value, label]) =>
-        `<option value="${value}"${d.who === value ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
+    const options = (labels, current) => Object.entries(labels).map(([value, label]) =>
+        `<option value="${value}"${current === value ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
+    const rungRows = d.rungs.map((r, i) => `<div class="rpg-vital-rung" data-rung="${i}">
+                <label class="rpg-vital-field" title="The value this level starts at"><span>From</span><input type="number" class="rpg-vital-rung-at" min="0" max="100" value="${r.at}" /></label>
+                <input type="text" class="rpg-vital-rung-label" value="${escapeHtml(r.label)}" maxlength="30" placeholder="Name" title="The level's name: what the card shows" />
+                <input type="text" class="rpg-vital-rung-note" value="${escapeHtml(r.note)}" maxlength="200" placeholder="What it means (told to the AI)" title="What this level means, told to the AI" />
+                <button type="button" class="rpg-ws-rel-remove rpg-vital-rung-remove" title="Remove this level"><i class="fa-solid fa-xmark"></i></button>
+            </div>`).join('');
+    const levelHint = d.show === 'level' && !d.rungs.length
+        ? '<p class="rpg-vital-detail-hint">It has no levels yet, so the cards show the number until it does.</p>' : '';
     return `<div class="rpg-vital-details">
         <div class="rpg-vital-detail">
             <span class="rpg-vital-detail-label">For</span>
-            <select class="rpg-vital-who rpg-accordion-select" title="Who carries this vital">${whoOptions}</select>
+            <select class="rpg-vital-who rpg-accordion-select" title="Who carries this vital">${options(VITAL_WHO_LABELS, d.who)}</select>
             <input type="text" class="rpg-vital-names${d.who === 'named' ? '' : ' is-hidden'}" value="${escapeHtml(d.names.join(', '))}" maxlength="400" placeholder="Roxy, Eli Vega" title="Names, separated by commas. A name your character goes by counts as your character." />
         </div>
-        <p class="rpg-vital-detail-hint">A vital for named characters shows on their cards only, and the AI is asked for it only for them. Use the name the card shows; a first name is enough.</p>
+        <div class="rpg-vital-detail">
+            <span class="rpg-vital-detail-label">Shown as</span>
+            <select class="rpg-vital-show rpg-accordion-select" title="What the cards make of the value">${options(VITAL_SHOW_LABELS, d.show)}</select>
+        </div>
+        ${levelHint}
+        <div class="rpg-vital-detail">
+            <span class="rpg-vital-detail-label">Measures</span>
+            <input type="text" class="rpg-vital-about" value="${escapeHtml(d.about)}" maxlength="240" placeholder="What it measures and what moves it (told to the AI)" title="One line told to the AI: what this vital measures, what raises it and what lowers it" />
+        </div>
+        <div class="rpg-vital-detail rpg-vital-detail-top">
+            <span class="rpg-vital-detail-label">Levels</span>
+            <div class="rpg-vital-rungs">
+                ${rungRows}
+                <div class="rpg-vital-rung-actions">
+                    <button type="button" class="rpg-vital-rung-add rpg-accordion-action-btn"${d.rungs.length >= MAX_VITAL_RUNGS ? ' disabled' : ''}><i class="fa-solid fa-plus"></i> Add a level</button>
+                    ${d.rungs.length > 1 ? '<button type="button" class="rpg-vital-rung-even rpg-accordion-action-btn" title="Start the levels at even steps from 0 to 100, in their order">Space evenly</button>' : ''}
+                </div>
+            </div>
+        </div>
+        <p class="rpg-vital-detail-hint">A vital for named characters shows on their cards only, and the AI is asked for it only for them; a first name is enough. The value is 0 to 100 whatever it is shown as: a level is the name for a stretch of it, starting at <b>From</b>, and the AI is told the levels and what each means.</p>
     </div>`;
 }
 
@@ -370,7 +406,7 @@ function renderVitalsSettings() {
                 <button type="button" class="rpg-vital-move" data-dir="-1" title="Move up"${i === 0 ? ' disabled' : ''}><i class="fa-solid fa-chevron-up"></i></button>
                 <button type="button" class="rpg-vital-move" data-dir="1" title="Move down"${i === list.length - 1 ? ' disabled' : ''}><i class="fa-solid fa-chevron-down"></i></button>
             </span>
-            <button type="button" class="rpg-vital-more${summary ? ' has-custom' : ''}" title="${open ? 'Close the options' : 'Options: who it is for'}" aria-expanded="${open ? 'true' : 'false'}"><i class="fa-solid fa-sliders"></i></button>
+            <button type="button" class="rpg-vital-more${summary ? ' has-custom' : ''}" title="${open ? 'Close the options' : 'Options: who it is for, how it is shown, its levels'}" aria-expanded="${open ? 'true' : 'false'}"><i class="fa-solid fa-sliders"></i></button>
             <button type="button" class="rpg-ws-rel-remove rpg-vital-remove" title="Remove this vital"><i class="fa-solid fa-trash"></i></button>
             ${open ? vitalDetailsHtml(d) : (summary ? `<div class="rpg-vital-summary">${escapeHtml(summary.charAt(0).toUpperCase() + summary.slice(1))}</div>` : '')}
         </div>`;
@@ -1956,6 +1992,94 @@ function bindSettingsUI() {
         const names = parseVitalNames($(this).val());
         if (names.length) entry.names = names; else delete entry.names;
         $(this).val(names.join(', '));
+        _saveVitals({ rerender: false });
+    });
+    // How it is shown, what it measures and its levels (D232).
+    $(document).on('change', '.rpg-vital-show', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        const show = String($(this).val() || 'bar');
+        if (show === 'bar') delete entry.show; else entry.show = show;
+        _saveVitals();
+    });
+    $(document).on('change', '.rpg-vital-about', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        const about = String($(this).val() || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+        if (about) entry.about = about; else delete entry.about;
+        $(this).val(about);
+        _saveVitals({ rerender: false });
+    });
+    // A level is found by where it sits in the list, which is kept in
+    // order and safe on every write, so the rows and the list agree.
+    const _rungFromRow = (el) => {
+        const { entry } = _vitalFromRow(el);
+        if (!entry) return { entry: null, rungs: [], i: -1 };
+        const rungs = normalizeRungs(entry.rungs);
+        const i = parseInt($(el).closest('.rpg-vital-rung').attr('data-rung'), 10);
+        return { entry, rungs, i: Number.isInteger(i) && i >= 0 && i < rungs.length ? i : -1 };
+    };
+    const _setRungs = (entry, rungs) => {
+        const safe = normalizeRungs(rungs);
+        if (safe.length) entry.rungs = safe; else delete entry.rungs;
+        _saveVitals();
+    };
+    $(document).on('click', '.rpg-vital-rung-add', function () {
+        const { entry, rungs } = _rungFromRow(this);
+        if (!entry || rungs.length >= MAX_VITAL_RUNGS) return;
+        // Halfway between the last level and the top; the first starts at 0.
+        const last = rungs.length ? rungs[rungs.length - 1].at : -1;
+        let at = last < 0 ? 0 : Math.min(100, last + Math.max(1, Math.round((100 - last) / 2)));
+        const taken = new Set(rungs.map(r => r.at));
+        while (taken.has(at) && at > 0) at--;
+        if (taken.has(at)) return;
+        const names = new Set(rungs.map(r => r.label.toLowerCase()));
+        let n = rungs.length + 1;
+        while (names.has(`level ${n}`)) n++;
+        _setRungs(entry, [...rungs, { at, label: `Level ${n}`, note: '' }]);
+        const $row = $(`#rpg-vitals-list .rpg-vital-row[data-vital="${entry.id}"] .rpg-vital-rung`).filter(function () { return Number($(this).find('.rpg-vital-rung-at').val()) === at; });
+        $row.find('.rpg-vital-rung-label').trigger('focus').trigger('select');
+    });
+    $(document).on('click', '.rpg-vital-rung-even', function () {
+        const { entry, rungs } = _rungFromRow(this);
+        if (!entry || rungs.length < 2) return;
+        const even = evenRungs(rungs.map(r => r.label));
+        _setRungs(entry, even.map((r, i) => ({ ...r, note: rungs[i] ? rungs[i].note : '' })));
+    });
+    $(document).on('click', '.rpg-vital-rung-remove', function () {
+        const { entry, rungs, i } = _rungFromRow(this);
+        if (!entry || i < 0) return;
+        _setRungs(entry, rungs.filter((_, k) => k !== i));
+    });
+    $(document).on('change', '.rpg-vital-rung-at', function () {
+        const { entry, rungs, i } = _rungFromRow(this);
+        if (!entry || i < 0) return;
+        const at = clampVital($(this).val());
+        if (at === null || at === rungs[i].at) { renderVitalsSettings(); return; }
+        if (rungs.some((r, k) => k !== i && r.at === at)) {
+            try { toastr.warning(`Another level already starts at ${at}.`, 'Vitals'); } catch (e) { /* no toastr */ }
+            renderVitalsSettings();
+            return;
+        }
+        rungs[i] = { ...rungs[i], at };
+        _setRungs(entry, rungs);
+    });
+    $(document).on('change', '.rpg-vital-rung-label', function () {
+        const { entry, rungs, i } = _rungFromRow(this);
+        if (!entry || i < 0) return;
+        const label = String($(this).val() || '').replace(/\s+/g, ' ').trim().slice(0, 30);
+        if (!label || label === rungs[i].label) { renderVitalsSettings(); return; }
+        rungs[i] = { ...rungs[i], label };
+        entry.rungs = normalizeRungs(rungs);
+        $(this).val(label);
+        _saveVitals({ rerender: false });
+    });
+    $(document).on('change', '.rpg-vital-rung-note', function () {
+        const { entry, rungs, i } = _rungFromRow(this);
+        if (!entry || i < 0) return;
+        rungs[i] = { ...rungs[i], note: String($(this).val() || '') };
+        entry.rungs = normalizeRungs(rungs);
+        $(this).val(entry.rungs[i] ? entry.rungs[i].note : '');
         _saveVitals({ rerender: false });
     });
     $(document).on('click', '.rpg-vital-move', function () {

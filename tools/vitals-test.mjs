@@ -381,5 +381,61 @@ check('updatePlayerVital on an empty block seeds the rest from the sheet', (() =
     extensionSettings.trackerConfig.presentCharacters.characterStats = sheet().trackerConfig.presentCharacters.characterStats;
 }
 
+// ── 9. How a vital is shown, and its levels (D232) ──
+{
+    check('D232: an entry that says nothing is a bar with no levels', defs[0].show === 'bar' && defs[0].about === '' && defs[0].rungs.length === 0);
+    check('D232: an unknown way to show reads as a bar', V.normalizeVitalDef({ name: 'X', show: 'dial' }).show === 'bar');
+    const rungs = V.normalizeRungs([
+        { at: 75, label: 'Fixated', note: ' will not   look away. ' }, { at: 0, label: 'Unaware' }, { at: '50%', label: 'Interested' },
+        { at: 50, label: 'Twice' }, { at: 25, label: '  ' }, { at: 'x', label: 'Lost' }, null, { at: 140, label: 'Over' },
+    ]);
+    check('D232: levels come back lowest first, one a value, the nameless and unreadable dropped',
+        rungs.map(r => `${r.at}:${r.label}`).join() === '0:Unaware,50:Interested,75:Fixated,100:Over', JSON.stringify(rungs));
+    check('D232: a level\'s note is kept on one line', rungs[2].note === 'will not look away.');
+    check('D232: at most eight levels', V.normalizeRungs(Array.from({ length: 12 }, (_, i) => ({ at: i * 5, label: `L${i}` }))).length === V.MAX_VITAL_RUNGS);
+    check('D232: names alone spread evenly', V.evenRungs(['Unaware', 'Curious', ' ', 'Interested', 'Fixated']).map(r => r.at).join() === '0,25,50,75' && V.evenRungs([]).length === 0);
+
+    const ladder = V.normalizeVitalDef({ name: 'Attention', show: 'level', about: 'How closely Roxy is watching.  ', rungs: [
+        { at: 0, label: 'Unaware' }, { at: 25, label: 'Curious', note: 'asks around.' }, { at: 50, label: 'Interested' }, { at: 75, label: 'Fixated' },
+    ] });
+    const edge = V.normalizeVitalDef({ name: 'Edge', show: 'percent', rungs: [{ at: 40, label: 'Tells' }, { at: 100, label: 'Gone' }] });
+    check('D232: a value is on the highest level it has reached', V.rungOf(ladder, 49).label === 'Curious' && V.rungOf(ladder, 50).label === 'Interested' && V.rungOf(ladder, 100).label === 'Fixated');
+    check('D232: ...which knows where it sits and what it covers', (() => { const r = V.rungOf(ladder, 30); return r.index === 1 && r.count === 4 && r.at === 25 && r.upTo === 49 && r.note === 'asks around.'; })());
+    check('D232: under the lowest level there is none', V.rungOf(edge, 39) === null && V.rungOf(defs[0], 50) === null && V.rungOf(ladder, 'x') === null);
+    check('D232: a card says the level for a vital shown as its level', V.vitalText(ladder, 55) === 'Interested');
+    check('D232: ...the number for one shown as a number or a bar', V.vitalText(edge, 62) === '62%' && V.vitalText(defs[0], 72) === '72%');
+    check('D232: ...and the number where there is no level to say', V.vitalText(V.normalizeVitalDef({ name: 'X', show: 'level' }), 30) === '30%' && V.vitalText({ ...edge, show: 'level' }, 10) === '10%' && V.vitalText(ladder, null) === '');
+    check('D232: the tooltip says both', V.vitalTip(ladder, 55) === 'Attention: Interested (55%)' && V.vitalTip(defs[0], 72) === 'Health 72%' && V.vitalTip(edge, 20) === 'Edge 20%');
+    const lines = V.vitalGuideLines([defs[0], ladder, edge]);
+    check('D232: the AI is told what a vital measures and its levels by value', lines.length === 2
+        && lines[0] === '"Attention": How closely Roxy is watching. Its levels by value: 0-24 "Unaware"; 25-49 "Curious" (asks around); 50-74 "Interested"; 75-100 "Fixated".'
+        && lines[1] === '"Edge" has levels by value: 40-99 "Tells"; 100 "Gone".', lines.join(' | '));
+    check('D232: a sheet that says nothing more tells the AI nothing more', V.vitalGuideLines(defs).length === 0);
+    check('D232: the context line names the level', V.formatVitalsLine({ Attention: 55, Edge: 20 }, [ladder, edge]) === 'Attention 55% (Interested), Edge 20%');
+
+    const jp = await import(`${DES}/src/systems/generation/jsonPromptHelpers.js`);
+    const cs = extensionSettings.trackerConfig.presentCharacters.characterStats;
+    const kept = cs.customStats;
+    cs.customStats = [...kept, { ...ladder, who: 'named', names: ['Roxy'], id: 'attention', enabled: true }];
+    const guide = jp.buildVitalsGuidance(false, 'Jordan');
+    check('D232: the guidance carries the levels and says the number is still what is returned',
+        guide.includes('Its levels by value: 0-24 "Unaware"') && guide.includes('still return the number'), guide);
+    check('D232: ...in fewer words when compact', jp.buildVitalsGuidance(true, 'Jordan').endsWith('Return the number; the level follows from it.'));
+    state.committedTrackerData.characterThoughts = JSON.stringify([{ name: 'Roxy', stats: [{ name: 'Health', value: 90 }, { name: 'Attention', value: 45 }] }]);
+    const pb2 = await import(`${DES}/src/systems/generation/promptBuilder.js`);
+    check('D232: the context summary names the level a character is on', pb2.generateContextualSummary().includes('Attention 45% (Curious)'), pb2.generateContextualSummary());
+    cs.customStats = kept;
+
+    // The card front: a bar for a bar, a tag for a number or a level.
+    const pbar = await import(`${DES}/src/systems/ui/portraitBar.js`);
+    const cfg = { maxBars: 3, lowAt: 25 };
+    const strip = pbar.buildVitalsStrip({ Health: 72, Attention: 55, Edge: 20 }, [defs[0], ladder, { ...edge, icon: '⚡' }], cfg);
+    check('D232: the card front draws a bar for a bar', (strip.match(/class="dooms-pb-vital"/g) || []).length === 1 && strip.includes('--v:72%'), strip);
+    check('D232: ...a tag with the level for a level', strip.includes('dooms-pb-vital-tag is-level') && strip.includes('>Interested</span>'), strip);
+    check('D232: ...a tag with the number for a number, in the warning colour when low', strip.includes('is-percent') && strip.includes('⚡ 20%') && strip.includes(`--c:${V.LOW_VITAL_COLOR}`), strip);
+    check('D232: ...and every vital in the tooltip', strip.includes('title="Health 72% · Attention: Interested (55%) · Edge 20%"'), strip);
+    check('D232: a plain sheet\'s front is bars alone, as before', !pbar.buildVitalsStrip({ Health: 72, Energy: 50 }, defs, cfg).includes('dooms-pb-vital-tag'));
+}
+
 console.log(failures === 0 ? '\nAll vitals checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

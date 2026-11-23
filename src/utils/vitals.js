@@ -16,8 +16,9 @@
  *     customStats: [                   // the sheet (existing key)
  *       { id, name, enabled,           //   existing
  *         color, icon, start, ai,      //   new: bar colour, emoji, value a new
- *         who, names },                //   character starts at, "AI updates it";
- *     ],                               //   who the vital is for (D231, below)
+ *         who, names,                  //   character starts at, "AI updates it";
+ *         show, about, rungs },        //   who the vital is for (D231), how it
+ *     ],                               //   is shown and its levels (D232), below
  *     player: { enabled: true },       // new: the persona has vitals too
  *     showOnCards: true,               // new: bars on the card front
  *     maxBars: 3,                      // new: how many bars the front shows
@@ -39,6 +40,17 @@
  *             them is the player when the name is one the player goes by
  * so Eli's Edge sits on Eli's card and nobody else's, in whichever story he
  * is played or met. An entry without `who` is 'all', as before.
+ *
+ * How a vital is shown, and its levels (D232). The value stays 0–100 for
+ * every vital; what differs is what a card makes of it:
+ *   show   'bar' (as before), 'percent' (the number: "Edge 62%"), or
+ *          'level' (the name of the level the value is on: "Interested")
+ *   about  one line told to the AI: what the vital measures and what moves it
+ *   rungs  the named levels, lowest first: [{ at, label, note }]; a value is
+ *          on the highest rung whose `at` it has reached. The AI is told
+ *          the levels and what each means, and moves the value; the level
+ *          follows from it.
+ * An entry with none of these is a bar with no levels, as before.
  */
 
 /** The sheet a fresh install (or an install that never switched vitals on) gets. */
@@ -61,6 +73,10 @@ export const EXTRA_VITAL_COLORS = Object.freeze([
 
 export const LOW_VITAL_COLOR = '#e5484d';
 export const MAX_VITALS = 24;
+
+/** How a vital can be shown (D232). */
+export const VITAL_SHOWS = Object.freeze(['bar', 'percent', 'level']);
+export const MAX_VITAL_RUNGS = 8;
 
 /** Who a vital can be for (D231), in the order the settings page lists them. */
 export const VITAL_WHO = Object.freeze(['all', 'player', 'others', 'named']);
@@ -186,7 +202,106 @@ export function normalizeVitalDef(entry, index = 0) {
         ai: e.ai !== false,
         who: VITAL_WHO.includes(e.who) ? e.who : 'all',
         names: cleanNames(e.names),
+        show: VITAL_SHOWS.includes(e.show) ? e.show : 'bar',
+        about: oneLine(e.about, 240),
+        rungs: normalizeRungs(e.rungs),
     };
+}
+
+const oneLine = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+
+/**
+ * A vital's levels made safe (D232): each with a name and the value it
+ * starts at, lowest first, one level a value, at most MAX_VITAL_RUNGS. A
+ * rung with no name, or no readable value, is dropped.
+ * @returns {Array<{ at: number, label: string, note: string }>}
+ */
+export function normalizeRungs(list) {
+    const out = [];
+    for (const r of Array.isArray(list) ? list : []) {
+        if (!r || typeof r !== 'object') continue;
+        const label = oneLine(r.label, 30);
+        const at = clampVital(r.at);
+        if (!label || at === null || out.some(x => x.at === at)) continue;
+        out.push({ at, label, note: oneLine(r.note, 200) });
+    }
+    out.sort((a, b) => a.at - b.at);
+    return out.slice(0, MAX_VITAL_RUNGS);
+}
+
+/** Levels spread evenly over 0–100 from their names alone: four names start at 0, 25, 50 and 75. */
+export function evenRungs(labels) {
+    const names = [];
+    for (const l of Array.isArray(labels) ? labels : []) { const t = oneLine(l, 30); if (t) names.push(t); }
+    const list = names.slice(0, MAX_VITAL_RUNGS);
+    return normalizeRungs(list.map((label, i) => ({ at: Math.round(i * 100 / list.length), label })));
+}
+
+/**
+ * The level a value is on (D232): the highest rung it has reached, with
+ * where the rung sits (`index` of `count`) and the values it covers (`at`
+ * to `upTo`). null when the vital has no levels, or the value is under the
+ * lowest.
+ */
+export function rungOf(def, value) {
+    const rungs = def && Array.isArray(def.rungs) ? def.rungs : [];
+    const v = clampVital(value);
+    if (!rungs.length || v === null) return null;
+    let i = -1;
+    for (let k = 0; k < rungs.length; k++) if (rungs[k].at <= v) i = k;
+    if (i < 0) return null;
+    return {
+        index: i,
+        count: rungs.length,
+        at: rungs[i].at,
+        upTo: i + 1 < rungs.length ? rungs[i + 1].at - 1 : 100,
+        label: rungs[i].label,
+        note: rungs[i].note,
+    };
+}
+
+/** What a card says for a value, by how the vital is shown (D232): the level's name for 'level' (when it is on one), "62%" otherwise; '' for no value. */
+export function vitalText(def, value) {
+    const v = clampVital(value);
+    if (v === null) return '';
+    if (def && def.show === 'level') {
+        const rung = rungOf(def, v);
+        if (rung) return rung.label;
+    }
+    return `${v}%`;
+}
+
+/** A vital in full, for a tooltip: "Edge 62%", "Attention: Interested (55%)". */
+export function vitalTip(def, value) {
+    const v = clampVital(value);
+    if (v === null) return def?.name || '';
+    const rung = rungOf(def, v);
+    return rung ? `${def.name}: ${rung.label} (${v}%)` : `${def.name} ${v}%`;
+}
+
+/**
+ * What the AI is told about the vitals that say more than a name (D232):
+ * one line each, what it measures and its levels by value with what each
+ * means. [] when no vital has either.
+ */
+export function vitalGuideLines(defs) {
+    const out = [];
+    for (const d of defs || []) {
+        const rungs = Array.isArray(d.rungs) ? d.rungs : [];
+        if (!d.about && !rungs.length) continue;
+        let line = `"${d.name}"`;
+        if (d.about) line += `: ${d.about.replace(/[.\s]+$/, '')}.`;
+        if (rungs.length) {
+            const levels = rungs.map((r, i) => {
+                const upTo = i + 1 < rungs.length ? rungs[i + 1].at - 1 : 100;
+                const span = upTo > r.at ? `${r.at}-${upTo}` : `${r.at}`;
+                return `${span} "${r.label}"${r.note ? ` (${r.note.replace(/[.\s]+$/, '')})` : ''}`;
+            });
+            line += `${d.about ? ' Its' : ' has'} levels by value: ${levels.join('; ')}.`;
+        }
+        out.push(line);
+    }
+    return out;
 }
 
 /**
@@ -585,10 +700,13 @@ export function vitalColor(def, value, lowAt) {
     return def?.color || EXTRA_VITAL_COLORS[0];
 }
 
-/** "Health 72%, Energy 50%" for the vitals in `map`, in sheet order. */
+/** "Health 72%, Energy 50%" for the vitals in `map`, in sheet order; one with levels says the level it is on: "Attention 55% (Interested)". */
 export function formatVitalsLine(map, defs) {
     return defs
         .filter(d => map && typeof map[d.name] === 'number')
-        .map(d => `${d.name} ${map[d.name]}%`)
+        .map(d => {
+            const rung = rungOf(d, map[d.name]);
+            return `${d.name} ${map[d.name]}%${rung ? ` (${rung.label})` : ''}`;
+        })
         .join(', ');
 }

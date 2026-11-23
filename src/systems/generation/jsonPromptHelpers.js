@@ -6,7 +6,7 @@ import { extensionSettings, committedTrackerData } from '../../core/state.js';
 import { getContext } from '../../../../../../extensions.js';
 import { i18n } from '../../core/i18n.js';
 import { getWeatherKeywordsAsPromptString } from '../ui/weatherEffects.js';
-import { vitalDefs, vitalsOn, playerVitalsOn, playerVitalDefs, castVitalDefs, namedVitalNotes } from '../../utils/vitals.js';
+import { vitalDefs, vitalsOn, playerVitalsOn, playerVitalDefs, castVitalDefs, namedVitalNotes, vitalGuideLines } from '../../utils/vitals.js';
 /**
  * Converts a field name to snake_case for use as JSON key
  * Example: "Test Tracker" -> "test_tracker"
@@ -362,6 +362,14 @@ export function buildVitalsGuidance(compact, userName) {
         out += compact
             ? ` Only ${who}: "stats" also holds ${entry}; nobody else's does.`
             : ` Only ${who} ${note.names.length > 1 ? 'have' : 'has'} "${escapeSpecString(note.name)}": whenever ${note.names.length > 1 ? 'one of them is' : `${who} is`} listed in "characters", that entry's "stats" also holds ${entry}, and nobody else's does.`;
+    }
+    // What a vital measures and its named levels (D232), for the vitals
+    // that say: the value is still what is returned, the level follows.
+    const lines = vitalGuideLines(vitalDefs(extensionSettings));
+    if (lines.length) {
+        out += compact
+            ? ` ${lines.join(' ')} Return the number; the level follows from it.`
+            : ` ${lines.join(' ')} For a vital with levels, still return the number: the level follows from it, so move the number to where the story has brought it.`;
     }
     return out;
 }

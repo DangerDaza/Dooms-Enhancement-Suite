@@ -1771,6 +1771,31 @@
 .rpg-vital-detail .rpg-vital-names { flex: 1 1 160px; }
 .rpg-vital-detail .is-hidden { display: none; }
 
+.rpg-vital-detail .rpg-vital-about { flex: 1 1 200px; }
+.rpg-vital-detail-top { align-items: flex-start; }
+.rpg-vital-detail-top > .rpg-vital-detail-label { padding-top: 6px; }
+
+/* A vital's levels (D232): one row a level, lowest first. */
+.rpg-vital-rungs { flex: 1 1 220px; min-width: 0; }
+
+.rpg-vital-rung {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+    min-width: 0;
+}
+
+.rpg-vital-rung .rpg-vital-rung-label { flex: 1 1 90px; }
+.rpg-vital-rung .rpg-vital-rung-note { flex: 3 1 160px; }
+
+.rpg-vital-rung-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
 .rpg-vital-detail-hint {
     margin: 6px 0 0;
     font-size: 0.74em;

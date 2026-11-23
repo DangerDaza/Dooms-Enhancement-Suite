@@ -2345,3 +2345,23 @@ a vital on the wrong character, the persona's card refusing another's
 vital). The settings rows were drawn in Chromium against the live
 stylesheets (section 72); the page itself needs SillyTavern and was not
 run.
+
+## 71. A vital's levels, and how it is shown (2026-11-23, D232)
+
+The owner, on the two stats: "I want different indicators for each one";
+Roxy's "should be able to show what level she's on and Eli's should show
+a %". A vital was a bar and nothing else, and all the AI knew of one was
+its name, which is enough for Health and not for Edge.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D232 | A vital says how the cards show it (a bar, the number, or the level it is on), what it measures, and its named levels | **Held.** **The value** stays 0 to 100 for every vital: the tracker, the swipe store, the fixed-vital lock and the card's number box are untouched. **The sheet entry** gains `show` (`bar`, `percent`, `level`), `about` (one line: what it measures and what moves it) and `rungs` (the levels, lowest first: `at`, the value a level starts at; `label`; `note`, what it means); an entry with none is a bar with no levels, as before (`normalizeVitalDef`, `normalizeRungs`; at most eight levels, one a value). **The level a value is on** is the highest rung it has reached (`rungOf`); under the lowest there is none. **The AI** is told, after the vitals guidance, one line for each vital that says more than its name: what it measures, then its levels by value with what each means ('"Attention": how closely Roxy is watching. Its levels by value: 0-24 "Unaware"; 25-49 "Curious" (asks around); ...'), and that the number is still what it returns (`vitalGuideLines`, `buildVitalsGuidance`). The context lines and History Persistence name the level beside the number ("Attention 45% (Curious)", `formatVitalsLine`). **The card front** (`buildVitalsStrip`, portraitBar.js): a vital shown as a bar is the thin bar it was; one shown as a number or a level is a small tag in the vital's colour above the bars ("⚡ 62%", "Interested"), counted against the same "Bars on the front" number. **The card back** (`vitalRowHtml`): a bar's row is as it was; a number's row drops the track and says the level it is on, when it has levels, before the number; a level's row has a step for each level, lit up to the one it is on, and the level's name, the number and the level's meaning in its tooltip. The value at the row's end is still the button that becomes a number box (the number now rides on the button, since its text may be a name). The Thoughts panel's card back does the same, and its front says the level after the number. A vital shown as its level that has no levels, or sits under its lowest, shows the number. **The warning colour** is for bars and numbers; a level has none. **Settings, Stats**, a vital's options: **Shown as**, **Measures**, and **Levels** (one row a level: From, its name, what it means; Add a level, which starts halfway between the last and the top; Space evenly). |
+
+What it does not do. A level is a name for a stretch of the value and
+nothing more: reaching one does nothing by itself (D233 is what does).
+The levels are the sheet's, so the same for every character who carries
+the vital.
+
+Tests: `tools/vitals-test.mjs` §9 (the levels made safe, the level a
+value is on at each edge, what a card says for each way of showing, the
+AI's lines, the context line, the card front's bars and tags).

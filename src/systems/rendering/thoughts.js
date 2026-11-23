@@ -38,7 +38,7 @@ import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { hasPendingAliasDecision } from '../features/characterAliases.js';
 import { lastReplyIndex } from '../generation/trackerRecovery.js';
-import { vitalsOn, vitalDefs, vitalsFor, playerVitalDefs, vitalsConfig, findVitalDef, clampVital, readVitals, toStatsArray, resolveVitals, vitalColor } from '../../utils/vitals.js';
+import { vitalsOn, vitalDefs, vitalsFor, playerVitalDefs, vitalsConfig, findVitalDef, clampVital, readVitals, toStatsArray, resolveVitals, vitalColor, rungOf } from '../../utils/vitals.js';
 
 /**
  * Per-card steady-state HTML cache (character name -> html) so the keyed
@@ -692,9 +692,11 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                     for (const stat of charStats) {
                         const statValue = escapeHtml(char[stat.name] || 0);
                         const statNameAttr = escapeAttr(stat.name);
+                        // The level the number is on, for a vital with levels (D232); the number stays the thing edited.
+                        const statRung = rungOf(stat, char[stat.name] || 0);
                         html += `
                                 <div class="rpg-character-stat">
-                                    <span class="rpg-stat-name">${escapeHtml(stat.name)}: </span><span class="rpg-editable" contenteditable="true" data-character="${nameAttr}" data-field="${statNameAttr}" title="Click to edit ${statNameAttr}">${statValue}%</span>
+                                    <span class="rpg-stat-name">${escapeHtml(stat.name)}: </span><span class="rpg-editable" contenteditable="true" data-character="${nameAttr}" data-field="${statNameAttr}" title="Click to edit ${statNameAttr}">${statValue}%</span>${statRung ? ` <span class="rpg-stat-rung">${escapeHtml(statRung.label)}</span>` : ''}
                                 </div>
                         `;
                     }
@@ -752,7 +754,27 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                     html += `<div class="rpg-card-back-stats">`;
                     for (const stat of backStats) {
                         const sv = escapeHtml(char[stat.name] || 0);
+                        // As the vital is set to show (D232): a bar, the number alone, or the level it is on.
+                        const backRung = rungOf(stat, char[stat.name] || 0);
+                        if (stat.show === 'level' && backRung) {
+                            html += `
+                                <div class="rpg-card-back-stat is-level" title="${sv}%${backRung.note ? ` · ${escapeHtml(backRung.note)}` : ''}">
+                                    <span class="rpg-card-back-stat-name">${escapeHtml(stat.name)}</span>
+                                    <span class="rpg-card-back-stat-level" style="color: ${escapeHtml(stat.color)};">${escapeHtml(backRung.label)}</span>
+                                </div>
+                            `;
+                            continue;
+                        }
                         const fill = escapeHtml(vitalColor(stat, char[stat.name], lowAt));
+                        if (stat.show !== 'bar') {
+                            html += `
+                                <div class="rpg-card-back-stat is-percent">
+                                    <span class="rpg-card-back-stat-name">${escapeHtml(stat.name)}</span>
+                                    <span class="rpg-card-back-stat-level" style="color: ${fill};">${sv}%${backRung ? ` · ${escapeHtml(backRung.label)}` : ''}</span>
+                                </div>
+                            `;
+                            continue;
+                        }
                         html += `
                                 <div class="rpg-card-back-stat">
                                     <span class="rpg-card-back-stat-name">${escapeHtml(stat.name)}</span>

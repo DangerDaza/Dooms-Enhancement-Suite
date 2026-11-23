@@ -1489,14 +1489,15 @@
                         the AI move it; off, the value only changes when you edit it on a card. <b>Start</b> is the
                         value a character begins at. A vital's name is what the AI sees, so keep it plain;
                         renaming one starts its values over. The <i class="fa-solid fa-sliders"></i> button opens a
-                        vital's options: who it is for (everyone, your character, or the characters you name).</p>
+                        vital's options: who it is for (everyone, your character, or the characters you name), how
+                        the cards show it (a bar, a number, or the level it is on), and its levels.</p>
 
                     <div class="rpg-setting-divider rpg-vitals-sub">On the cards and in context</div>
                     <div class="rpg-setting-row rpg-vitals-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Bars on the card front</span>
-                            <span class="rpg-setting-hint">Thin bars above the name. The card's back always lists
-                                every vital.</span>
+                            <span class="rpg-setting-hint">Thin bars above the name, and a small tag for a vital
+                                shown as a number or a level. The card's back always lists every vital.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-vitals-show-cards" />
@@ -1506,7 +1507,7 @@
                     <div class="rpg-setting-row rpg-vitals-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Bars on the front</span>
-                            <span class="rpg-setting-hint">How many of the vitals, in sheet order, the front shows.</span>
+                            <span class="rpg-setting-hint">How many of the vitals a character has, in sheet order, the front shows.</span>
                         </div>
                         <input type="number" id="rpg-vitals-max-bars" class="rpg-accordion-input" min="1" max="6"
                             value="3" style="width: 64px;" />
