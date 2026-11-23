@@ -46,6 +46,7 @@ import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { schedule } from '../../core/scheduler.js';
 import { ensureSettingsUI } from '../../core/lazyUI.js';
 import { isOffScene } from '../../utils/offScene.js';
+import { pickActiveUser } from '../../utils/activeUser.js';
 // Vitals (Project Short Fuse): bars on the card front and rows on the back.
 // The editors live in thoughts.js, which reaches this module through
 // characterAliases.js, so they are imported at click time rather than here
@@ -1672,12 +1673,9 @@ export function getCharacterList() {
 
 /**
  * Returns the name of the currently-active user character, regardless
- * of whether showUserInPCP is on. Resolution priority:
- *   1. Manual override: extensionSettings.activeUserCharacter (set by the
- *      Workshop's "Set as active persona" button)
- *   2. Auto-match: the user character whose linkedPersona equals the
- *      current SillyTavern user_avatar
- *   3. Single-entry fallback: if exactly one user character exists, use it
+ * of whether showUserInPCP is on, by the one rule in
+ * src/utils/activeUser.js (D226): the persona in use, then the story in
+ * front's player, then the Workshop's hand pick, then the only one.
  * Returns null if no user character is available.
  *
  * Used by both buildActiveUserCharacterEntry (PCP card) and
@@ -1685,23 +1683,13 @@ export function getCharacterList() {
  */
 export function resolveActiveUserName() {
     const s = extensionSettings || {};
-    const userMap = s.userCharacters || {};
-    if (!userMap || typeof userMap !== 'object') return null;
-    if (s.activeUserCharacter && userMap[s.activeUserCharacter]) return s.activeUserCharacter;
     let currentAvatar = '';
     try {
         const ctx = (typeof window !== 'undefined' && window.SillyTavern && window.SillyTavern.getContext)
             ? window.SillyTavern.getContext() : null;
         currentAvatar = (ctx && ctx.user_avatar) || (typeof window !== 'undefined' && window.user_avatar) || '';
     } catch (e) { currentAvatar = ''; }
-    if (currentAvatar) {
-        for (const [n, entry] of Object.entries(userMap)) {
-            if (entry && entry.linkedPersona === currentAvatar) return n;
-        }
-    }
-    const allNames = Object.keys(userMap);
-    if (allNames.length === 1) return allNames[0];
-    return null;
+    return pickActiveUser({ userCharacters: s.userCharacters, avatar: currentAvatar, pin: s.activeUserCharacter || '' }) || null;
 }
 
 /**

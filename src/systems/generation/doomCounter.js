@@ -21,6 +21,7 @@ import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { DEFAULT_TWIST_GENERATOR_RULES_PROMPT, DEFAULT_KNIFE_GENERATOR_RULES_PROMPT } from './defaultPrompts.js';
 import { escapeHtml } from '../../utils/html.js';
 import { repairJSON } from '../../utils/jsonRepair.js';
+import { resolvePersonaName } from '../features/diceRolls.js';
 
 /** Logs to the debug panel only when debugMode is on — parts of this module run per AI message. */
 function debugLog(message, data = null) {
@@ -248,10 +249,7 @@ export function getSceneKnifeCandidates() {
 
     // The player's persona is always in the scene
     const userChars = extensionSettings.userCharacters || {};
-    let activeName = extensionSettings.activeUserCharacter;
-    if (!activeName) {
-        try { activeName = getContext().name1; } catch { activeName = null; }
-    }
+    const activeName = resolvePersonaName();
     if (activeName) {
         const lower = String(activeName).toLowerCase();
         const key = Object.keys(userChars).find(k => k.toLowerCase() === lower);

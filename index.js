@@ -97,6 +97,7 @@ import {
     applyPortraitBarSettings,
     applySideModeStyling,
     setShelfPage,
+    resolveActiveUserName,
 } from './src/systems/ui/portraitBar.js';
 import {
     initWeatherEffects,
@@ -876,26 +877,9 @@ function updateGenerationModeUI() {
         $('#rpg-external-api-settings').slideDown(200);
     }
 }
-/**
- * Resolve the currently-active user character name. Manual override
- * (extensionSettings.activeUserCharacter) wins; otherwise auto-match
- * via linkedPersona == window.user_avatar; final fallback is the only
- * user character if exactly one exists. Returns null if none.
- */
+/** The user character being played (src/utils/activeUser.js, D226); null when none is. */
 function resolveActiveUserCharacterName() {
-    const s = extensionSettings;
-    if (!s || !s.userCharacters || typeof s.userCharacters !== 'object') return null;
-    if (s.activeUserCharacter && s.userCharacters[s.activeUserCharacter]) return s.activeUserCharacter;
-    let currentAvatar = '';
-    try { currentAvatar = (typeof window !== 'undefined' && window.user_avatar) || ''; } catch (e) {}
-    if (currentAvatar) {
-        for (const [n, entry] of Object.entries(s.userCharacters)) {
-            if (entry && entry.linkedPersona === currentAvatar) return n;
-        }
-    }
-    const allNames = Object.keys(s.userCharacters);
-    if (allNames.length === 1) return allNames[0];
-    return null;
+    return resolveActiveUserName();
 }
 
 /**
