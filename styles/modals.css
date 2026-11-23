@@ -1796,6 +1796,24 @@
     gap: 6px;
 }
 
+/* A vital's mark (D233): the rows under "At a mark" line up with the controls above. */
+.rpg-vital-detail-sub { padding-left: 82px; }
+.rpg-vital-detail .rpg-vital-limit-text { flex: 1 1 180px; }
+
+.rpg-vital-limit-side {
+    flex: 0 0 auto;
+    min-width: 46px;
+    font-size: 0.78em;
+    font-weight: 700;
+}
+
+.rpg-vital-limit-side.is-pass { color: #5fd38d; }
+.rpg-vital-limit-side.is-fail { color: #ff8a8a; }
+
+@media (max-width: 600px) {
+    .rpg-vital-detail-sub { padding-left: 0; }
+}
+
 .rpg-vital-detail-hint {
     margin: 6px 0 0;
     font-size: 0.74em;

@@ -167,6 +167,7 @@ import { messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMe
 import { initTrackerJsonInline, syncTrackerJsonForMessage, updateTrackerJsonDropdowns } from './src/systems/rendering/trackerJsonInline.js';
 // Dice (Project Short Fuse, Phase 2): the roll on a message, its card, the pending check
 import { initDiceRolls, onDiceMessageSent, onDiceChatChanged, onDiceReplyRendered, onDiceToolCallsPerformed, registerDiceTool, syncRollCardForMessage, updateRollCards, refreshDiceEntryPoints, notifyDiceChanged } from './src/systems/features/diceRolls.js';
+import { syncVitalCardForMessage, updateVitalCards } from './src/systems/features/vitalLimits.js';
 // Inventory (Project Short Fuse, Phase 5): the per-chat store, the end-of-reply tag and the tool
 import { initInventory, onInventoryChatChanged, onInventoryReplyRendered, onInventoryMessageDeleted, onInventoryToolCallsPerformed, registerInventoryTool, notifyInventoryChanged } from './src/systems/features/inventory.js';
 import { defaultInventoryConfig, inventoryConfig, MIN_SLOTS as INV_MIN_SLOTS, MAX_SLOTS as INV_MAX_SLOTS } from './src/utils/inventory.js';
@@ -203,7 +204,7 @@ import {
 import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
 import { escapeHtml } from './src/utils/html.js';
 // Vitals (Project Short Fuse): the Settings → Stats page edits the sheet
-import { vitalsConfig, defaultVitalsConfig, migrateVitalsConfig, normalizeVitalDef, vitalSlug, clampVital, isHexColor, VITAL_PRESETS, EXTRA_VITAL_COLORS, MAX_VITALS, setPlayedNamesSource, parseVitalNames, normalizeRungs, evenRungs, MAX_VITAL_RUNGS } from './src/utils/vitals.js';
+import { vitalsConfig, defaultVitalsConfig, migrateVitalsConfig, normalizeVitalDef, vitalSlug, clampVital, isHexColor, VITAL_PRESETS, EXTRA_VITAL_COLORS, MAX_VITALS, setPlayedNamesSource, parseVitalNames, normalizeRungs, evenRungs, MAX_VITAL_RUNGS, normalizeLimit } from './src/utils/vitals.js';
 import { attributesConfig, migrateAttributesConfig, normalizeAttributeDef, normalizeSkills, pruneProficiencies, clampProficiency, attributeDefs, attributeSlug, ATTRIBUTE_PRESETS, DIFFICULTIES, MAX_ATTRIBUTES } from './src/utils/d20.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
@@ -326,10 +327,70 @@ function vitalSummary(d) {
     if (d.show === 'percent') parts.push('shown as a number');
     else if (d.show === 'level') parts.push(d.rungs.length ? 'shown as its level' : 'shown as its level (no levels yet)');
     if (d.rungs.length) parts.push(`${d.rungs.length} ${d.rungs.length === 1 ? 'level' : 'levels'}: ${d.rungs.map(r => r.label).join(', ')}`);
+    if (d.limit.when !== 'off') {
+        parts.push(`at ${d.limit.at}% ${d.limit.when === 'fall' ? 'or under' : 'or over'}, ${d.limit.does === 'roll' ? `a d20 against ${d.limit.dc}` : 'the narrator is told'}`);
+    }
     return parts.join(' · ');
 }
 
-/** The options under a vital's row: who it is for (D231), how it is shown, what it measures and its levels (D232). */
+const VITAL_LIMIT_WHEN_LABELS = Object.freeze({
+    off: 'Nothing happens',
+    rise: 'When it rises to',
+    fall: 'When it falls to',
+});
+
+const VITAL_LIMIT_DOES_LABELS = Object.freeze({
+    note: 'Tell the narrator',
+    roll: 'Roll a d20',
+});
+
+/** The rows for a vital's mark (D233): when it is reached and what reaching it does. */
+function vitalLimitHtml(d) {
+    const l = d.limit;
+    const options = (labels, current) => Object.entries(labels).map(([value, label]) =>
+        `<option value="${escapeHtml(value)}"${current === value ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
+    let html = `<div class="rpg-vital-detail">
+            <span class="rpg-vital-detail-label">At a mark</span>
+            <select class="rpg-vital-limit rpg-accordion-select" data-key="when" title="When the mark is reached">${options(VITAL_LIMIT_WHEN_LABELS, l.when)}</select>`;
+    if (l.when === 'off') return `${html}
+        </div>`;
+    html += `
+            <label class="rpg-vital-field" title="The mark, 0 to 100"><input type="number" class="rpg-vital-limit" data-key="at" min="0" max="100" value="${l.at}" /><span>%</span></label>
+            <select class="rpg-vital-limit rpg-accordion-select" data-key="does" title="What reaching it does">${options(VITAL_LIMIT_DOES_LABELS, l.does)}</select>
+        </div>`;
+    if (l.does !== 'roll') {
+        return `${html}
+        <div class="rpg-vital-detail rpg-vital-detail-sub">
+            <input type="text" class="rpg-vital-limit rpg-vital-limit-text" data-key="note" value="${escapeHtml(l.note)}" maxlength="300" placeholder="What the narrator is told when it gets there" title="Told to the narrator once, in the prompt of the next reply" />
+        </div>`;
+    }
+    // The attribute whose modifier rides on the die, offered while attributes are on.
+    const attrsOn = attributesConfig(extensionSettings).enabled;
+    const attrs = attrsOn ? attributeDefs(extensionSettings) : [];
+    const attrLabels = { '': 'A bare d20' };
+    for (const a of attrs) attrLabels[a.id] = `${a.name} save`;
+    if (l.attr && !attrLabels[l.attr]) attrLabels[l.attr] = `${l.attr} (not on the sheet: a bare d20)`;
+    const attrSelect = attrs.length || l.attr
+        ? `<select class="rpg-vital-limit rpg-accordion-select" data-key="attr" title="An attribute whose modifier, and save proficiency, ride on the die">${options(attrLabels, l.attr)}</select>` : '';
+    const toField = (key, value) => `<label class="rpg-vital-field" title="The value the vital is left at afterwards. Empty leaves it where it is."><span>then set to</span><input type="number" class="rpg-vital-limit" data-key="${key}" min="0" max="100" value="${value === null ? '' : value}" placeholder="-" /><span>%</span></label>`;
+    return `${html}
+        <div class="rpg-vital-detail rpg-vital-detail-sub">
+            <label class="rpg-vital-field" title="What the d20 (and the modifier, with an attribute) has to reach"><span>DC</span><input type="number" class="rpg-vital-limit" data-key="dc" min="1" max="40" value="${l.dc}" /></label>
+            ${attrSelect}
+        </div>
+        <div class="rpg-vital-detail rpg-vital-detail-sub">
+            <span class="rpg-vital-limit-side is-pass">Passed</span>
+            <input type="text" class="rpg-vital-limit rpg-vital-limit-text" data-key="pass" value="${escapeHtml(l.pass)}" maxlength="300" placeholder="What the narrator is told on a pass" />
+            ${toField('passTo', l.passTo)}
+        </div>
+        <div class="rpg-vital-detail rpg-vital-detail-sub">
+            <span class="rpg-vital-limit-side is-fail">Failed</span>
+            <input type="text" class="rpg-vital-limit rpg-vital-limit-text" data-key="fail" value="${escapeHtml(l.fail)}" maxlength="300" placeholder="What the narrator is told on a failure" />
+            ${toField('failTo', l.failTo)}
+        </div>`;
+}
+
+/** The options under a vital's row: who it is for (D231), how it is shown, what it measures and its levels (D232), its mark (D233). */
 function vitalDetailsHtml(d) {
     const options = (labels, current) => Object.entries(labels).map(([value, label]) =>
         `<option value="${value}"${current === value ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
@@ -366,7 +427,8 @@ function vitalDetailsHtml(d) {
                 </div>
             </div>
         </div>
-        <p class="rpg-vital-detail-hint">A vital for named characters shows on their cards only, and the AI is asked for it only for them; a first name is enough. The value is 0 to 100 whatever it is shown as: a level is the name for a stretch of it, starting at <b>From</b>, and the AI is told the levels and what each means.</p>
+        ${vitalLimitHtml(d)}
+        <p class="rpg-vital-detail-hint">A vital for named characters shows on their cards only, and the AI is asked for it only for them; a first name is enough. The value is 0 to 100 whatever it is shown as: a level is the name for a stretch of it, starting at <b>From</b>, and the AI is told the levels and what each means. A mark is reached when a reply carries the value to it: the narrator is told once, in the next reply, and a roll is made on the spot and is final.</p>
     </div>`;
 }
 
@@ -406,7 +468,7 @@ function renderVitalsSettings() {
                 <button type="button" class="rpg-vital-move" data-dir="-1" title="Move up"${i === 0 ? ' disabled' : ''}><i class="fa-solid fa-chevron-up"></i></button>
                 <button type="button" class="rpg-vital-move" data-dir="1" title="Move down"${i === list.length - 1 ? ' disabled' : ''}><i class="fa-solid fa-chevron-down"></i></button>
             </span>
-            <button type="button" class="rpg-vital-more${summary ? ' has-custom' : ''}" title="${open ? 'Close the options' : 'Options: who it is for, how it is shown, its levels'}" aria-expanded="${open ? 'true' : 'false'}"><i class="fa-solid fa-sliders"></i></button>
+            <button type="button" class="rpg-vital-more${summary ? ' has-custom' : ''}" title="${open ? 'Close the options' : 'Options: who it is for, how it is shown, its levels, its mark'}" aria-expanded="${open ? 'true' : 'false'}"><i class="fa-solid fa-sliders"></i></button>
             <button type="button" class="rpg-ws-rel-remove rpg-vital-remove" title="Remove this vital"><i class="fa-solid fa-trash"></i></button>
             ${open ? vitalDetailsHtml(d) : (summary ? `<div class="rpg-vital-summary">${escapeHtml(summary.charAt(0).toUpperCase() + summary.slice(1))}</div>` : '')}
         </div>`;
@@ -1889,6 +1951,7 @@ function bindSettingsUI() {
         try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] vitals save failed', e); }
         if (rerender) renderVitalsSettings();
         try { renderThoughts(); updatePortraitBar(); } catch (e) { /* non-fatal */ }
+        try { updateVitalCards(); } catch (e) { /* no chat open */ }    // the boxes under the replies follow the sheet (D233)
     };
     const _vitalFromRow = (el) => {
         const cs = getVitalsSheet();
@@ -2073,6 +2136,26 @@ function bindSettingsUI() {
         entry.rungs = normalizeRungs(rungs);
         $(this).val(label);
         _saveVitals({ rerender: false });
+    });
+    // A vital's mark (D233): every field of it is one handler, the field
+    // named on the control. The mark is kept whole and safe; one that says
+    // nothing is not kept at all.
+    $(document).on('change', '.rpg-vital-limit', function () {
+        const { entry } = _vitalFromRow(this);
+        const key = String($(this).attr('data-key') || '');
+        if (!entry || !key) return;
+        const before = normalizeLimit(entry.limit);
+        const raw = { ...before };
+        let value = $(this).val();
+        if (key === 'passTo' || key === 'failTo') value = String(value ?? '').trim() === '' ? null : value;
+        raw[key] = value;
+        // A mark still where its direction put it follows a change of direction: the top for a rise, the bottom for a fall.
+        if (key === 'when' && before.at === (before.when === 'fall' ? 0 : 100)) delete raw.at;
+        const safe = normalizeLimit(raw);
+        if (JSON.stringify(safe) === JSON.stringify(normalizeLimit(null))) delete entry.limit; else entry.limit = safe;
+        const redraw = key === 'when' || key === 'does';
+        if (!redraw) $(this).val(safe[key] === null ? '' : safe[key]);
+        _saveVitals({ rerender: redraw });
     });
     $(document).on('change', '.rpg-vital-rung-note', function () {
         const { entry, rungs, i } = _rungFromRow(this);
@@ -5035,7 +5118,7 @@ jQuery(async () => {
             // original relative registration order within each event type.
             // The chat-change handlers, in the order SillyTavern calls them. Kept as a list so that they can be run again
             // when the extension's data turns out to be another chat's (src/core/chatGuard.js, D215).
-            const chatLoaders = [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, onWorldChatChanged, onCanonChatChanged, onHubChatChanged, onSceneChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged];
+            const chatLoaders = [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, updateVitalCards, onInventoryChatChanged, onWorldChatChanged, onCanonChatChanged, onHubChatChanged, onSceneChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged];
             setChatLoaders(chatLoaders);
             registerAllEvents({
                 // onDiceMessageSent rolls and attaches; refreshDiceInjection then
@@ -5053,26 +5136,26 @@ jQuery(async () => {
                 [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
                 // chatLoaded last: the handlers before it have run for the chat in front (src/core/chatGuard.js, D215).
                 [event_types.CHAT_CHANGED]: [...chatLoaders, chatLoaded],
-                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage],
+                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage, syncVitalCardForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices, onGlintUserMessageRendered],
                 [event_types.SETTINGS_UPDATED]: [updatePersonaAvatar, onHubPlayerChanged],    // the persona in use may be another: who is played, and the continuity books that follow (D230)
                 // onDiceReplyRendered reads a game-master call from the reply and
                 // decorates its tag; it runs after the bubble decorations so it
                 // sees the final markup, and before the roll box sync.
-                [event_types.CHARACTER_MESSAGE_RENDERED]: [onCharacterMessageRenderedDecorations, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage, onGlintMessageRendered],
-                [event_types.MESSAGE_UPDATED]: [onMessageUpdatedDecorations, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage],
+                [event_types.CHARACTER_MESSAGE_RENDERED]: [onCharacterMessageRenderedDecorations, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage, syncVitalCardForMessage, onGlintMessageRendered],
+                [event_types.MESSAGE_UPDATED]: [onMessageUpdatedDecorations, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage, syncVitalCardForMessage],
                 // Regenerate deletes the last reply after GENERATION_STARTED has
                 // set the slots, so the inventory it put back must be re-injected
                 // here, before the prompt is built (wrapped: the event's argument
                 // is a number, not the options object).
-                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, onInventoryMessageDeleted, onWorldMessageDeleted, onCanonMessageDeleted, onHubMessageDeleted, () => refreshDiceInjection()],
+                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, updateVitalCards, onInventoryMessageDeleted, onWorldMessageDeleted, onCanonMessageDeleted, onHubMessageDeleted, () => refreshDiceInjection()],
                 [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_DELETED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_UPDATED]: onConnectionProfilesChanged,
                 // Guarded: MORE_MESSAGES_LOADED doesn't exist on some older ST
                 // builds; a spread of {} registers nothing there.
                 ...(event_types.MORE_MESSAGES_LOADED
-                    ? { [event_types.MORE_MESSAGES_LOADED]: [onMoreMessagesLoadedFullsheet, updateRollCards] }
+                    ? { [event_types.MORE_MESSAGES_LOADED]: [onMoreMessagesLoadedFullsheet, updateRollCards, updateVitalCards] }
                     : {}),
                 // A scene's chat deleted in SillyTavern marks its record (docs/hub-plan.md D128); older builds have no such event.
                 ...(event_types.CHAT_DELETED

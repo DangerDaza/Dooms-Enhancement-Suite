@@ -2365,3 +2365,53 @@ the vital.
 Tests: `tools/vitals-test.mjs` §9 (the levels made safe, the level a
 value is on at each edge, what a card says for each way of showing, the
 AI's lines, the context line, the card front's bars and tags).
+
+## 72. A vital's mark (2026-11-23, D233)
+
+The last of the three steps. Eli's Edge was written as "tells, then a
+blackout": the number climbs, and at the top something is decided that
+the story does not get to argue with. Roxy's ladder has a top rung where
+her behaviour changes. Both are the same thing: a value reaches a mark,
+and a consequence follows, either by the dice or as a plain instruction.
+Left to the AI, the blackout would come when the prose felt like it and
+never when it was inconvenient, which is what the dice checks were
+built to stop.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D233 | A vital may have one mark; a reply that carries the value to it tells the narrator something, or rolls a d20 that decides what follows | **Held.** **The sheet entry** gains `limit`: `when` (`off`, `rise`, `fall`), `at` (the mark, 0 to 100), `does` (`note` or `roll`), `note` (what the narrator is told), and for a roll `dc`, `attr` (an attribute whose modifier and save proficiency ride on the die; none is a bare d20), `pass` and `fail` (what the narrator is told each way) and `passTo` and `failTo` (the value the vital is left at afterwards; empty leaves it). An entry without one has no mark (`normalizeLimit`, `src/utils/vitals.js`). **Reaching it** is a crossing, not a state: on a rise, the value was under the mark and the reply puts it at or over; on a fall, the other way round; a character seen for the first time is measured from the vital's start. A value that stays past its mark reaches it once (`limitCrossed`, `limitsCrossed`: every character the reply lists, then the persona). **When** (`settleVitalLimits`, `src/systems/features/vitalLimits.js`): where a reply's vitals have just been made safe, in together mode (`sillytavern.js`) and separate mode (`apiClient.js`), before the swipe's tracker data is stored. Each crossing is settled into a record (`settleLimit`, `src/utils/vitalLimits.js`): for a roll the die is thrown there and then (d20.js's, with the attribute's modifier and the sheet's save proficiency when attributes are on and the mark names one; criticals as the attributes are set), and the value the roll leaves the vital at is written into the reply's tracker data, so the cards, the swipe store and the next prompt all read it. **Where it is kept**: on the reply, `message.extra.dooms_vital_events[swipeId]`, a store of its own because the swipe's tracker entry is replaced whole in several places. A swipe is settled once: a second pass over it finds its records, rolls nothing and writes the same value; a new swipe is a new reply and rolls for itself. **The narrator** hears of it in the generation after the player's next message (`buildVitalLimitsForGeneration`, a slot of its own, `dooms-dice-vital`, set beside the dice in `refreshDiceInjection`, same depth and role): one block for each mark, "[STAT: Eli Vega's Edge has risen to 100% ("Fraying"), reaching its mark of 100%. A roll decides what follows: d20 = 7 vs DC 13. FAILURE. Eli blacks out. Cut to the aftermath. This outcome is final: narrate it in this reply. Do not re-roll, reverse or soften it. Edge now stands at 20%: carry on from there.]", then a reminder, as the dice give after theirs, that the tracker block is still owed. It is read from the chat, the records of every reply the player's last message answers, so a swipe or a regenerate of the answer is told the same, and the reply after that nothing. **The player** sees a toast when it happens ("Eli Vega · Edge reached 100% · d20 7 vs DC 13 · Failed") and a box under the reply it happened in, in the dice's style: what moved, the roll and its outcome, what the next reply will be told, and where the value was set (`vitalCardHtml`, `syncVitalCardForMessage`, `updateVitalCards`; index.js wires them to the chat's events). **The warning colour**: a vital whose mark is reached on a rise is not drawn in the low colour at the bottom, since low is where it is safe (`vitalIsLow`). **Settings, Stats**, a vital's options: **At a mark** (Nothing happens, When it rises to, When it falls to), the mark, what it does (Tell the narrator, Roll a d20), and for a roll the DC, the save, and a line and a "then set to" for Passed and for Failed. A closed row says it in its summary ("at 100% or over, a d20 against 13"). |
+
+What it does not do. Only a reply reaches a mark: a value typed into a
+card's number box does not, and so a vital the AI is not asked to move
+(AI unticked) never does. The mark's die is rolled once and cannot be
+stepped or re-rolled as a dice check can; another swipe of the reply is
+the way to another roll, as it is for the reply's words. The narrator is
+told after the player's next message, not in the reply that reached the
+mark, because that reply is already written, and not in a reply asked
+for without a word from the player. In a group every member's reply in
+the round after is told the same block. A vital has one mark: the levels (D232)
+name the stretches, and only the mark does anything. The roll is the
+mark's own: it is kept on the reply and nowhere among the dice checks.
+
+Drawn in a browser. The three steps were drawn in Chromium against the
+extension's own stylesheets (`style.css`, `styles/modals.css`), with the
+real `buildVitalsStrip`, `vitalRowHtml` and `vitalCardHtml` and the
+settings rows built by index.js's own functions: the Stats rows closed
+and open at 1200 and 390 pixels wide, a shelf of cards front and back
+with Edge as a number and Attention as a level, and the three boxes
+under a reply. Nothing ran past its container. Three things it turned
+up, all fixed here: the tags on a card's front were too small to read
+(now about 9 pixels on a standard card); a level's name and a number's
+level squeezed the vital's name off a narrow card (the name now holds
+and the level's name wraps under); and on the card's back the vitals'
+names had no height at all, bars included, since the shelf sets
+`line-height: 0` and the row never set one back (`.dooms-pb-vital-row`),
+which is older than this work. SillyTavern itself was not run: the
+Settings page, the toast and the box's place in a real chat are as the
+tests and the drawing have them and no further.
+
+Tests: `tools/vital-limits-test.mjs` (the mark made safe, reaching it on
+a rise and a fall and once only, the roll and the narrator's words, a
+reply through to the next generation, a second pass and a new swipe, a
+swipe SillyTavern put away, a group's round, attributes on and off, the
+box, the off states, the low colour).

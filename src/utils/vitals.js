@@ -17,8 +17,9 @@
  *       { id, name, enabled,           //   existing
  *         color, icon, start, ai,      //   new: bar colour, emoji, value a new
  *         who, names,                  //   character starts at, "AI updates it";
- *         show, about, rungs },        //   who the vital is for (D231), how it
- *     ],                               //   is shown and its levels (D232), below
+ *         show, about, rungs,          //   who the vital is for (D231), how it
+ *         limit },                     //   is shown and its levels (D232), what
+ *     ],                               //   happens at a mark (D233), below
  *     player: { enabled: true },       // new: the persona has vitals too
  *     showOnCards: true,               // new: bars on the card front
  *     maxBars: 3,                      // new: how many bars the front shows
@@ -51,6 +52,19 @@
  *          the levels and what each means, and moves the value; the level
  *          follows from it.
  * An entry with none of these is a bar with no levels, as before.
+ *
+ * What happens at a mark (D233). `limit` is one mark on a vital and what a
+ * reply that carries the value to it sets off:
+ *   when   'off' (as before), 'rise' (the value rises to `at` or past it)
+ *          or 'fall' (falls to `at` or under it)
+ *   does   'note': the narrator is told `note` once, in the next reply's
+ *          prompt; 'roll': a d20 is rolled against `dc` there and then (an
+ *          attribute's modifier riding on it when `attr` names one), the
+ *          narrator is told `pass` or `fail` as final, and the value is
+ *          set to `passTo` / `failTo` when those are given.
+ * This file finds the crossings (limitsCrossed); the roll and the words
+ * are src/utils/vitalLimits.js, the lifecycle
+ * src/systems/features/vitalLimits.js.
  */
 
 /** The sheet a fresh install (or an install that never switched vitals on) gets. */
@@ -73,6 +87,11 @@ export const EXTRA_VITAL_COLORS = Object.freeze([
 
 export const LOW_VITAL_COLOR = '#e5484d';
 export const MAX_VITALS = 24;
+
+/** When a vital's mark is reached, and what reaching it does (D233). */
+export const VITAL_LIMIT_WHEN = Object.freeze(['off', 'rise', 'fall']);
+export const VITAL_LIMIT_DOES = Object.freeze(['note', 'roll']);
+export const DEFAULT_LIMIT_DC = 12;
 
 /** How a vital can be shown (D232). */
 export const VITAL_SHOWS = Object.freeze(['bar', 'percent', 'level']);
@@ -205,7 +224,46 @@ export function normalizeVitalDef(entry, index = 0) {
         show: VITAL_SHOWS.includes(e.show) ? e.show : 'bar',
         about: oneLine(e.about, 240),
         rungs: normalizeRungs(e.rungs),
+        limit: normalizeLimit(e.limit),
     };
+}
+
+/**
+ * A vital's mark made safe (D233), every field present: off unless it says
+ * when, at the top for a rise and the bottom for a fall unless it says
+ * where, a note unless it says a roll.
+ */
+export function normalizeLimit(raw) {
+    const l = raw && typeof raw === 'object' ? raw : {};
+    const when = VITAL_LIMIT_WHEN.includes(l.when) ? l.when : 'off';
+    const at = clampVital(l.at);
+    const dc = l.dc === null || l.dc === undefined || l.dc === '' ? NaN : Number(l.dc);
+    const to = (v) => (v === null || v === undefined || v === '' ? null : clampVital(v));
+    return {
+        when,
+        at: at === null ? (when === 'fall' ? 0 : 100) : at,
+        does: VITAL_LIMIT_DOES.includes(l.does) ? l.does : 'note',
+        note: oneLine(l.note, 300),
+        dc: Number.isFinite(dc) ? Math.min(40, Math.max(1, Math.round(dc))) : DEFAULT_LIMIT_DC,
+        attr: typeof l.attr === 'string' ? l.attr.trim().slice(0, 40) : '',
+        pass: oneLine(l.pass, 300),
+        fail: oneLine(l.fail, 300),
+        passTo: to(l.passTo),
+        failTo: to(l.failTo),
+    };
+}
+
+/**
+ * Whether a value moving from `prev` to `next` reaches the vital's mark
+ * (D233): it was short of the mark and is now at it or past it. A value
+ * that stays past the mark does not reach it again; one with no previous
+ * value came from the vital's start.
+ */
+export function limitCrossed(def, prev, next) {
+    const l = def && def.limit;
+    if (!l || l.when === 'off' || typeof next !== 'number') return false;
+    const before = typeof prev === 'number' ? prev : def.start;
+    return l.when === 'fall' ? (before > l.at && next <= l.at) : (before < l.at && next >= l.at);
 }
 
 const oneLine = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
@@ -693,10 +751,95 @@ export function applyVitalsToPlayer(nextJson, prevJson, defs) {
     return JSON.stringify(base);
 }
 
-/** The colour a bar shows: the vital's own, or the warning colour at or below `lowAt`. */
-export function vitalColor(def, value, lowAt) {
+/**
+ * The marks a reply carried a value to (D233), characters first and the
+ * persona last, each in sheet order. The data is the tracker's, before and
+ * after: strings or parsed, characters as an array or under `characters`,
+ * the persona's block as `{ stats }`. Characters are matched by name.
+ * @param {{ defs?: object[], prevChars?: *, nextChars?: *, playerDefs?: object[], prevPlayer?: *, nextPlayer?: *, playerName?: string }} p
+ * @returns {Array<{ def: object, who: string, isPlayer: boolean, prev: number, next: number }>}
+ */
+export function limitsCrossed({ defs = [], prevChars = null, nextChars = null, playerDefs = [], prevPlayer = null, nextPlayer = null, playerName = '' } = {}) {
+    const out = [];
+    const marked = (list) => (list || []).some(d => d.limit && d.limit.when !== 'off');
+    if (marked(defs)) {
+        const prevByName = new Map();
+        for (const c of characterList(parseLoose(prevChars)) || []) {
+            if (c && typeof c.name === 'string') prevByName.set(c.name.trim().toLowerCase(), c);
+        }
+        for (const c of characterList(parseLoose(nextChars)) || []) {
+            if (!c || typeof c !== 'object' || typeof c.name !== 'string' || !c.name.trim()) continue;
+            const mine = vitalsFor(defs, { name: c.name });
+            if (!marked(mine)) continue;
+            const next = readVitals(c.stats, mine);
+            const prev = readVitals(prevByName.get(c.name.trim().toLowerCase())?.stats, mine);
+            for (const d of mine) {
+                if (limitCrossed(d, prev[d.name], next[d.name])) {
+                    out.push({ def: d, who: c.name.trim(), isPlayer: false, prev: typeof prev[d.name] === 'number' ? prev[d.name] : d.start, next: next[d.name] });
+                }
+            }
+        }
+    }
+    if (marked(playerDefs)) {
+        const nextBlock = parseLoose(nextPlayer);
+        const prevBlock = parseLoose(prevPlayer);
+        const next = readVitals(nextBlock && typeof nextBlock === 'object' ? nextBlock.stats : null, playerDefs);
+        const prev = readVitals(prevBlock && typeof prevBlock === 'object' ? prevBlock.stats : null, playerDefs);
+        for (const d of playerDefs) {
+            if (limitCrossed(d, prev[d.name], next[d.name])) {
+                out.push({ def: d, who: String(playerName || '').trim() || 'The player', isPlayer: true, prev: typeof prev[d.name] === 'number' ? prev[d.name] : d.start, next: next[d.name] });
+            }
+        }
+    }
+    return out;
+}
+
+/**
+ * Sets one vital's value in tracker data (D233: the value a roll leaves it
+ * at): a character's by name in the characters data, or the persona's in
+ * its block. Strings come back as strings. The input untouched when the
+ * character or the vital is not there.
+ * @param {string|object} json
+ * @param {{ who?: string, isPlayer?: boolean, vital: string, value: number }} p
+ */
+export function setVitalValue(json, { who = '', isPlayer = false, vital = '', value } = {}) {
+    const parsed = parseLoose(json);
     const v = clampVital(value);
-    if (v !== null && typeof lowAt === 'number' && v <= lowAt) return LOW_VITAL_COLOR;
+    if (!parsed || typeof parsed !== 'object' || v === null) return json;
+    const want = String(vital || '').trim().toLowerCase();
+    const write = (holder) => {
+        if (!holder || typeof holder !== 'object' || !Array.isArray(holder.stats)) return false;
+        const entry = holder.stats.find(s => s && typeof s.name === 'string' && s.name.trim().toLowerCase() === want);
+        if (!entry) return false;
+        entry.value = v;
+        return true;
+    };
+    let done = false;
+    if (isPlayer) {
+        done = write(parsed);
+    } else {
+        const name = String(who || '').trim().toLowerCase();
+        const c = (characterList(parsed) || []).find(x => x && typeof x.name === 'string' && x.name.trim().toLowerCase() === name);
+        done = write(c);
+    }
+    if (!done) return json;
+    return typeof json === 'string' ? JSON.stringify(parsed) : parsed;
+}
+
+/**
+ * Whether a value is low enough to warn of: at or below `lowAt`. Not for a
+ * vital whose mark is reached on a rise (D233): what it warns of is at the
+ * top, and a low Edge is the good news.
+ */
+export function vitalIsLow(def, value, lowAt) {
+    const v = clampVital(value);
+    if (v === null || typeof lowAt !== 'number' || v > lowAt) return false;
+    return !(def && def.limit && def.limit.when === 'rise');
+}
+
+/** The colour a bar shows: the vital's own, or the warning colour when the value is low (vitalIsLow). */
+export function vitalColor(def, value, lowAt) {
+    if (vitalIsLow(def, value, lowAt)) return LOW_VITAL_COLOR;
     return def?.color || EXTRA_VITAL_COLORS[0];
 }
 

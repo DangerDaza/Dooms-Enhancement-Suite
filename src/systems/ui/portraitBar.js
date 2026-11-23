@@ -51,7 +51,7 @@ import { pickActiveUser } from '../../utils/activeUser.js';
 // The editors live in thoughts.js, which reaches this module through
 // characterAliases.js, so they are imported at click time rather than here
 // (a static edge would close a cycle).
-import { vitalsConfig, readVitals, vitalColor, clampVital, vitalsFor, playerVitalDefs, rungOf, vitalText, vitalTip } from '../../utils/vitals.js';
+import { vitalsConfig, readVitals, vitalColor, vitalIsLow, clampVital, vitalsFor, playerVitalDefs, rungOf, vitalText, vitalTip } from '../../utils/vitals.js';
 import { attributesOn } from '../../utils/d20.js';
 // Inventory (Project Short Fuse, Phase 5): the shelf's pages show while it is on.
 import { isInventoryOn, INVENTORY_CHANGED_EVENT } from '../features/inventory.js';
@@ -1819,7 +1819,7 @@ export function buildVitalsStrip(map, defs, cfg) {
     }).join('');
     const bars = shown.filter(d => d.show === 'bar').map(d => {
         const v = map[d.name];
-        const low = v <= cfg.lowAt ? ' is-low' : '';
+        const low = vitalIsLow(d, v, cfg.lowAt) ? ' is-low' : '';
         return `<i class="dooms-pb-vital${low}" style="--v:${v}%;--c:${escapeHtml(vitalColor(d, v, cfg.lowAt))}"></i>`;
     }).join('');
     return `<div class="dooms-pb-vitals" title="${escapeHtml(title)}">${tags ? `<span class="dooms-pb-vital-tags">${tags}</span>` : ''}${bars}</div>`;
@@ -1832,11 +1832,11 @@ export function buildVitalsStrip(map, defs, cfg) {
  * each level (lit up to the one it is on), the level's name. The value at
  * the row's end is a button either way: pressed, it becomes a number box.
  */
-function vitalRowHtml(d, v, { nameEsc, isUser, lowAt }) {
+export function vitalRowHtml(d, v, { nameEsc, isUser, lowAt }) {
     const nameAttr = escapeHtml(d.name);
     const rung = rungOf(d, v);
     const asLevel = d.show === 'level' && !!rung;
-    const low = !asLevel && v <= lowAt;
+    const low = !asLevel && vitalIsLow(d, v, lowAt);
     const color = escapeHtml(asLevel ? d.color : vitalColor(d, v, lowAt));
     let middle;
     if (asLevel) {

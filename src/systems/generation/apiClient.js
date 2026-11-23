@@ -31,6 +31,7 @@ import { renderInfoBox } from '../rendering/infoBox.js';
 import { removeLocks } from './lockManager.js';
 import { applyCharacterAliases } from '../features/characterAliases.js';
 import { vitalsOn, playerVitalsOn, vitalDefs, playerVitalDefs, applyVitalsToCharacters, applyVitalsToPlayer } from '../../utils/vitals.js';
+import { settleVitalLimits } from '../features/vitalLimits.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
 import { i18n } from '../../core/i18n.js';
@@ -467,6 +468,13 @@ export async function updateRPGData(renderInfoBox, renderThoughts, { force = fal
                     }
                     if (playerVitalsOn(extensionSettings)) {
                         parsedData.player = applyVitalsToPlayer(parsedData.player, committedTrackerData.player, playerVitalDefs(extensionSettings));
+                    }
+                    // A vital carried to its mark (D233), as in together mode.
+                    try {
+                        const reply = chat && chat.length > 0 ? chat[chat.length - 1] : null;
+                        if (reply && !reply.is_user && !isSyntheticTrackerMessage(reply)) settleVitalLimits(parsedData, reply);
+                    } catch (e) {
+                        console.warn('[Dooms Tracker] Vital marks could not be settled:', e);
                     }
                 }
                 // Store RPG data for the last assistant message (separate mode)

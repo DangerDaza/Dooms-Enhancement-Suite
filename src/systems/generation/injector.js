@@ -30,6 +30,7 @@ import {
 import { DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT, DEFAULT_KNIFE_TEMPLATE_PROMPT, DEFAULT_NEW_FIELDS_BOOST_PROMPT } from './defaultPrompts.js';
 // Dice (Phase 2): the verdict for a rolled message rides every generation that answers it.
 import { buildDiceVerdictForGeneration, buildDiceRulesForGeneration, DICE_VERDICT_SLOT, DICE_RULES_SLOT } from '../features/diceRolls.js';
+import { buildVitalLimitsForGeneration, VITAL_LIMIT_SLOT } from '../features/vitalLimits.js';
 import { buildInventoryLineForGeneration, buildInventoryRulesForGeneration, INVENTORY_LINE_SLOT, INVENTORY_RULES_SLOT } from '../features/inventory.js';
 import { buildQuestCutForGeneration } from '../features/questCut.js';
 import { QUEST_CUT_SLOT } from '../../utils/questCut.js';
@@ -705,6 +706,10 @@ export function refreshDiceInjection({ suppress = false } = {}) {
         const on = !suppress && extensionSettings.enabled;
         const verdict = on ? buildDiceVerdictForGeneration() : '';
         setExtensionPrompt(DICE_VERDICT_SLOT, verdict ? `\n${verdict}\n` : '', extension_prompt_types.IN_CHAT, depth, false, role);
+        // A vital the last reply carried to its mark (D233): what follows,
+        // in the same message as the dice and for the same reason.
+        const marks = on ? buildVitalLimitsForGeneration() : '';
+        setExtensionPrompt(VITAL_LIMIT_SLOT, marks ? `\n${marks}\n` : '', extension_prompt_types.IN_CHAT, depth, false, role);
         // What the game master may do about checks of its own (Phase 3).
         const rules = on ? buildDiceRulesForGeneration() : '';
         setExtensionPrompt(DICE_RULES_SLOT, rules ? `\n${rules}\n` : '', extension_prompt_types.IN_CHAT, depth, false, role);
@@ -749,6 +754,7 @@ export async function onGenerationStarted(type, data, dryRun) {
         setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
         setExtensionPrompt('dooms-tracker-new-fields', '', extension_prompt_types.IN_PROMPT, 0, false);
         setExtensionPrompt(DICE_VERDICT_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
+        setExtensionPrompt(VITAL_LIMIT_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt(DICE_RULES_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt(INVENTORY_LINE_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt(INVENTORY_RULES_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
