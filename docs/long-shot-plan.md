@@ -2463,3 +2463,60 @@ through (36 checks: who a card opens on, a chip picked and cleared for
 a player, a description started from the shared one and typed over, the
 shared ones untouched, no switch with one user character, nothing past
 the window). SillyTavern itself was not run.
+
+## 74. A world's stories hear of each other (2026-11-23, D235)
+
+A world may hold a story for each of the player's characters (D216), with
+the map (D217) and the cast (D234) shared between them. Nothing that
+happened in one was known in the other: Jack could burn a warehouse down
+in his story, and in Eli's it still stood. The owner, asked what the
+stories should share: world events, on one timeline ("they share a time
+line"), with what is personal kept each story's own.
+
+So a scene's End now sends out what the wider world would hear of, and
+the world's other stories take it in at their next Start, as news, once
+their own date has come to it.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D235 | A scene's End sends its world events and its clock moves out to the world's other stories; a story takes them in at its next Start, as news, once its date has reached them | **Held.** **What is shared.** Two things: events (what happened in the scene that people elsewhere would hear of or see: a death, an arrest, a fire, a place closed, something made public) and how the scene moved the world's clocks. **What is not**: where people stand, relationships, the threads, the quests, inventory, anyone's whereabouts and the ledger itself stay each story's own (D189, D216, D234); the map was shared already (D217). **The store**: `hub.news[world] = { v, share, seq, items }`, beside `hub.maps`, an item `{ id, kind: 'event', about, text, story, scene, at, date, time, taken }` or `{ id, kind: 'clock', clock, from, to, … }`; `taken[story]` is the scene whose Start took it in; a world keeps its newest 120. `src/utils/worldNews.js` holds every rule, pure. **Sent out at End.** Only where the world has two or more stories and sharing is not switched off for it, the record's request (D176) also asks, in the same answer, for `"world": [{ "about", "what" }]`: one sentence each, told as someone who was not there would tell it, the player named only where people would know it was them, nothing private, at most 4 a request and 6 a scene, an empty list the usual case. A record written in passes (D198) gathers them a page at a time and each later page is told what is listed. The End sheet shows them ticked under who they are news to; an unticked one is not sent, and the player may add one line of their own. An End with no sheet (`/endscene`, a handover) sends what the record said. The clock moves are the world's clocks in the story's memory before the End against after it, so a clock the story only caught up with at its Start is not sent back. A scene ended a second time replaces what it sent and no story had taken; what was taken stays. **Taken in at Start.** What is due to a story: the other stories' items it has not taken, at most 8 events a Start (the oldest first, the rest wait for the next). **The date rule**: an item is told once the date the scene opens at is not before the item's. Dates are compared where both are of one kind (`storyDay`: a count such as "Day 12" or "Week 2, Day 3", or a calendar date, written out, ISO or in figures; the time of day settles the same day); a date in figures that reads two ways holds an order only where both readings agree. Where the two cannot be compared the news is told, with its date said, and where it is plainly ahead it waits and the sheet says how much does. A story with no date that has not ended a scene yet takes none: there is nothing to hold the news against. What is due is told to the openings' request ("News of the world since the last scene (it happened elsewhere; the player was not there)", with a rule that it is true, known as news is known, and never something the player was at), stands first in the brief's "Since last time" ("Elsewhere, Day 4: …"), and at commit is written into the story's memory: each clock caught up by direction (one that rose elsewhere is raised to at least where it got to, one that fell is lowered to at most), which is the same done twice and does not count twice the days both stories lived through, logged with the story it came from; and, where Canon is on, each event into the ledger as a fact marked "(news from elsewhere, DATE)", where it rides every reply and the record's contradiction check (D190) reads it. A fact the player pinned is not replaced. With Canon off the news is in the openings and the brief and no further. **Taken back.** Undo of an End takes back what that End sent and puts back what it replaced; a scene deleted takes back everything it sent. What another story took in already stays in that story: it was told. **The switch**: under the story chooser, "Stories share world events", a world at a time, with the news kept listed beneath it (whose story, its date, whom it has reached, a cross to take one out by hand). On by default, the recommended answer to a question the owner has open as this is written; `NEWS.onByDefault` is the one line that says so. **Nothing changes** for a world with one story: no request is longer, no field is drawn, no store is written. |
+
+What it does not do. It does not share what happened before the world
+had a second story: the record is asked for world events only from then
+on, so the first story's earlier scenes reach the second through the
+ledger and the lorebooks the player keeps, as before. It does not merge
+the two ledgers or let one story's ledger correct the other's: an event
+arrives as one fact, and what the story makes of it is its own. It does
+not move people: a person killed in one story is news in the other, and
+that story's continuity still holds where they last stood there, so the
+record's contradiction check is what catches a scene that then plays
+them alive. It does not reorder time: a story played behind another's
+date is told the other's news only when it reaches that date, and what
+it does before then cannot change what was already played ahead of it;
+two stories that contradict each other are for the player to settle. It
+does not send news back to the story it came from, and it does not send
+a clock's reason, only where it stands. The Settings status lines say
+nothing of it.
+
+Tests: `tools/world-news-test.mjs` (25: the store and the switch, the
+caps, reading the record's events, the request's words, the clocks'
+changes, sending, replacing and taking back, the dates and times and
+their order, a date that reads two ways, what is due, a story with no
+date, the limit a Start, the lines, the catch-up by direction and its
+public face, the ledger's facts and a pinned one, the list for the
+Atlas). `tools/hub-flow-test.mjs` §38 (23: one story shares nothing; two
+share; the record asked for the world; the sheet's ticks; one ticked
+event and a clock sent; the other story untouched until its Start; Undo;
+an End by command; the Start told the news with the clock's public face;
+the scene's chat seeded with the clock and the ledger's facts; the
+brief; what was taken marked; news ahead of a story's date held, then
+told after the gap; the switch; one taken out by hand; a scene deleted).
+`tools/hub-test.mjs` (8: both requests exactly as before without it,
+and with it; the result's words; the store made safe).
+`tools/atlas-browser-test.mjs` §5l (22, in Chromium against the live
+stylesheet at 1600, 412 and 390 pixels wide: the End sheet's field, its
+ticks kept, locked while ending, what was sent; the Start sheet's line,
+unfolded, clocks alone, what waits; the switch and the list under the
+story chooser, off, waiting, on a phone). SillyTavern itself was not
+run, and no model was asked what it would list as a world event: the
+request's wording is untried against a real narrator.

@@ -3345,5 +3345,137 @@ console.log('\n§37 the character card is the anchor: who is played, what the st
     hub.onHubPlayerChanged();
 }
 
+console.log('\n§38 a world\'s stories hear of each other: what a scene sends out, and what another story\'s next scene takes in (D235)');
+{
+    const W = 'newsland';
+    const W2 = 'newsland~2';
+    const cardsWas = extensionSettings.hub.sceneCards;
+    const lbWas = extensionSettings.lorebook;
+    const packWas = extensionSettings.liveWorld.pack;
+    extensionSettings.lorebook = { enabled: true, campaigns: {}, campaignOrder: [], activeCampaignId: null };
+    extensionSettings.hub.sceneCards = true;
+    extensionSettings.hub.styleLaw = false;
+    extensionSettings.liveWorld.customPacks[W] = JSON.stringify({ ...example, id: W, name: 'Newsland' });
+    extensionSettings.liveWorld.pack = W;
+    hub.__setBookApi(shelfApi);
+    ctxTarget.characters.push({ name: 'Teller', avatar: 'Teller.png', chat: 'Teller - plain' }, { name: 'Bard', avatar: 'Bard.png', chat: 'Bard - plain' });
+    const at = (avatar) => ctxTarget.characters.findIndex(c => c.avatar === avatar);
+    const box = (date, time) => JSON.stringify({ date: { value: date }, time: { start: time, end: time }, location: { value: 'The quay' }, weather: { emoji: '☁', forecast: 'grey' } });
+    const dated = (date, time) => { state.setLastGeneratedData({ ...state.lastGeneratedData, infoBox: box(date, time) }); state.setCommittedTrackerData({ ...state.committedTrackerData, infoBox: box(date, time) }); };
+    const begin = async (avatar, name, file, date) => {
+        ctxTarget.characterId = at(avatar);
+        ctxTarget.name2 = name;
+        files.set(file, { header: { chat_metadata: {} }, messages: [], avatar, chName: name });
+        await openPlain(file);
+        chat.push(user(`I am ${name}'s player.`));
+        chat.push({ is_user: false, name, mes: `${name} tells the tale.`, extra: {} });
+        dated(date, 'noon');
+        await persistence.saveChatData({ immediate: true });
+        await loaders();
+    };
+    const front = async (avatar, name, file) => { ctxTarget.characterId = at(avatar); ctxTarget.name2 = name; await openFile(file); };
+    const newsNow = () => JSON.parse(JSON.stringify((extensionSettings.hub.news || {})[W] || { items: [] }));
+    const itemsOf = () => newsNow().items.map(i => [i.kind, i.kind === 'event' ? i.text : `${i.clock} ${i.from}>${i.to}`, i.story, i.scene, i.date]);
+    const ledger = (id) => ((hub.worldEntry(id).memory.stores.dooms_canon || {}).entries || []).map(x => `${x.name}: ${x.text}`);
+    let openersAsked = null;
+    let openersWhen = { date: 'Day 5', time: 'noon' };
+    hub.__setOpenersTransport(async (prompt) => { openersAsked = prompt; return JSON.stringify({ when: openersWhen, openers: [{ title: 'The quay', text: 'The quay is busy.', who: [] }] }); });
+    hub.__setGapTransport(async () => '{"elapsed":"some days","now":{"date":"Day 7","time":"dawn"},"clocks":{},"moved":[],"blurb":"x","heard":[]}');
+    let recapAsked = null;
+    let recapReply = '{"recap":"x"}';
+    hub.__setRecapTransport(async (prompt) => { recapAsked = prompt; return recapReply; });
+    const start = async (worldId, gap = { id: 'now' }) => { const p = await hub.prepareScene({ worldId, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap }); return { p, c: p.ok ? await hub.commitScene(p.token, { choice: 0 }) : p }; };
+
+    // One story in the world: there is nobody to tell.
+    await begin('Teller.png', 'Teller', 'Teller - the first story', 'Day 3');
+    const d1 = await hub.commitAdopt({ recap: 'The first story so far.' });
+    check('a world with one story shares nothing: its scenes are not asked for world events', d1.ok && d1.worldId === W && hub.isNewsShared(W) === false && hub.worldNews(W).shared === false, JSON.stringify([d1.ok, d1.reason, hub.worldNews(W)]));
+    await begin('Bard.png', 'Bard', 'Bard - the second story', 'Day 5');
+    const d2 = await hub.commitAdopt({ recap: 'The second story so far.' });
+    check('with a second story the world\'s stories share their events, with nothing switched on', d2.ok && d2.worldId === W2 && hub.isNewsShared(W) && hub.isNewsShared(W2) && hub.worldEntry(W).memory.facts.date === 'Day 3' && hub.worldEntry(W2).memory.facts.date === 'Day 5', JSON.stringify([d2.ok, d2.reason, hub.worldEntry(W).memory.facts, hub.worldEntry(W2).memory.facts]));
+
+    // A scene of the first story: it burns a ship and gets a captain arrested, and the blockade tightens while it is played.
+    await front('Teller.png', 'Teller', 'Teller - the first story');
+    const s1 = await start(W);
+    check('a Start with nothing sent out yet takes nothing in, and its request is as it was', s1.c.ok && s1.p.news === null && !openersAsked.user.includes('News of the world') && !openersAsked.system.includes('News of the world'), JSON.stringify([s1.c.ok, s1.c.reason, s1.p.news]));
+    chat.push(user('I set the Kestrel alight.'));
+    chat.push({ is_user: false, name: 'Narrator', mes: 'The Kestrel burns at her moorings. The navy takes Captain Reyes away in irons.', extra: {} });
+    dated('Day 4', 'night');
+    meta.dooms_world = { ...meta.dooms_world, clocks: { ...meta.dooms_world.clocks, blockade: 2 } };
+    await persistence.saveChatData({ immediate: true });
+    await loaders();
+    recapReply = JSON.stringify({ recap: 'Jordan burned the Kestrel; Captain Reyes was arrested.', people: [], threads: { closed: [], opened: [] }, world: [{ about: 'The Kestrel', what: 'The Kestrel was burned at her moorings on the quay.' }, { about: 'Captain Reyes', what: 'Captain Reyes was arrested by the navy.' }, { about: 'Jordan', what: '' }] });
+    const pe = await hub.prepareEnd();
+    check('the record\'s request also asks what the wider world would hear of, in the same answer', pe.ok && recapAsked.system.includes('"world": [{"about": "<who or what it concerns, a few words>", "what": "<what happened, one sentence>"}]') && recapAsked.system.includes('other stories are being told in this same world') && recapAsked.system.includes('Jordan is named in it only where people would know it was them'), recapAsked && recapAsked.system.slice(-900));
+    check('the End sheet is handed the events and whom they are news to', pe.ok && same(pe.news, { events: [{ about: 'The Kestrel', text: 'The Kestrel was burned at her moorings on the quay.' }, { about: 'Captain Reyes', text: 'Captain Reyes was arrested by the navy.' }], to: ['Bard'] }), JSON.stringify(pe.news));
+    const firstWas = JSON.stringify(hub.worldEntry(W2));
+    const e1 = await hub.commitEnd({ recap: pe.recap, skipCanon: true, skipWorld: true, news: [pe.news.events[0]] });
+    check('ended with one event left ticked: it is sent out with how the scene moved the world\'s clocks, stamped with the story, the scene and its date', e1.ok && same(e1.news, { events: 1, clocks: 1, to: ['Bard'] }) && same(itemsOf(), [['event', 'The Kestrel was burned at her moorings on the quay.', W, 's1', 'Day 4'], ['clock', 'blockade 1>2', W, 's1', 'Day 4']]) && newsNow().items[0].time === 'night', JSON.stringify([e1.ok, e1.reason, e1.news, itemsOf()]));
+    check('nothing of the other story is touched by it', JSON.stringify(hub.worldEntry(W2)) === firstWas);
+    const un = await hub.undoEnd();
+    check('that End undone: what it sent out is taken back', un.ok && same(itemsOf(), []), JSON.stringify([un.ok, un.reason, itemsOf()]));
+    const e1b = await hub.endScene({ skipCanon: true, skipWorld: true });
+    check('ended with no sheet (the command): the events are as the record said', e1b.ok && same(e1b.news, { events: 2, clocks: 1, to: ['Bard'] }) && same(itemsOf().map(x => x[1]), ['The Kestrel was burned at her moorings on the quay.', 'Captain Reyes was arrested by the navy.', 'blockade 1>2']), JSON.stringify([e1b.ok, e1b.reason, e1b.news, itemsOf()]));
+    {
+        const n = hub.worldNews(W2);
+        check('the Atlas\'s list for the other story: both events, where they came from, and that they are due to its next scene', n.shared && n.stories === 2 && n.due === 3 && n.later === 0 && n.clocks === 1 && same(n.events.map(x => [x.text, x.from, x.date, x.reached, x.waiting]), [['Captain Reyes was arrested by the navy.', 'Teller', 'Day 4', [], ['Bard']], ['The Kestrel was burned at her moorings on the quay.', 'Teller', 'Day 4', [], ['Bard']]]) && hub.worldNews(W).due === 0, JSON.stringify(n));
+    }
+
+    // The second story's next scene, on Day 5: Day 4 is behind it.
+    await front('Bard.png', 'Bard', 'Bard - the second story');
+    const jackWas = JSON.stringify(hub.worldEntry(W));
+    const s2 = await start(W2);
+    check('its Start is told the news: each event with its date, and what the clock that caught up now shows', s2.p.ok && openersAsked.user.includes('News of the world since the last scene (it happened elsewhere; Jordan was not there):\n- The Kestrel was burned at her moorings on the quay. (Day 4)\n- Captain Reyes was arrested by the navy. (Day 4)\n- The blockade: Cargo is searched on the quay; prices of salt and lamp oil rise.\n') && openersAsked.system.includes('News of the world is given: things that happened elsewhere since the last scene, which Jordan took no part in and did not see.'), openersAsked && openersAsked.user);
+    check('the sheet is told what arrives and from which story', same(s2.p.news, { events: [{ text: 'The Kestrel was burned at her moorings on the quay.', date: 'Day 4', from: 'Teller' }, { text: 'Captain Reyes was arrested by the navy.', date: 'Day 4', from: 'Teller' }], clocks: 1, later: 0, waiting: 0 }), JSON.stringify(s2.p.news));
+    const h2 = s2.c.ok ? files.get(s2.c.file).header.chat_metadata : {};
+    check('the scene\'s chat is seeded with it: the clock caught up, the events in its ledger as facts marked as news', s2.c.ok && h2.dooms_world.clocks.blockade === 2 && same((h2.dooms_canon.entries || []).map(x => [x.kind, x.name, x.text]), [['fact', 'The Kestrel', 'The Kestrel was burned at her moorings on the quay. (news from elsewhere, Day 4)'], ['fact', 'Captain Reyes', 'Captain Reyes was arrested by the navy. (news from elsewhere, Day 4)']]), JSON.stringify([s2.c.ok, s2.c.reason, h2.dooms_world && h2.dooms_world.clocks, h2.dooms_canon && h2.dooms_canon.entries]));
+    check('its brief says it since last time: the events, then the clock by its public face', s2.c.ok && h2.dooms_hub.brief.includes('Since last time: Elsewhere, Day 4: The Kestrel was burned at her moorings on the quay; Elsewhere, Day 4: Captain Reyes was arrested by the navy; Day 4: The blockade: Cargo is searched on the quay; prices of salt and lamp oil rise.'), h2.dooms_hub && h2.dooms_hub.brief);
+    check('the story\'s memory keeps it, and it has reached the story: nothing is due a second time', hub.worldEntry(W2).memory.stores.dooms_world.clocks.blockade === 2 && ledger(W2).length === 2 && newsNow().items.every(i => i.taken[W2] === 's1') && hub.worldNews(W2).due === 0, JSON.stringify([ledger(W2), newsNow().items.map(i => i.taken)]));
+    check('the story it came from is as it was, to the letter', JSON.stringify(hub.worldEntry(W)) === jackWas);
+
+    // The second story's scene ends on Day 6 with news of its own: the first story stands at Day 4.
+    chat.push(user('I win the pit fight.'));
+    chat.push({ is_user: false, name: 'Narrator', mes: 'The crowd roars.', extra: {} });
+    dated('Day 6', 'dusk');
+    await persistence.saveChatData({ immediate: true });
+    await loaders();
+    recapReply = JSON.stringify({ recap: 'Jordan won the pit fight.', people: [], threads: { closed: [], opened: [] }, world: [{ about: 'The Anchor', what: 'A stranger won the pit fight at the Anchor.' }] });
+    const e2 = await hub.endScene({ skipCanon: true, skipWorld: true });
+    check('its End sends out its own event and no clock: the clock it caught up with is not sent back as its own move', e2.ok && same(e2.news, { events: 1, clocks: 0, to: ['Teller'] }) && same(itemsOf().slice(-1), [['event', 'A stranger won the pit fight at the Anchor.', W2, 's1', 'Day 6']]), JSON.stringify([e2.ok, e2.reason, e2.news, itemsOf()]));
+    await front('Teller.png', 'Teller', 'Teller - the first story');
+    openersWhen = { date: 'Day 4', time: 'night' };
+    const p3 = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'now' } });
+    check('the first story, still on Day 4, is not told of Day 6: it is in its future, and waits', p3.ok && same(p3.news, { events: [], clocks: 0, later: 1, waiting: 0 }) && !openersAsked.user.includes('News of the world') && hub.worldNews(W).later === 1 && hub.worldNews(W).due === 0, JSON.stringify([p3.ok, p3.reason, p3.news]));
+    hub.cancelStart();
+    openersWhen = { date: 'Day 7', time: 'dawn' };
+    const s3 = await start(W, { id: 'days' });
+    const h3 = s3.c.ok ? files.get(s3.c.file).header.chat_metadata : {};
+    check('started some days later, the world moved to Day 7 first: now it is told, and takes it in', s3.c.ok && same(s3.p.news, { events: [{ text: 'A stranger won the pit fight at the Anchor.', date: 'Day 6', from: 'Bard' }], clocks: 0, later: 0, waiting: 0 }) && openersAsked.user.includes('- A stranger won the pit fight at the Anchor. (Day 6)\n') && h3.dooms_hub.brief.includes('Since last time: Elsewhere, Day 6: A stranger won the pit fight at the Anchor') && same(ledger(W), ['The Anchor: A stranger won the pit fight at the Anchor. (news from elsewhere, Day 6)']) && newsNow().items.find(i => i.story === W2).taken[W] === 's2', JSON.stringify([s3.c.ok, s3.c.reason, s3.p.news, ledger(W)]));
+
+    // Sharing switched off for the world: its stories are as they were before there was any.
+    hub.setNewsShared(W, false);
+    recapReply = JSON.stringify({ recap: 'Nothing much.', people: [], threads: { closed: [], opened: [] }, world: [{ about: 'The quay', what: 'The quay was closed.' }] });
+    dated('Day 8', 'noon');
+    const before = itemsOf().length;
+    const e3 = await hub.endScene({ skipCanon: true, skipWorld: true });
+    check('switched off: the record is not asked for world events, and an End sends nothing out', e3.ok && hub.isNewsShared(W) === false && e3.news === undefined && !recapAsked.system.includes('"world"') && itemsOf().length === before && hub.worldNews(W).shared === false, JSON.stringify([e3.ok, e3.reason, e3.news]));
+    check('what was sent out before is kept, for when it is switched on again', before === 4 && hub.worldNews(W).events.length === 3);
+    hub.setNewsShared(W, true);
+
+    // One event taken out by hand; and a scene deleted takes with it what it sent out.
+    const gone = newsNow().items.find(i => i.text === 'Captain Reyes was arrested by the navy.').id;
+    check('an event taken out of the world\'s news by hand is gone from it', hub.removeWorldNews(W, gone) === true && hub.removeWorldNews(W, gone) === false && !itemsOf().some(x => x[1].startsWith('Captain Reyes')));
+    const del = await hub.deleteScene(W, 's1');
+    check('a scene deleted takes back what it sent out; what another story took in of it stays in that story', del.ok && !newsNow().items.some(i => i.story === W && i.scene === 's1') && same(itemsOf().map(x => x[1]), ['A stranger won the pit fight at the Anchor.']) && ledger(W2).length === 2 && hub.worldEntry(W2).memory.stores.dooms_world.clocks.blockade === 2, JSON.stringify([del.ok, del.reason, itemsOf(), ledger(W2)]));
+
+    for (const id of [W, W2]) for (const sc of hub.worldEntry(id).scenes.filter(x => x.status === 'open')) hub.setSceneAside(id, sc.id);
+    extensionSettings.lorebook = lbWas;
+    extensionSettings.liveWorld.pack = packWas;
+    extensionSettings.hub.sceneCards = cardsWas;
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+    hub.__setRecapTransport(null);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

@@ -207,6 +207,30 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-conflict:last-child { border-bottom: 0; }
 .dooms-atlas-setup-card .dooms-atlas-conflict p { font-size: 0.88em; line-height: 1.45; overflow-wrap: anywhere; }
 .dooms-atlas-conflict-source { color: var(--atlas-muted); font-style: italic; }
+/* A world's news between its stories (D235): what a scene sends out, on the End sheet; what reaches a scene, on the Start sheet; the switch and the list, under the story chooser. */
+.dooms-atlas-world-news legend { padding: 0; }
+.dooms-atlas-world-news legend > i { color: var(--atlas-accent2); margin-right: 3px; }
+.dooms-atlas-news-out .dooms-atlas-check { font-size: 0.88em; line-height: 1.45; }
+.dooms-atlas-news-out input:not(:checked) + span { opacity: 0.55; text-decoration: line-through; text-decoration-color: var(--atlas-muted); }
+.dooms-atlas-news-meta { color: var(--atlas-muted); font-size: 0.9em; white-space: normal; }
+.dooms-atlas-news-out .dooms-atlas-news-meta::before { content: '· '; }
+.dooms-atlas-end-news-own { font-size: 0.88em; }
+.dooms-atlas-news-in > summary { cursor: pointer; list-style: none; }
+.dooms-atlas-news-in > summary::-webkit-details-marker { display: none; }
+.dooms-atlas-news-in > summary::after { content: ' ▸'; color: var(--atlas-muted); }
+.dooms-atlas-news-in[open] > summary::after { content: ' ▾'; }
+.dooms-atlas-news-items { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.dooms-atlas-news-in .dooms-atlas-news-items li { font-size: 0.86em; line-height: 1.45; padding-left: 12px; border-left: 2px solid var(--atlas-line); overflow-wrap: anywhere; }
+.dooms-atlas-news-in .dooms-atlas-news-meta::before { content: '· '; }
+.dooms-atlas-news-share { margin: 8px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.dooms-atlas-news-share .dooms-atlas-check { font-size: 0.82em; }
+.dooms-atlas-news-list { font-size: 0.78em; border: 1px solid var(--atlas-line); border-radius: var(--atlas-radius); padding: 0 8px; background: var(--atlas-panel2); }
+.dooms-atlas-news-list > summary { cursor: pointer; padding: 6px 0; color: var(--atlas-muted); overflow-wrap: anywhere; }
+.dooms-atlas-news-list .dooms-atlas-news-items { max-height: 220px; overflow: auto; margin: 0 0 8px; }
+.dooms-atlas-news-item { display: grid; grid-template-columns: minmax(0, 1fr) 26px; gap: 1px 4px; align-items: start; padding: 5px 0; border-top: 1px solid var(--atlas-line); }
+.dooms-atlas-news-item .dooms-atlas-news-text { grid-column: 1; line-height: 1.4; color: var(--atlas-text); overflow-wrap: anywhere; }
+.dooms-atlas-news-item .dooms-atlas-news-meta { grid-column: 1; font-size: 0.95em; overflow-wrap: anywhere; }
+.dooms-atlas-news-item .dooms-atlas-icon-btn { grid-column: 2; grid-row: 1 / span 2; }
 /* Where the people stand and the threads, on a record's sheet (D188). */
 .dooms-atlas-cont { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .dooms-atlas-cont-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
