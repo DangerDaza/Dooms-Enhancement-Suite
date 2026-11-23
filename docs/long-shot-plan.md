@@ -2521,3 +2521,30 @@ unfolded, clocks alone, what waits; the switch and the list under the
 story chooser, off, waiting, on a phone). SillyTavern itself was not
 run, and no model was asked what it would list as a world event: the
 request's wording is untried against a real narrator.
+
+## 75. Canon follows the messages it read (2026-11-23, D236)
+
+The owner: "if a user deletes or swipes a message it is possible that
+that message was used in a canon update, and it needs to be removed and
+redone." What fed which update was traced across DES: the tracker,
+stats, vitals and their marks, dice and inventory are kept per swipe and
+already follow a delete or a swipe. Three things read several messages
+at once and wrote lasting canon without following them: Canon's ledger,
+Live World's advances and a scene's End. This is the first of the three;
+the owner chose that Canon and Live World put themselves right on their
+own, and that a scene's End offers a Redo End button instead.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D236 | A Canon run that read a message version no longer in front is taken back and the ledger read again | **Held.** **A version**: every message read gets an id per swipe (`dooms_canon_v`, `{ [swipe index]: id }`, on the message beside its stamp), so a new swipe, a swipe to another, and the reply a regenerate brings (even one Live World hands the old stamp) are each a version of their own; swiping back finds the old id. **The note**: a recent run keeps, with the ledger (`runs`, the newest 24), the versions it read and what it changed, found by the ledger before and after: the ids it added, the old text of what it rewrote, the lines it dropped or the caps pushed out (`recordCanonRun`). A run over a whole scene (End's) and an answer that rode another request are not noted: those are End's and the long read's. **Taken back** (`rollbackCanon`, on a delete and a swipe): the first run that read a version no longer in front and every run after it, newest first: a line added goes, a line rewritten gets its old text back, a line dropped comes back unless its kind and name are taken again; a line that is yours (pinned or written by you) is never touched. The older rewind (D109, by the stamp of the newest reply) runs after it, for runs from before. **Redone**: one run over what the runs taken back read together (up to 60 messages, their adds summed up to 32), four seconds after (swipes browsed one after another ask once), or, when a reply is being written (a new swipe, a regenerate), once it lands. A toast says how many line changes went. A run whose read message goes while it is asked writes nothing and is asked again. **Not a version change**: an edit; per-swipe caching (swiping back reads again rather than restoring). |
+
+Tests: `tools/canon-test.mjs` (9: a run noted and one that read nothing,
+the old text and the dropped line kept, the notes kept through
+normalising and capped, nothing gone, one run back, both back newest
+first, a pinned line, a name taken again). `tools/canon-flow-test.mjs`
+§7 (12: a run's versions; a swipe to another version taken back, a
+dropped line and an old text back, a pinned line untouched; the redo;
+swiping back; a new swipe waiting for its reply; a regenerate with the
+old stamp; a message from the middle taking every later run with it; a
+message gone while a run is asked). SillyTavern itself was not run: the
+swipe and regenerate events are as the code reads them.

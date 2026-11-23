@@ -194,5 +194,101 @@ extensionSettings.canon.enabled = false;
 cn.onCanonChatChanged();
 check('Canon off: no ledger, the slot emptied, nothing counted', cn.getCanon() === null && slots['dooms-canon'].value === '' && (cn.onCanonMessageReceived(), cn.getCanon() === null));
 
+console.log('\n§7 a message that fed a run, deleted, swiped or regenerated: the run taken back and redone');
+extensionSettings.canon = { enabled: true, every: 50, recentMessages: 6, inject: true, depth: 3, role: 'system', maxChars: 1500 };
+resetMeta(); chat.length = 0; globalThis.__DES_CTX__.chatId = 'rollback-chat';
+cn.onCanonChatChanged();
+const answer = (obj) => async (prompt) => { asked.push(prompt.user); return JSON.stringify(obj); };
+let asked = [];
+chat.push(user('I meet the smith.'));
+chat.push(ai('Hask the smith grunts a greeting.'));
+chat.push(user('I ask about the sword.'));
+chat.push(ai('"Done by the new moon," Hask says.'));
+cn.onCanonMessageReceived();
+cn.__setCanonTransport(answer({ add: [{ kind: 'person', name: 'Hask', text: 'The smith; gruff.' }, { kind: 'promise', name: 'The sword', text: 'Hask will finish it by the new moon.' }] }));
+let r7 = await cn.updateCanon({ reason: 'manual' });
+s = cn.getCanon();
+check('a run notes what it read, one version id per message, and what it added', r7.ok && s.runs.length === 1 && s.runs[0].read.length === 4 && s.runs[0].added.length === 2 && chat.every(m => m.dooms_canon_v && typeof m.dooms_canon_v['0'] === 'string'), JSON.stringify(s.runs));
+cn.addCanonLine({ kind: 'secret', name: 'The ore', text: 'Stolen from the mine.' });
+chat.push(user('I wait.'));
+chat.push(ai('Hask hammers; the sword is nearly done.'));
+cn.__setCanonTransport(answer({ add: [{ kind: 'promise', name: 'The sword', text: 'Nearly done.' }], drop: ['Hask'] }));
+r7 = await cn.updateCanon({ reason: 'manual' });
+s = cn.getCanon();
+check('a second run rewrote one line and dropped another', r7.ok && s.runs.length === 2 && s.entries.find(e => e.name === 'The sword').text === 'Nearly done.' && !s.entries.some(e => e.name === 'Hask'));
+
+// The swipe: the newest reply swiped to an existing other version.
+const lastAi = chat[5];
+lastAi.swipes.push('Hask sleeps by the forge.');
+lastAi.swipe_id = 1; lastAi.mes = 'Hask sleeps by the forge.';
+asked = [];
+cn.__setCanonTransport(answer({ add: [{ kind: 'fact', name: 'The forge', text: 'Hask sleeps beside it.' }] }));
+cn.onCanonMessageSwiped(5);
+s = cn.getCanon();
+check('swiped to another version: the second run is taken back (old text back, the dropped line back), the first stands, your line untouched', s.runs.length === 1 && s.entries.find(e => e.name === 'The sword').text === 'Hask will finish it by the new moon.' && s.entries.some(e => e.name === 'Hask') && s.entries.some(e => e.name === 'The ore' && e.pinned), JSON.stringify(s.entries.map(e => `${e.name}=${e.text}`)));
+await wait(4300);
+s = cn.getCanon();
+check('the redo runs over the chat as it is now, and is noted like any run', asked.length === 1 && asked[0].includes('Hask sleeps by the forge.') && !asked[0].includes('nearly done') && s.runs.length === 2 && s.entries.some(e => e.name === 'The forge'), JSON.stringify({ asked: asked.length, runs: s.runs.length }));
+
+// Swiping back: the redo read the version now gone, so it is taken back and redone again.
+lastAi.swipe_id = 0; lastAi.mes = lastAi.swipes[0];
+asked = [];
+cn.__setCanonTransport(answer({ add: [] }));
+cn.onCanonMessageSwiped(5);
+check('swiping back takes the redo back (its line goes)', !cn.getCanon().entries.some(e => e.name === 'The forge'));
+await wait(4300);
+check('and reads the version in front again', asked.length === 1 && asked[0].includes('nearly done'));
+
+// A new swipe: the ledger is put back at once, the redo waits for the reply.
+lastAi.swipes.push(''); lastAi.swipe_id = 2; lastAi.mes = '';
+asked = [];
+cn.__setCanonTransport(answer({ add: [{ kind: 'fact', name: 'The quench', text: 'The blade cracked.' }] }));
+const runsBefore = cn.getCanon().runs.length;
+cn.onCanonMessageSwiped(5);
+await wait(4300);
+check('a new swipe: the run that read the old version goes, nothing asked while the reply is written', cn.getCanon().runs.length === runsBefore - 1 && asked.length === 0);
+lastAi.swipes[2] = 'The blade cracks in the quench.'; lastAi.mes = lastAi.swipes[2];
+cn.onCanonMessageReceived(5, 'swipe');
+await wait(4300);
+check('the reply lands: the redo goes and reads it', asked.length === 1 && asked[0].includes('The blade cracks') && cn.getCanon().entries.some(e => e.name === 'The quench'));
+
+// A regenerate: the reply deleted and a new one in its place (a new message, even if Live World hands it the old stamp).
+asked = [];
+const oldStamp = chat[5].dooms_canon_id;
+chat.splice(5, 1);
+STUB.__setSendPress(true);
+cn.onCanonMessageDeleted();
+s = cn.getCanon();
+check('a regenerate\'s deletion: the run taken back, the redo waits for the generation', !s.entries.some(e => e.name === 'The quench') && asked.length === 0);
+chat.push({ ...ai('Hask shrugs and starts over.'), dooms_canon_id: oldStamp, dooms_world_id: oldStamp });
+STUB.__setSendPress(false);
+cn.__setCanonTransport(answer({ add: [{ kind: 'fact', name: 'The second blade', text: 'Begun again.' }] }));
+cn.onCanonMessageReceived(5, 'regenerate');
+await wait(4300);
+check('the regenerated reply lands: the redo reads it', asked.length === 1 && asked[0].includes('starts over') && cn.getCanon().entries.some(e => e.name === 'The second blade'));
+
+// A message from the middle deleted: every run that read it, and every run after, taken back; one redo over what they read.
+asked = [];
+const runsNow = cn.getCanon().runs.length;
+chat.splice(1, 1);
+cn.__setCanonTransport(answer({ add: [{ kind: 'person', name: 'Hask', text: 'The smith.' }] }));
+cn.onCanonMessageDeleted();
+s = cn.getCanon();
+check('a message from the middle deleted: all the runs that read it are taken back, your line stands', runsNow === 2 && s.runs.length === 0 && s.entries.length === 1 && s.entries[0].name === 'The ore', JSON.stringify(s.entries.map(e => e.name)));
+await wait(4300);
+check('one redo over the chat as it is', asked.length === 1 && cn.getCanon().runs.length === 1 && cn.getCanon().entries.some(e => e.name === 'Hask'));
+
+// A message read by a run deleted while the run is being asked: the answer is not used.
+let release;
+cn.__setCanonTransport(() => new Promise(res => { release = () => res(JSON.stringify({ add: [{ kind: 'fact', name: 'Stale', text: 'From a chat that changed.' }] })); }));
+const pending = cn.updateCanon({ reason: 'manual' });
+await wait(10);
+chat.splice(0, 1);
+release();
+const rp = await pending;
+check('a message the run read went while it was asked: nothing from it is written', !rp.ok && rp.reason === 'changed' && !cn.getCanon().entries.some(e => e.name === 'Stale'));
+cn.__setCanonTransport(answer({ add: [] }));
+await wait(4300);
+
 console.log(`\n${failures === 0 ? 'All canon flow checks pass' : `${failures} FAILURE(S)`}`);
 process.exit(failures === 0 ? 0 : 1);

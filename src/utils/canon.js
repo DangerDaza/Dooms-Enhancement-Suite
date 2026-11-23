@@ -20,6 +20,8 @@ export const MAX_TEXT = 200;
 export const COUNTED_KEEP = 400;
 export const ADDS_PER_RUN = 8;
 export const DROPS_PER_RUN = 4;
+export const RUNS_KEEP = 24;
+export const MAX_READ = 80;
 
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
 const isInt = (n) => Number.isInteger(n);
@@ -67,7 +69,7 @@ export function canonConfig(settings) {
 // ─── The ledger ─────────────────────────────────────────────────────────
 
 export function emptyCanon() {
-    return { v: 1, entries: [], counted: [], sinceLast: 0, last: null, lastError: null, retryNext: false, seq: 0 };
+    return { v: 1, entries: [], counted: [], sinceLast: 0, last: null, lastError: null, retryNext: false, seq: 0, runs: [] };
 }
 
 function cleanEntry(e, s) {
@@ -108,7 +110,18 @@ export function normalizeCanon(raw) {
     s.last = r.last && typeof r.last === 'object' ? { msgId: typeof r.last.msgId === 'string' ? r.last.msgId : null, ranAt: Number.isFinite(r.last.ranAt) ? r.last.ranAt : 0, ok: r.last.ok === true, added: isInt(r.last.added) ? r.last.added : 0, dropped: isInt(r.last.dropped) ? r.last.dropped : 0, gameDate: clean(r.last.gameDate, 80) } : null;
     s.lastError = r.lastError && typeof r.lastError === 'object' ? { error: clean(r.lastError.error, 300), kind: r.lastError.kind === 'error' ? 'error' : 'invalid', ranAt: Number.isFinite(r.lastError.ranAt) ? r.lastError.ranAt : 0 } : null;
     s.retryNext = r.retryNext === true;
+    s.runs = (Array.isArray(r.runs) ? r.runs : []).map(cleanRun).filter(Boolean).slice(-RUNS_KEEP);
     return s;
+}
+
+/** A run's undo note made safe (what it read, and what it added, rewrote and removed), or null. */
+function cleanRun(x) {
+    if (!x || typeof x !== 'object') return null;
+    const read = (Array.isArray(x.read) ? x.read : []).filter(v => typeof v === 'string' && v).slice(0, MAX_READ);
+    if (!read.length) return null;
+    const ids = (a) => (Array.isArray(a) ? a : []).filter(v => typeof v === 'string' && v);
+    const lines = (a) => (Array.isArray(a) ? a : []).map(e => cleanEntry(e, { seq: 0 })).filter(Boolean);
+    return { read, at: Number.isFinite(x.at) ? x.at : 0, added: ids(x.added), rewrote: lines(x.rewrote), removed: lines(x.removed) };
 }
 
 /** The caps: at most PER_KIND of a kind and TOTAL in all, the oldest unpinned going first. */
@@ -350,6 +363,69 @@ export function removeCanonEntry(state, id) {
 }
 
 // ─── The rewind ─────────────────────────────────────────────────────────
+
+/**
+ * A run's undo note kept with the ledger: the message versions it read
+ * (`read`, one id per message and swipe) and what it changed, found by
+ * comparing the ledger before and after it (lines added, the old text of
+ * lines it rewrote, lines it dropped or the caps pushed out). The newest
+ * RUNS_KEEP are kept. A run that read nothing is not noted.
+ */
+export function recordCanonRun(before, after, { read = [], at = 0 } = {}) {
+    const ids = (Array.isArray(read) ? read : []).filter(v => typeof v === 'string' && v).slice(0, MAX_READ);
+    if (!ids.length) return after;
+    const was = new Map(before.entries.map(e => [e.id, e]));
+    const now = new Map(after.entries.map(e => [e.id, e]));
+    const added = after.entries.filter(e => !was.has(e.id)).map(e => e.id);
+    const rewrote = before.entries.filter(e => now.has(e.id) && now.get(e.id).text !== e.text).map(e => ({ ...e }));
+    const removed = before.entries.filter(e => !now.has(e.id)).map(e => ({ ...e }));
+    const next = cloneState(after);
+    if (!Array.isArray(next.runs)) next.runs = [];
+    next.runs.push({ read: ids, at, added, rewrote, removed });
+    next.runs = next.runs.slice(-RUNS_KEEP);
+    return next;
+}
+
+/**
+ * The runs that read a message version no longer in the chat (deleted,
+ * swiped away, regenerated) taken back: the first such run and every run
+ * after it, newest first, so each is undone over the ledger it left.
+ * A line a run added goes; a line it rewrote gets its old text back; a
+ * line it dropped comes back unless its kind and name are taken again.
+ * Lines that are yours (pinned, or written by you) are never touched.
+ * The same state back when nothing read is gone.
+ * @returns {{ state: object, runs: number, lines: number, span: number }}  span: how many messages the runs taken back read, together
+ */
+export function rollbackCanon(state, presentVersions) {
+    const runs = Array.isArray(state.runs) ? state.runs : [];
+    const present = new Set(Array.isArray(presentVersions) ? presentVersions : []);
+    const first = runs.findIndex(r => r.read.some(v => !present.has(v)));
+    if (first < 0) return { state, runs: 0, lines: 0, span: 0 };
+    const next = cloneState(state);
+    const undone = next.runs.splice(first);
+    const mine = (e) => e.pinned || e.by === 'you';
+    let lines = 0;
+    for (const r of undone.slice().reverse()) {
+        for (const id of r.added) {
+            const i = next.entries.findIndex(e => e.id === id);
+            if (i >= 0 && !mine(next.entries[i])) { next.entries.splice(i, 1); lines++; }
+        }
+        for (const old of r.rewrote) {
+            const i = next.entries.findIndex(e => e.id === old.id);
+            if (i >= 0 && !mine(next.entries[i])) { next.entries[i] = { ...old }; lines++; }
+        }
+        for (const old of r.removed) {
+            const key = canonKey(old.kind, old.name);
+            if (next.entries.some(e => e.id === old.id || canonKey(e.kind, e.name) === key)) continue;
+            next.entries.push({ ...old });
+            lines++;
+        }
+    }
+    next.entries = capEntries(next.entries);
+    if (next.last && undone.length) next.last = null;
+    const span = new Set(undone.flatMap(r => r.read)).size;
+    return { state: next, runs: undone.length, lines, span };
+}
 
 /**
  * The ledger brought back to the chat it sits in (D109): a line stamped

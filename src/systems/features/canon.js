@@ -22,13 +22,17 @@ import { sceneTranscript, RECAP_BUDGET } from '../../utils/hub.js';
 import {
     CANON_SLOT, canonConfig, emptyCanon, normalizeCanon, countCanonReply, canonDue, buildCanonPrompt, parseCanonReply,
     validateCanon, applyCanon, failCanon, addCanonEntry, editCanonEntry, pinCanonEntry, removeCanonEntry, reconcileCanon,
-    buildCanonBlock, canonToLorebookEntries, canonToMarkdown,
+    buildCanonBlock, canonToLorebookEntries, canonToMarkdown, recordCanonRun, rollbackCanon, ADDS_PER_RUN,
 } from '../../utils/canon.js';
 import { resolvePersonaName } from './diceRolls.js';
 
 export const CANON_CHANGED_EVENT = 'dooms:canon-changed';
 const META_KEY = 'dooms_canon';
 const STAMP = 'dooms_canon_id';
+const VERSIONS = 'dooms_canon_v';    // { [swipe index]: id }: one id per version of a message, so a swipe or a regenerate is a version gone
+const REDO_MAX_MESSAGES = 60;
+const REDO_MAX_ADDS = 32;
+const REDO_DELAY_MS = 4000;    // a little longer than a run's: swipes browsed one after another ask once
 const RUN_DELAY_MS = 1500;
 const BUSY_RETRY_MS = 4000;
 
@@ -40,6 +44,7 @@ let updating = false;
 let timer = null;
 let transport = null;      // test hook: ({ system, user }) => Promise<string>
 let lorebookSink = null;   // test hook, or the lazy lorebookAPI
+let redo = null;           // runs taken back and not yet redone: { runs, span }; the redo waits for a reply in flight to land
 
 function cfg() {
     return canonConfig(extensionSettings);
@@ -85,6 +90,69 @@ function stamp(m) {
     return m[STAMP];
 }
 
+/**
+ * The id of the version of a message in front (its swipe), given the
+ * first time it is read. A new swipe, or the reply a regenerate brings,
+ * is a new version with an id of its own; swiping back finds the old one.
+ */
+function versionId(m, { give = true } = {}) {
+    if (!m || typeof m !== 'object') return '';
+    const k = String(Number.isInteger(m.swipe_id) && m.swipe_id >= 0 ? m.swipe_id : 0);
+    const map = m[VERSIONS] && typeof m[VERSIONS] === 'object' && !Array.isArray(m[VERSIONS]) ? m[VERSIONS] : null;
+    if (map && typeof map[k] === 'string' && map[k]) return map[k];
+    if (!give) return '';
+    const id = `v${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+    m[VERSIONS] = { ...(map || {}), [k]: id };
+    return id;
+}
+
+/** The versions in front now: the ids already given (a version never read fed nothing). */
+function presentVersions() {
+    const list = chatArray();
+    if (!list) return [];
+    const out = [];
+    for (const m of list) { const v = versionId(m, { give: false }); if (v) out.push(v); }
+    return out;
+}
+
+/** The messages a recent run reads (as buildRecentText picks them: the newest `count` with text, no system lines or tool records). */
+function readVersions(list, count) {
+    const out = [];
+    for (let i = list.length - 1; i >= 0 && out.length < count; i--) {
+        const m = list[i];
+        if (!m || typeof m !== 'object' || m.is_system || isToolRecord(m)) continue;
+        if (typeof m.mes !== 'string' || !m.mes.trim()) continue;
+        out.push(versionId(m));
+    }
+    return out.reverse();
+}
+
+function canonNotice(text) {
+    try { console.debug(`[Dooms Tracker] Canon: ${text}`); } catch (e) { /* no console */ }
+    try {
+        const t = typeof window !== 'undefined' ? window.toastr : null;
+        if (t && typeof t.info === 'function') t.info(text, 'Canon', { timeOut: 6000, escapeHtml: true });
+    } catch (e) { /* no toastr */ }
+}
+
+/**
+ * A message that fed the ledger is gone, swiped away or regenerated: the
+ * runs that read it are taken back and one run over the chat as it is now
+ * is asked for. A reply still being written is waited for (the redo goes
+ * when it lands); otherwise the redo is scheduled at once.
+ */
+function rollback(why) {
+    if (!ready()) return false;
+    const r = rollbackCanon(state, presentVersions());
+    if (!r.runs) return false;
+    log(`a ${why} message had fed ${r.runs} run(s): ${r.lines} line change(s) taken back`);
+    commit(r.state, { source: 'rollback', at: why }, { immediate: true });
+    redo = { runs: (redo ? redo.runs : 0) + r.runs, span: Math.max(redo ? redo.span : 0, r.span) };
+    if (r.lines) canonNotice(`A ${why} message had fed the ledger: ${r.lines} line change${r.lines === 1 ? '' : 's'} taken back. Canon reads the chat again${mainGenerationBusy() ? ' once the reply lands' : ''}.`);
+    if (!mainGenerationBusy()) scheduleRun('redo', REDO_DELAY_MS);
+    return true;
+}
+
 function presentIds() {
     const list = chatArray();
     if (!list) return [];
@@ -124,6 +192,7 @@ export function onCanonChatChanged() {
     state = null;
     loadedMeta = null;
     loadedChat = undefined;
+    redo = null;
     if (timer) { clearTimeout(timer); timer = null; }
     if (!isCanonOn()) { clearSlot(); notify({ source: 'chat' }); return; }
     const id = chatId();
@@ -143,6 +212,7 @@ export function onCanonMessageReceived(messageId, type) {
     const m = list && list.length ? list[list.length - 1] : null;
     if (!isReply(m)) return;
     if (!ready()) return;
+    if (redo && !timer && !updating) scheduleRun('redo', REDO_DELAY_MS);    // the reply a rollback waited for has landed
     if (type === 'first_message' || list.length <= 1) return;
     const r = countCanonReply(state, stamp(m));
     if (!r.counted) return;
@@ -153,7 +223,24 @@ export function onCanonMessageReceived(messageId, type) {
 /** MESSAGE_DELETED: a reply gone takes its lines and its count. */
 export function onCanonMessageDeleted() {
     if (!ready()) return;
+    rollback('deleted');
     reconcile({ at: 'delete' });
+}
+
+/** MESSAGE_SWIPED: the version that fed the ledger is no longer in front; a new swipe's redo waits for it to land. */
+export function onCanonMessageSwiped(index) {
+    if (!ready()) return;
+    const list = chatArray();
+    const m = list && list.length ? (Number.isInteger(index) && list[index] ? list[index] : list[list.length - 1]) : null;
+    const fresh = !!(m && Array.isArray(m.swipes) && !(typeof m.swipes[m.swipe_id || 0] === 'string' && m.swipes[m.swipe_id || 0].length));
+    if (!fresh) { rollback('swiped'); return; }
+    // A new swipe is about to be written: the ledger is put back now, the redo waits for the reply.
+    const r = rollbackCanon(state, presentVersions());
+    if (!r.runs) return;
+    commit(r.state, { source: 'rollback', at: 'swiped' }, { immediate: true });
+    redo = { runs: (redo ? redo.runs : 0) + r.runs, span: Math.max(redo ? redo.span : 0, r.span) };
+    log(`a swiped message had fed ${r.runs} run(s): ${r.lines} line change(s) taken back; the redo waits for the new swipe`);
+    if (r.lines) canonNotice(`A swiped message had fed the ledger: ${r.lines} line change${r.lines === 1 ? '' : 's'} taken back. Canon reads the chat again once the new swipe lands.`);
 }
 
 /** GENERATION_STARTED: the block rides the generation (not a quiet one), raw, at the configured depth. */
@@ -173,6 +260,7 @@ export function onCanonGenerationStarted(type, data, dryRun) {
 /** The tracker's separate request done: a run that waited for a free line goes now. */
 export function onCanonTrackerUpdateComplete() {
     if (!ready()) return;
+    if (redo && !timer && !updating) { scheduleRun('redo', REDO_DELAY_MS); return; }
     if (canonDue(state, cfg().every) && !timer && !updating) scheduleRun('tracker');
 }
 
@@ -223,6 +311,8 @@ const SCENE_ADDS = 16;
 const SCENE_DROPS = 8;
 
 export async function updateCanon({ reason = 'manual', scope = 'recent', text: given = '', adds: more = 0, also = '', before = '' } = {}) {
+    // A redo after a rollback reads what the runs it replaces read together, with their adds between them.
+    const redoing = reason === 'redo' && redo && scope !== 'scene' ? redo : null;
     if (!ready()) return { ok: false, reason: 'off' };
     if (updating) return { ok: false, reason: 'running' };
     if (reason !== 'manual' && scope !== 'scene' && mainGenerationBusy()) { scheduleRun(reason, BUSY_RETRY_MS); return { ok: false, reason: 'busy' }; }
@@ -238,9 +328,12 @@ export async function updateCanon({ reason = 'manual', scope = 'recent', text: g
         const scene = scope === 'scene';
         // A run over a whole scene reads the scene's last page; a run handed its own text reads that (one page of a long
         // chat read page by page, docs/long-shot-plan.md D198), with the ledger as the pages before left it.
+        const count = redoing ? Math.min(REDO_MAX_MESSAGES, Math.max(c.recentMessages, redoing.span)) : c.recentMessages;
         const read = scene
             ? (typeof given === 'string' && given.trim() ? given : sceneTranscript(chatArray() || [], { budget: RECAP_BUDGET, persona: players[0] || 'Player' }))
-            : buildRecentText(chatArray() || [], { count: c.recentMessages, persona: players[0] || 'Player' });
+            : buildRecentText(chatArray() || [], { count, persona: players[0] || 'Player' });
+        // What a recent run read, version by version, so a message deleted or swiped later takes the run back (a scene's run is End's).
+        const versions = scene ? [] : readVersions(chatArray() || [], count);
         // How the player says the scene ended (D219), where the chat stops short of it: it happened, and is read with the scene.
         const extra = scene && typeof also === 'string' ? also.replace(/\s+/g, ' ').trim().slice(0, 2000) : '';
         // What the player said happens next when they started the scene (D222): what it says had happened since the scene before
@@ -249,7 +342,8 @@ export async function updateCanon({ reason = 'manual', scope = 'recent', text: g
         const lead = earlier ? `Before this scene opened, ${players[0] || 'the player'} said this of what had happened since the scene before (their own words: what it says had already happened by then did happen, off the page; what it only asks for, plans or expects did not):\n${earlier}\n\nThe scene:\n` : '';
         const recent = `${lead}${read}${extra ? `\n\nHow the scene ended, in ${players[0] || 'the player'}'s own words (it happened, after the last of what is written above):\n${extra}` : ''}`;
         // A whole chat handed over in one request may add more than a scene's page does (D198), within the ledger's own limits.
-        const caps = scene ? { adds: Math.max(SCENE_ADDS, Math.min(64, Math.floor(Number(more) || 0))), drops: SCENE_DROPS } : {};
+        const caps = scene ? { adds: Math.max(SCENE_ADDS, Math.min(64, Math.floor(Number(more) || 0))), drops: SCENE_DROPS }
+            : redoing ? { adds: Math.min(REDO_MAX_ADDS, ADDS_PER_RUN * Math.max(1, redoing.runs)) } : {};
         const prompt = buildCanonPrompt({ entries: state.entries, recent, now, player: players, names: knownNames(), ...caps });
         const external = extensionSettings.generationMode === 'external';
         const messages = [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }];
@@ -266,6 +360,11 @@ export async function updateCanon({ reason = 'manual', scope = 'recent', text: g
             return { ok: false, reason: 'busy' };
         }
         const text = typeof result === 'string' ? result : (result && typeof result === 'object' && typeof result.text === 'string' ? result.text : String(result ?? ''));
+        // A message the run read went while it was asked: what it says is of a chat that is no longer there; asked again.
+        if (versions.length) {
+            const here = new Set(presentVersions());
+            if (versions.some(x => !here.has(x))) { scheduleRun(redoing ? 'redo' : reason); return { ok: false, reason: 'changed' }; }
+        }
         const v = validateCanon(parseCanonReply(text), state, caps);
         const list = chatArray();
         const last = list && list.length ? list[list.length - 1] : null;
@@ -275,8 +374,10 @@ export async function updateCanon({ reason = 'manual', scope = 'recent', text: g
             log('run discarded', { errors: v.errors, reply: text.slice(0, 400) });
             return { ok: false, reason: 'invalid', errors: v.errors };
         }
-        const next = applyCanon(state, v.clean, { msgId, gameDate: now.date || '', ranAt: Date.now() });
-        commit(next, { source: 'run' }, { immediate: true });
+        const ranAt = Date.now();
+        const next = recordCanonRun(state, applyCanon(state, v.clean, { msgId, gameDate: now.date || '', ranAt }), { read: versions, at: ranAt });
+        if (redoing && redo === redoing) redo = null;
+        commit(next, { source: redoing ? 'redo' : 'run' }, { immediate: true });
         log('run applied', { added: next.last.added, dropped: next.last.dropped, dropsRefused: v.errors });
         return { ok: true, added: next.last.added, dropped: next.last.dropped, errors: v.errors };
     } catch (e) {
