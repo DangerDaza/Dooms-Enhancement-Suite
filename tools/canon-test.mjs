@@ -12,6 +12,7 @@ import {
     CANON_KINDS, PER_KIND, TOTAL, defaultCanonConfig, canonConfig, emptyCanon, normalizeCanon, countCanonReply, canonDue,
     buildCanonPrompt, parseCanonReply, validateCanon, applyCanon, failCanon, addCanonEntry, editCanonEntry, pinCanonEntry,
     removeCanonEntry, reconcileCanon, buildCanonBlock, canonToMarkdown, canonToLorebookEntries, describeCanonResult, canonKey,
+    recordCanonRun, rollbackCanon, RUNS_KEEP,
 } from '../src/utils/canon.js';
 
 let failures = 0;
@@ -107,6 +108,30 @@ console.log('\n§6 the block and the exports');
     check('lorebook entries: one per line, keyed by the name (a promise by its words too), titled so a later export finds them', lb.length === 4 && lb[0].comment === 'Canon · person: Old Marit' && same(lb[0].key, ['Old Marit']) && lb[3].key.includes('The fee') && lb[0].content === 'Old Marit: Keeps the Anchor.');
     check('the result lines', describeCanonResult({ ok: true, added: 2, dropped: 1 }).includes('2 lines added') && describeCanonResult({ ok: true, added: 0, dropped: 0 }) === 'Nothing new to record.' && describeCanonResult({ ok: false, reason: 'invalid', errors: ['x'] }).includes('discarded'));
     check('keys', canonKey('person', '  Old, Marit! ') === 'person|old marit' && CANON_KINDS.length === 6 && TOTAL === 160);
+}
+
+{
+    console.log('\n§ the runs taken back (a message they read deleted or swiped)');
+    let s0 = emptyCanon();
+    const r1 = applyCanon(s0, { add: [{ kind: 'person', name: 'Hask', text: 'The smith.' }, { kind: 'fact', name: 'The forge', text: 'Hot.' }], drop: [] }, { msgId: 'm2', ranAt: 1 });
+    const s1 = recordCanonRun(s0, r1, { read: ['a', 'b'], at: 1 });
+    check('a run noted: what it read, the lines it added', s1.runs.length === 1 && s1.runs[0].read.join() === 'a,b' && s1.runs[0].added.length === 2);
+    check('a run that read nothing is not noted', recordCanonRun(s0, r1, { read: [] }).runs.length === 0);
+    const r2 = applyCanon(s1, { add: [{ kind: 'person', name: 'Hask', text: 'The smith; owes money.' }], drop: ['The forge'] }, { msgId: 'm4', ranAt: 2 });
+    const s2 = recordCanonRun(s1, r2, { read: ['b', 'c', 'd'], at: 2 });
+    check('a second run noted: the old text of the line it rewrote, the line it dropped', s2.runs[1].rewrote[0].text === 'The smith.' && s2.runs[1].removed[0].name === 'The forge');
+    check('normalize keeps the notes', normalizeCanon(JSON.parse(JSON.stringify(s2))).runs.length === 2 && normalizeCanon({ runs: Array.from({ length: RUNS_KEEP + 5 }, (x, i) => ({ read: [`r${i}`] })) }).runs.length === RUNS_KEEP);
+    check('everything read still there: nothing taken back, the same state', rollbackCanon(s2, ['a', 'b', 'c', 'd']).state === s2);
+    let rb = rollbackCanon(s2, ['a', 'b', 'd']);
+    check('a version only the second run read is gone: that run is taken back, the old text and the dropped line back', rb.runs === 1 && rb.state.runs.length === 1 && rb.state.entries.find(e => e.name === 'Hask').text === 'The smith.' && rb.state.entries.some(e => e.name === 'The forge') && rb.span === 3 && rb.state.last === null);
+    rb = rollbackCanon(s2, ['a', 'c', 'd']);
+    check('a version both read is gone: both runs taken back, newest first, the ledger empty', rb.runs === 2 && rb.state.runs.length === 0 && rb.state.entries.length === 0 && rb.span === 4);
+    const yours = { ...s2, entries: s2.entries.map(e => (e.name === 'Hask' ? { ...e, pinned: true } : e)) };
+    rb = rollbackCanon(yours, ['a', 'c', 'd']);
+    check('a line you pinned since is not touched', rb.state.entries.length === 1 && rb.state.entries[0].text === 'The smith; owes money.');
+    const retaken = { ...s2, entries: [...s2.entries, { id: 'c99', kind: 'fact', name: 'The forge', text: 'Cold now.', msgId: null, gameDate: '', at: 3, pinned: true, by: 'you' }] };
+    rb = rollbackCanon(retaken, ['a', 'b', 'd']);
+    check('a dropped line whose name is taken again does not come back twice', rb.state.entries.filter(e => e.name === 'The forge').length === 1 && rb.state.entries.find(e => e.name === 'The forge').text === 'Cold now.');
 }
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll canon checks pass');

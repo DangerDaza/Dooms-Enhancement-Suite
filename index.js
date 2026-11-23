@@ -176,7 +176,7 @@ import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 // Live World (docs/live-world-spec.md): per-chat clocks and last-seen places, the advancer, the narrator's line
 import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, getWorldState, getActivePack, getPackError, getMissingWorld, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
-import { initCanon, onCanonChatChanged, onCanonMessageReceived, onCanonMessageDeleted, onCanonGenerationStarted, updateCanon, clearCanon, exportCanonToLorebook, canonBookName, getCanon, isCanonOn, CANON_CHANGED_EVENT } from './src/systems/features/canon.js';
+import { initCanon, onCanonChatChanged, onCanonMessageReceived, onCanonMessageDeleted, onCanonMessageSwiped, onCanonGenerationStarted, updateCanon, clearCanon, exportCanonToLorebook, canonBookName, getCanon, isCanonOn, CANON_CHANGED_EVENT } from './src/systems/features/canon.js';
 import { sceneMenu, continueFresh, reopenCurrentScene, openSceneChat, initHub, onHubChatChanged, onHubPlayerChanged, onHubChatDeleted, onHubChatRenamed, onHubMessageReceived, onHubMessageDeleted, onHubGenerationStarted, hubWorldIds, cardOf, bindCard, unbindCard, makeNarratorCard, worldEntry, worldOfCard } from './src/systems/features/hub.js';
 import { hubConfig, hubStatusLine } from './src/utils/hub.js';
 import { onDialogueGenerationStarted, clearDialogueSlot } from './src/systems/features/exampleDialogue.js';
@@ -5136,7 +5136,7 @@ jQuery(async () => {
                 [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
                 // chatLoaded last: the handlers before it have run for the chat in front (src/core/chatGuard.js, D215).
                 [event_types.CHAT_CHANGED]: [...chatLoaders, chatLoaded],
-                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage, syncVitalCardForMessage],
+                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onCanonMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage, syncVitalCardForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices, onGlintUserMessageRendered],
                 [event_types.SETTINGS_UPDATED]: [updatePersonaAvatar, onHubPlayerChanged],    // the persona in use may be another: who is played, and the continuity books that follow (D230)
                 // onDiceReplyRendered reads a game-master call from the reply and
