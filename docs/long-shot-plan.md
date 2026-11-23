@@ -2208,3 +2208,26 @@ outranked.
 Tests: `tools/active-user-test.mjs` (the order, a story player who is no
 user character, a hand pick that is gone, the only one, nothing, a name
 that resembles another); `tools/load-check.mjs`.
+
+## 66. One continuity book a story (2026-11-23, D227)
+
+Every story keeps its own continuity book (D216, D189), and each is filed
+with the world's campaign so it is switched on and off with the
+campaign's other books. With two stories that put both books on in every
+chat: where Jack's people stood was read into Eli's replies, and Eli's
+into Jack's. The second story's book was also named only by a number
+("Nightcity - Scenes Continuity 2").
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D227 | Only the continuity book of the story in front is on; a later story's book says whose it is | **Held.** **Which are held back** (`heldBackBooks`, `src/utils/hub.js`): of the campaign's world, every story's book but the one of the story the chat in front belongs to (`storyInFront`). With the chat in front part of no story, every story's book. With one story that has a book, none: a world played as one story is as before. **How** (`setCampaignHoldBack`, `reconcileActiveCampaignBooks`, `src/systems/lorebook/campaignManager.js`): a book held back is not one the campaign wants, so the campaign's own ledger turns it off and does not turn it on; the book stays filed with the campaign, and nothing else about the campaign's books changes. The Hub hands the campaign what to hold back when it starts, and puts the campaign's books right whenever what is held back changes (`refreshStoryBooks`, on the hub's every change: the chat in front, a chat taken as a story's beginning, an End). A Lore Library that cannot be reached leaves the books as they were, and it is tried again at the next change. A book switched on by hand outside the campaign is never touched. **The name**: the first story's book is named as before, after the campaign (or the world); a later story's after the campaign and who it is played as, the player its memory keeps ("Nightcity (Eli Vega) - Scenes Continuity"), else the story's own name, else its number (`storyBookBase`). A book made before this keeps its name. |
+
+What it does not do. It does not rename a book that is already there,
+and does not move what one story's book says into another's. With no
+campaign on there is nothing to switch: a world in no campaign has its
+book switched on by itself (D189), and that is unchanged.
+
+Tests: `tools/hub-test.mjs` (D227: the books held back for a story in
+front, for none, for one story; the names); `tools/campaign-switch-test.mjs`
+(a book held back stays off, comes on when let go, goes off when held
+back later, a hold-back that fails).
