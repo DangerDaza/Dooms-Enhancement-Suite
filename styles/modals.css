@@ -1715,6 +1715,112 @@
 .rpg-vital-move:disabled,
 .rpg-attr-move:disabled { opacity: 0.2; cursor: default; }
 
+/* A row's options (who it is for, D231): a button on the row, and under it
+   either the options themselves or, closed, a line saying what they come to. */
+.rpg-vital-more {
+    background: transparent;
+    border: 1px solid var(--rpg-border);
+    border-radius: 4px;
+    color: var(--rpg-text);
+    opacity: 0.6;
+    padding: 4px 7px;
+    cursor: pointer;
+    font-size: 0.75em;
+    flex: 0 0 auto;
+}
+
+.rpg-vital-more:hover,
+.rpg-vital-row.is-open > .rpg-vital-more,
+.rpg-vital-more.has-custom { opacity: 1; border-color: var(--rpg-highlight); color: var(--rpg-highlight); }
+
+.rpg-vital-summary {
+    flex: 1 1 100%;
+    font-size: 0.76em;
+    opacity: 0.7;
+    padding-left: 2px;
+    overflow-wrap: anywhere;
+}
+
+.rpg-vital-details {
+    flex: 1 1 100%;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--rpg-border);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.rpg-vital-detail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.rpg-vital-detail + .rpg-vital-detail { margin-top: 6px; }
+
+.rpg-vital-detail-label {
+    flex: 0 0 76px;
+    font-size: 0.8em;
+    opacity: 0.85;
+}
+
+.rpg-vital-detail select { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.rpg-vital-detail .rpg-vital-names { flex: 1 1 160px; }
+.rpg-vital-detail .is-hidden { display: none; }
+
+.rpg-vital-detail .rpg-vital-about { flex: 1 1 200px; }
+.rpg-vital-detail-top { align-items: flex-start; }
+.rpg-vital-detail-top > .rpg-vital-detail-label { padding-top: 6px; }
+
+/* A vital's levels (D232): one row a level, lowest first. */
+.rpg-vital-rungs { flex: 1 1 220px; min-width: 0; }
+
+.rpg-vital-rung {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+    min-width: 0;
+}
+
+.rpg-vital-rung .rpg-vital-rung-label { flex: 1 1 90px; }
+.rpg-vital-rung .rpg-vital-rung-note { flex: 3 1 160px; }
+
+.rpg-vital-rung-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* A vital's mark (D233): the rows under "At a mark" line up with the controls above. */
+.rpg-vital-detail-sub { padding-left: 82px; }
+.rpg-vital-detail .rpg-vital-limit-text { flex: 1 1 180px; }
+
+.rpg-vital-limit-side {
+    flex: 0 0 auto;
+    min-width: 46px;
+    font-size: 0.78em;
+    font-weight: 700;
+}
+
+.rpg-vital-limit-side.is-pass { color: #5fd38d; }
+.rpg-vital-limit-side.is-fail { color: #ff8a8a; }
+
+@media (max-width: 600px) {
+    .rpg-vital-detail-sub { padding-left: 0; }
+}
+
+.rpg-vital-detail-hint {
+    margin: 6px 0 0;
+    font-size: 0.74em;
+    opacity: 0.65;
+    line-height: 1.35;
+}
+
 .rpg-vitals-add-row {
     display: flex;
     flex-wrap: wrap;
@@ -6573,6 +6679,103 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     background: rgba(233, 69, 96, 0.18);
     border-color: var(--rpg-highlight, #e94560);
     color: #fff;
+}
+
+/* The "For" switch (D234): who the relationship and the description on show
+   are written for. A row of small tabs above the field, wrapping when the
+   user characters do not fit on one line. */
+#character-workshop-popup .cw-with-switch {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    margin-bottom: 6px;
+    min-width: 0;
+}
+
+#character-workshop-popup .cw-with-switch[hidden],
+#character-workshop-popup .cw-with-hint[hidden] { display: none !important; }
+
+#character-workshop-popup .cw-with-label {
+    font-size: var(--modal-font-small, 0.8rem);
+    opacity: 0.7;
+    margin-right: 2px;
+}
+
+#character-workshop-popup .cw-with-chip {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 100%;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--rpg-text, #eaeaea);
+    font-size: var(--modal-font-small, 0.8rem);
+    cursor: pointer;
+    opacity: 0.75;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: background 0.2s, border-color 0.2s, opacity 0.2s;
+}
+
+#character-workshop-popup .cw-with-chip:hover {
+    opacity: 1;
+    border-color: var(--rpg-highlight, #e94560);
+}
+
+#character-workshop-popup .cw-with-chip.selected {
+    opacity: 1;
+    background: rgba(233, 69, 96, 0.18);
+    border-color: var(--rpg-highlight, #e94560);
+    color: #fff;
+}
+
+/* Something is written for this one: a dot before the name. */
+#character-workshop-popup .cw-with-chip.is-written::before {
+    content: '';
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--rpg-highlight, #e94560);
+}
+
+#character-workshop-popup .cw-with-chip.is-gone {
+    border-style: dashed;
+}
+
+#character-workshop-popup .cw-with-played {
+    flex: 0 0 auto;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    font-size: 0.82em;
+    opacity: 0.85;
+}
+
+#character-workshop-popup .cw-with-hint {
+    margin-top: 6px;
+    margin-bottom: 0;
+}
+
+#character-workshop-popup .cw-with-copy {
+    appearance: none;
+    margin: 2px 0 0 0.4rem;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--rpg-text, #eaeaea);
+    font: inherit;
+    cursor: pointer;
+}
+
+#character-workshop-popup .cw-with-copy:hover {
+    border-color: var(--rpg-highlight, #e94560);
 }
 
 

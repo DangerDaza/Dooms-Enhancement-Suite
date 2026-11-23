@@ -47,6 +47,10 @@ export const PROFILE_FIELDS = Object.freeze([
     { field: 'heroPosition',  store: 'heroPositions' },
     { field: 'portraitMeta',  store: 'generatedPortraits' },
     { field: 'voice',         store: 'characterVoices' },
+    // The relationship and the description written for one of the player's
+    // characters (src/utils/characterWith.js, D234): a campaign's version of
+    // a character carries its own.
+    { field: 'with',          store: 'characterWith' },
 ]);
 
 /** The version id of the flat stores themselves. */

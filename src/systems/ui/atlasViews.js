@@ -254,6 +254,7 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
             <p>${e(where)}${when ? ` · ${e(when)}` : ''}. ${list.length > 1 ? `All ${countWord(list.length)} are swipes of the scene's first message. Mark the one to show first.` : ''}</p>
             ${newCard ? `<p class="dooms-atlas-start-note dooms-atlas-card-line"><i class="fa-solid fa-id-card" aria-hidden="true"></i> Starting makes a new narrator card for this scene${list.length ? `, with ${list.length === 1 ? 'this opening as its greeting' : 'these openings as its greetings'}` : ''}. It is blank otherwise: no other card's text is sent in this scene.</p>` : ''}
             ${tailLine(p.tail)}
+            ${newsInLine(p.news)}
             ${loreLine(p.lore)}
             ${voiceLine(p.lore)}
             ${contLine(p.continuity)}
@@ -530,6 +531,30 @@ function contLine(c) {
     return `<p class="dooms-atlas-start-note"><i class="fa-solid fa-link" aria-hidden="true"></i> Told ${parts.join(' and ')}, as the scenes before left them.</p>`;
 }
 
+/**
+ * The news of the world's other stories that reaches this scene (D235):
+ * each event with the story it came from and its date, and how many
+ * clocks caught up; and what is not told yet, because it is dated after
+ * this scene or waits its turn.
+ */
+function newsInLine(n) {
+    const k = n && typeof n === 'object' ? n : null;
+    if (!k) return '';
+    const events = Array.isArray(k.events) ? k.events.filter(x => x && x.text) : [];
+    const clocks = Number(k.clocks) > 0 ? Math.floor(Number(k.clocks)) : 0;
+    const later = Number(k.later) > 0 ? Math.floor(Number(k.later)) : 0;
+    const waiting = Number(k.waiting) > 0 ? Math.floor(Number(k.waiting)) : 0;
+    const from = [...new Set(events.map(x => String(x.from || '').trim()).filter(Boolean))];
+    const what = [events.length ? `${events.length} ${events.length === 1 ? 'event' : 'events'}` : '', clocks ? `${clocks === 1 ? 'a clock' : `${clocks} clocks`} caught up` : ''].filter(Boolean).join(' and ');
+    const arrives = what
+        ? `<details class="dooms-atlas-news-in"${events.length ? '' : ' open'}><summary class="dooms-atlas-start-note"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> News ${from.length ? `from ${e(listOf(from))}` : 'from the world\'s other stories'} reaches this scene: ${what}.</summary>
+                ${events.length ? `<ul class="dooms-atlas-news-items">${events.map(x => `<li>${e(x.text)}${x.date ? ` <span class="dooms-atlas-news-meta">${e(x.date)}</span>` : ''}</li>`).join('')}</ul>` : ''}
+                <p class="dooms-atlas-start-note">The openings were told it, the scene's brief says it, and starting the scene writes it into this story's ledger. It happened elsewhere: this story's player was not there.</p></details>`
+        : '';
+    const held = [later ? `${later} ${later === 1 ? 'piece of news is' : 'pieces of news are'} dated after this scene and ${later === 1 ? 'waits' : 'wait'} until the story reaches ${later === 1 ? 'it' : 'them'}` : '', waiting ? `${waiting} more ${waiting === 1 ? 'waits' : 'wait'} for the next scene` : ''].filter(Boolean);
+    return `${arrives}${held.length ? `<p class="dooms-atlas-start-note dooms-atlas-news-held"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i> From the world's other stories: ${held.join('; ')}.</p>` : ''}`;
+}
+
 /** Which of the scene before's own lines the openings were shown (D205), or that they had only its record. */
 function tailLine(t) {
     const k = t && typeof t === 'object' ? t : null;
@@ -645,6 +670,40 @@ export function continuityFieldsHtml(c, { locked = false, next = 'the next scene
 }
 
 /**
+ * What a scene sends out to the world's other stories (D235), on the End
+ * sheet: each event the record listed, ticked; unticked, it is not sent.
+ * One of the player's own can be added. Nothing where the world's stories
+ * do not share their events (`news` is null).
+ * @param {{ events: Array<{ about: string, text: string, off?: boolean }>, to: string[], own?: string }|null} news  prepareEnd()'s
+ * @param {object} o
+ * @param {boolean} o.locked  the sheet is running: nothing can be changed
+ * @param {boolean} o.done    the scene is ended
+ * @param {{ events: number, clocks: number }|null} o.sent  commitEnd()'s word on what went out
+ */
+export function worldNewsFieldHtml(news, { locked = false, done = false, sent = null } = {}) {
+    const k = news && typeof news === 'object' ? news : null;
+    if (!k) return '';
+    const events = Array.isArray(k.events) ? k.events.filter(x => x && x.text) : [];
+    const to = Array.isArray(k.to) ? k.to.map(x => String(x || '').trim()).filter(Boolean) : [];
+    const whom = to.length ? e(listOf(to)) : 'the world\'s other stories';
+    const off = locked || done ? ' disabled' : '';
+    const rows = events.map((x, i) => `<li><label class="dooms-atlas-check"><input type="checkbox" class="dooms-atlas-end-news" value="${i}"${x.off ? '' : ' checked'}${off} /> <span>${e(x.text)}${x.about ? ` <span class="dooms-atlas-news-meta">${e(x.about)}</span>` : ''}</span></label></li>`).join('');
+    const own = String(k.own || '');
+    const ownField = done && !own ? '' : `<input type="text" class="dooms-atlas-input dooms-atlas-end-news-own" maxlength="150" value="${attr(own)}" placeholder="Something else the world would hear of, in one sentence" aria-label="Another world event, in your own words"${locked || done ? ' readonly' : ''} />`;
+    const n = sent && Number(sent.events) > 0 ? Math.floor(Number(sent.events)) : 0;
+    const c = sent && Number(sent.clocks) > 0 ? Math.floor(Number(sent.clocks)) : 0;
+    const note = done
+        ? (n || c ? `Sent out: ${[n ? `${n} ${n === 1 ? 'event' : 'events'}` : '', c ? `${c === 1 ? 'a clock move' : `${c} clock moves`}` : ''].filter(Boolean).join(' and ')}. ${to.length === 1 ? `${whom} hears` : `${whom} hear`} of it at the first scene started on or after this scene's date. One Undo takes it back with the End.` : 'Nothing was sent out.')
+        : `This world has more than one story. The ticked lines reach ${whom} as news, at the first scene started there on or after this scene's date, with how this scene moved the world's clocks. Untick what the wider world would not know. Where people stand and the threads stay this story's own.`;
+    return `<fieldset class="dooms-atlas-scene-field dooms-atlas-world-news" role="group">
+            <legend class="dooms-atlas-card-label"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i> News for ${whom}</legend>
+            ${rows ? `<ul class="dooms-atlas-cont-list dooms-atlas-news-out">${rows}</ul>` : `<p class="dooms-atlas-none">${done ? 'No world event was listed.' : 'The record found nothing in this scene that would be news elsewhere.'}</p>`}
+            ${ownField}
+            <p class="dooms-atlas-start-note">${note}</p>
+        </fieldset>`;
+}
+
+/**
  * A bar for every request of a read that takes several (D198): the ones
  * done full, the one being asked for moving, the ones to come empty, one
  * that failed or was skipped marked so. A request does not say how far
@@ -728,6 +787,7 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
         ${prep && prep.error ? `<p class="dooms-atlas-setup-error" role="alert">The record could not be written (${e(prep.error)}). Write it yourself, or end without one.</p>` : ''}
         ${continuityFieldsHtml(prep && prep.continuity, { locked: done || running || busy, book: prep && prep.book ? prep.book : '' })}
         ${conflictsHtml(prep && prep.conflicts, { done, checked: prep && prep.checked })}
+        ${busy ? '' : worldNewsFieldHtml(prep && prep.news, { locked: running, done, sent: result && result.news ? result.news : null })}
         ${stale}
         ${habits}
         <ul class="dooms-atlas-parts">
@@ -1324,12 +1384,38 @@ export function atlasCampaignRowHtml(c) {
         ? `<label class="dooms-atlas-world-pick" title="This world has more than one story. Each has its own scenes, its own date, people, news, quests and ledger; they share the world as it is built. The Atlas shows the story of the chat in front, else the one played last."><span class="dooms-atlas-card-label">Story</span>
                 <select class="dooms-atlas-story-select" aria-label="Which story of this world the Atlas shows"${off}>${stories.map(x => `<option value="${attr(x.id)}"${x.id === c.story ? ' selected' : ''}>${e(x.name)}${x.open ? ' · being played' : ''}</option>`).join('')}</select></label>`
         : '';
+    // Whether the world's stories share their events (D235), and what has been sent out: where it has more than one story.
+    const share = story ? worldNewsRowHtml(c.news, { off: !!c.busy }) : '';
     const n = c.notice && c.notice.text ? c.notice : null;
     const acts = n && Array.isArray(n.actions) ? n.actions : [];
     const notice = n
         ? `<div class="dooms-atlas-between dooms-atlas-mixup" role="status"><p><i class="fa-solid fa-circle-info" aria-hidden="true"></i> <span>${e(n.text)}</span></p>${acts.length ? `<p class="dooms-atlas-mixup-acts">${acts.map(a => `<button type="button" class="${a.primary || a.act === 'scenes' ? 'dooms-atlas-btn is-primary' : 'dooms-atlas-btn'}" data-act="${attr(a.act)}"${a.id ? ` data-id="${attr(a.id)}"` : ''}${a.title ? ` title="${attr(a.title)}"` : ''}${off}>${e(a.label)}</button>`).join('')}</p>` : ''}</div>`
         : '';
-    return `${select}${world}${story}${notice}`;
+    return `${select}${world}${story}${share}${notice}`;
+}
+
+/**
+ * A world's news between its stories (D235), under the story chooser:
+ * the switch, and the events kept, each with where it came from, its
+ * date, whom it has reached, and a way to take it out.
+ * @param {{ shared: boolean, events: Array<{ id: string, text: string, date: string, from: string, reached: string[], waiting: string[] }>, clocks: number, due: number, later: number, open?: boolean }|null} news  worldNews(), and whether the list is unfolded
+ */
+export function worldNewsRowHtml(news, { off = false } = {}) {
+    const k = news && typeof news === 'object' ? news : null;
+    if (!k) return '';
+    const events = Array.isArray(k.events) ? k.events : [];
+    const dis = off ? ' disabled' : '';
+    const reach = (x) => [x.reached && x.reached.length ? `reached ${e(listOf(x.reached))}` : '', x.waiting && x.waiting.length ? `not yet ${e(listOf(x.waiting))}` : ''].filter(Boolean).join(', ');
+    const rows = events.map(x => `<li class="dooms-atlas-news-item" data-id="${attr(x.id)}">
+            <span class="dooms-atlas-news-text">${e(x.text)}</span>
+            <span class="dooms-atlas-news-meta">${[`from ${e(x.from)}`, x.date ? e(x.date) : '', reach(x)].filter(Boolean).join(' · ')}</span>
+            <button type="button" class="dooms-atlas-icon-btn" data-act="news-remove" data-id="${attr(x.id)}" title="Take this out of the world's news: it reaches no story it has not reached yet" aria-label="Take this out of the world's news"${dis}><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+        </li>`).join('');
+    const counts = [`${events.length} ${events.length === 1 ? 'event' : 'events'}`, k.clocks ? `${k.clocks} clock ${k.clocks === 1 ? 'move' : 'moves'}` : '', k.due ? `${k.due} due to this story's next scene` : '', k.later ? `${k.later} still ahead of this story's date` : ''].filter(Boolean).join(' · ');
+    return `<div class="dooms-atlas-news-share">
+            <label class="dooms-atlas-check" title="What a scene does that the wider world would hear of (a death, a fire, a place closed) reaches the world's other stories as news, with how it moved the world's clocks, once their date has come to it. Where people stand, relationships and threads stay each story's own. Off, the stories know nothing of each other."><input type="checkbox" class="dooms-atlas-news-toggle"${k.shared ? ' checked' : ''}${dis} /> <span>Stories share world events</span></label>
+            ${events.length || k.clocks ? `<details class="dooms-atlas-news-list"${k.open ? ' open' : ''}><summary>World news · ${counts}</summary>${rows ? `<ul class="dooms-atlas-news-items">${rows}</ul>` : ''}</details>` : ''}
+        </div>`;
 }
 
 const scenesWord = (n) => (n > 0 ? `${n} scene${n === 1 ? '' : 's'}` : 'no scenes yet');

@@ -35,6 +35,7 @@ import {
     parseSheetSuggestion,
 } from '../../utils/d20.js';
 import { resolvePersonaName, recentChatText, diceNotice } from './diceRolls.js';
+import { descriptionFor } from '../../utils/characterWith.js';
 
 let transport = null;          // test hook: (messages) => Promise<string>
 let timeoutMs = 20000;
@@ -76,8 +77,8 @@ function lookup(map, name) {
 
 /** What the Workshop knows about a character: the card description and the appearance note. */
 export function cardTextFor(name) {
-    const inj = lookup(extensionSettings.characterInjection, name);
-    const description = inj && typeof inj === 'object' && typeof inj.description === 'string' ? inj.description : '';
+    // The description as whoever is played knows them (D234), else the shared one.
+    const description = descriptionFor(extensionSettings, name, resolvePersonaName() || '');
     const appearance = lookup(extensionSettings.characterAppearance, name);
     return { description, appearance: typeof appearance === 'string' ? appearance : '' };
 }

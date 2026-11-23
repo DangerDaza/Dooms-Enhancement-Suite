@@ -43,6 +43,7 @@ import { characters } from '../../../../../../../script.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import { findSimilarCharacter } from '../../utils/nameSimilarity.js';
 import { addCharacterAlias } from '../features/characterAliases.js';
+import { relationshipFor, cleanWith } from '../../utils/characterWith.js';
 import { deleteSheet } from '../../utils/d20.js';
 import { canonicalStockId } from '../voices/voiceCatalog.js';
 import { applyPopupLayout } from './settingsRail.js';
@@ -609,8 +610,9 @@ function collectCharacterNames() {
 }
 
 function resolveRelationshipEmoji(name) {
-    // Persistent user-set override wins over the AI's per-turn classification.
-    const override = extensionSettings?.characterRelationships?.[name];
+    // Persistent user-set override wins over the AI's per-turn classification:
+    // the one written for whoever is played, else the shared one (D234).
+    const override = relationshipFor(extensionSettings, name, resolveActiveUserName());
     if (override && REL_EMOJI[override]) return REL_EMOJI[override];
     // Fallback: best-effort read from volatile lastGeneratedData.
     try {
@@ -1095,6 +1097,14 @@ function importCharacterPayload(payload) {
             if (dialogue) entry.dialogue = dialogue;
             extensionSettings.characterInjection[targetName] = entry;
         }
+    }
+
+    // The sides written for the player's characters (D234), by the user
+    // character's name: read by a story whose player goes by it.
+    const sides = cleanWith(payload.with);
+    if (sides) {
+        if (!extensionSettings.characterWith || typeof extensionSettings.characterWith !== 'object') extensionSettings.characterWith = {};
+        extensionSettings.characterWith[targetName] = sides;
     }
 
     // Standard voices import as-is. A designed voice arrives as its

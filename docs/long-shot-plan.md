@@ -2315,3 +2315,209 @@ of its own, a chat opened by hand on a story's card, the books held
 back at each step). The Workshop's new field was drawn in Chromium at a
 desktop's and a phone's width against the live stylesheets; the Workshop
 itself needs SillyTavern and was not run.
+
+## 70. A vital for one character (2026-11-23, D231)
+
+The owner's second story has mechanics of its own that so far lived in
+prose: Eli Vega's Edge (how near he is to losing himself), and the
+attention Roxy pays, which climbs a ladder. Asked how they should be
+kept, the owner chose real stats over notes in the tracker, and asked
+that Settings, Stats grow the means: custom vitals with an indicator of
+their own each. This is the first of three steps (D231 to D233): who a
+vital is for. Until now the sheet was one list every character carried,
+the persona included, so an Edge added for Eli would have been asked for
+and drawn on every card in the scene.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D231 | A vital says who it is for: everyone, the character being played, everyone but them, or the characters named | **Held.** **The sheet entry** gains `who` (`all`, `player`, `others`, `named`) and `names` (the names for `named`); an entry without them is for everyone, as before, and nothing stored is rewritten (`normalizeVitalDef`, `src/utils/vitals.js`). **Whose a vital is** is one rule (`vitalAppliesTo`, `vitalsFor`): a vital for the player is the persona's whoever is played; one for named characters is theirs wherever the tracker lists them, and the persona's when a name is one the player goes by (the Workshop user character being played, D230, or the persona's own name; handed in by `setPlayedNamesSource`, index.js). So Edge, named for Eli Vega, is on the persona's card in Eli's story and on Eli's own card if Jack's story meets him, and in neither case on anyone else's. A name matches when its words are all in the other ("Roxy" is the "Roxy Vance" the AI lists; `sameWho`). **"Your character too"** now governs only the vitals for everyone: switched off, a vital meant for the player (by `player`, or by name) stays (`playerVitalDefs`, `playerVitalsOn`). **The prompt** (`jsonPromptHelpers.js`): the sample character shows the vitals every character carries (`castVitalDefs`); the "player" block lists the persona's own; a vital for named characters is asked for in a sentence of its own in the guidance ("Only Roxy has "Attention": ..."), the player's own names left out of it since theirs rides in "player" (`namedVitalNotes`). **A reply** is normalised a character at a time (`applyVitalsToCharacters`): each keeps the vitals it carries, seeded and locked as before, one the AI wrote on the wrong character is dropped, and a character who carries none has no "stats". **The cards** (the shelf's front strip and back face, the Thoughts panel, the persona's card) draw the vitals their character carries; the context lines and History Persistence read the same. **Settings, Stats**: each vital's row has an options button (the sliders); open, **For** with the four choices and, for the named, a box of names separated by commas. Closed, a row whose options are not as they come says what they come to under it ("Only Roxy"). |
+
+What it does not do. It does not move values between stories: a
+character's vitals are in the chat's tracker, as they were, so Roxy's
+Attention in Eli's story and in Jack's are two numbers. It does not
+check a name against the cast: a vital named for someone the tracker
+never lists is simply never drawn or asked for on a card.
+
+Tests: `tools/vitals-test.mjs` §8 (the four choices, names by first name
+and without accents, "Your character too" off, the sample character and
+the named sentence, the persona's block as Eli and as Jack, a reply with
+a vital on the wrong character, the persona's card refusing another's
+vital). The settings rows were drawn in Chromium against the live
+stylesheets (section 72); the page itself needs SillyTavern and was not
+run.
+
+## 71. A vital's levels, and how it is shown (2026-11-23, D232)
+
+The owner, on the two stats: "I want different indicators for each one";
+Roxy's "should be able to show what level she's on and Eli's should show
+a %". A vital was a bar and nothing else, and all the AI knew of one was
+its name, which is enough for Health and not for Edge.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D232 | A vital says how the cards show it (a bar, the number, or the level it is on), what it measures, and its named levels | **Held.** **The value** stays 0 to 100 for every vital: the tracker, the swipe store, the fixed-vital lock and the card's number box are untouched. **The sheet entry** gains `show` (`bar`, `percent`, `level`), `about` (one line: what it measures and what moves it) and `rungs` (the levels, lowest first: `at`, the value a level starts at; `label`; `note`, what it means); an entry with none is a bar with no levels, as before (`normalizeVitalDef`, `normalizeRungs`; at most eight levels, one a value). **The level a value is on** is the highest rung it has reached (`rungOf`); under the lowest there is none. **The AI** is told, after the vitals guidance, one line for each vital that says more than its name: what it measures, then its levels by value with what each means ('"Attention": how closely Roxy is watching. Its levels by value: 0-24 "Unaware"; 25-49 "Curious" (asks around); ...'), and that the number is still what it returns (`vitalGuideLines`, `buildVitalsGuidance`). The context lines and History Persistence name the level beside the number ("Attention 45% (Curious)", `formatVitalsLine`). **The card front** (`buildVitalsStrip`, portraitBar.js): a vital shown as a bar is the thin bar it was; one shown as a number or a level is a small tag in the vital's colour above the bars ("⚡ 62%", "Interested"), counted against the same "Bars on the front" number. **The card back** (`vitalRowHtml`): a bar's row is as it was; a number's row drops the track and says the level it is on, when it has levels, before the number; a level's row has a step for each level, lit up to the one it is on, and the level's name, the number and the level's meaning in its tooltip. The value at the row's end is still the button that becomes a number box (the number now rides on the button, since its text may be a name). The Thoughts panel's card back does the same, and its front says the level after the number. A vital shown as its level that has no levels, or sits under its lowest, shows the number. **The warning colour** is for bars and numbers; a level has none. **Settings, Stats**, a vital's options: **Shown as**, **Measures**, and **Levels** (one row a level: From, its name, what it means; Add a level, which starts halfway between the last and the top; Space evenly). |
+
+What it does not do. A level is a name for a stretch of the value and
+nothing more: reaching one does nothing by itself (D233 is what does).
+The levels are the sheet's, so the same for every character who carries
+the vital.
+
+Tests: `tools/vitals-test.mjs` §9 (the levels made safe, the level a
+value is on at each edge, what a card says for each way of showing, the
+AI's lines, the context line, the card front's bars and tags).
+
+## 72. A vital's mark (2026-11-23, D233)
+
+The last of the three steps. Eli's Edge was written as "tells, then a
+blackout": the number climbs, and at the top something is decided that
+the story does not get to argue with. Roxy's ladder has a top rung where
+her behaviour changes. Both are the same thing: a value reaches a mark,
+and a consequence follows, either by the dice or as a plain instruction.
+Left to the AI, the blackout would come when the prose felt like it and
+never when it was inconvenient, which is what the dice checks were
+built to stop.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D233 | A vital may have one mark; a reply that carries the value to it tells the narrator something, or rolls a d20 that decides what follows | **Held.** **The sheet entry** gains `limit`: `when` (`off`, `rise`, `fall`), `at` (the mark, 0 to 100), `does` (`note` or `roll`), `note` (what the narrator is told), and for a roll `dc`, `attr` (an attribute whose modifier and save proficiency ride on the die; none is a bare d20), `pass` and `fail` (what the narrator is told each way) and `passTo` and `failTo` (the value the vital is left at afterwards; empty leaves it). An entry without one has no mark (`normalizeLimit`, `src/utils/vitals.js`). **Reaching it** is a crossing, not a state: on a rise, the value was under the mark and the reply puts it at or over; on a fall, the other way round; a character seen for the first time is measured from the vital's start. A value that stays past its mark reaches it once (`limitCrossed`, `limitsCrossed`: every character the reply lists, then the persona). **When** (`settleVitalLimits`, `src/systems/features/vitalLimits.js`): where a reply's vitals have just been made safe, in together mode (`sillytavern.js`) and separate mode (`apiClient.js`), before the swipe's tracker data is stored. Each crossing is settled into a record (`settleLimit`, `src/utils/vitalLimits.js`): for a roll the die is thrown there and then (d20.js's, with the attribute's modifier and the sheet's save proficiency when attributes are on and the mark names one; criticals as the attributes are set), and the value the roll leaves the vital at is written into the reply's tracker data, so the cards, the swipe store and the next prompt all read it. **Where it is kept**: on the reply, `message.extra.dooms_vital_events[swipeId]`, a store of its own because the swipe's tracker entry is replaced whole in several places. A swipe is settled once: a second pass over it finds its records, rolls nothing and writes the same value; a new swipe is a new reply and rolls for itself. **The narrator** hears of it in the generation after the player's next message (`buildVitalLimitsForGeneration`, a slot of its own, `dooms-dice-vital`, set beside the dice in `refreshDiceInjection`, same depth and role): one block for each mark, "[STAT: Eli Vega's Edge has risen to 100% ("Fraying"), reaching its mark of 100%. A roll decides what follows: d20 = 7 vs DC 13. FAILURE. Eli blacks out. Cut to the aftermath. This outcome is final: narrate it in this reply. Do not re-roll, reverse or soften it. Edge now stands at 20%: carry on from there.]", then a reminder, as the dice give after theirs, that the tracker block is still owed. It is read from the chat, the records of every reply the player's last message answers, so a swipe or a regenerate of the answer is told the same, and the reply after that nothing. **The player** sees a toast when it happens ("Eli Vega · Edge reached 100% · d20 7 vs DC 13 · Failed") and a box under the reply it happened in, in the dice's style: what moved, the roll and its outcome, what the next reply will be told, and where the value was set (`vitalCardHtml`, `syncVitalCardForMessage`, `updateVitalCards`; index.js wires them to the chat's events). **The warning colour**: a vital whose mark is reached on a rise is not drawn in the low colour at the bottom, since low is where it is safe (`vitalIsLow`). **Settings, Stats**, a vital's options: **At a mark** (Nothing happens, When it rises to, When it falls to), the mark, what it does (Tell the narrator, Roll a d20), and for a roll the DC, the save, and a line and a "then set to" for Passed and for Failed. A closed row says it in its summary ("at 100% or over, a d20 against 13"). |
+
+What it does not do. Only a reply reaches a mark: a value typed into a
+card's number box does not, and so a vital the AI is not asked to move
+(AI unticked) never does. The mark's die is rolled once and cannot be
+stepped or re-rolled as a dice check can; another swipe of the reply is
+the way to another roll, as it is for the reply's words. The narrator is
+told after the player's next message, not in the reply that reached the
+mark, because that reply is already written, and not in a reply asked
+for without a word from the player. In a group every member's reply in
+the round after is told the same block. A vital has one mark: the levels (D232)
+name the stretches, and only the mark does anything. The roll is the
+mark's own: it is kept on the reply and nowhere among the dice checks.
+
+Drawn in a browser. The three steps were drawn in Chromium against the
+extension's own stylesheets (`style.css`, `styles/modals.css`), with the
+real `buildVitalsStrip`, `vitalRowHtml` and `vitalCardHtml` and the
+settings rows built by index.js's own functions: the Stats rows closed
+and open at 1200 and 390 pixels wide, a shelf of cards front and back
+with Edge as a number and Attention as a level, and the three boxes
+under a reply. Nothing ran past its container. Three things it turned
+up, all fixed here: the tags on a card's front were too small to read
+(now about 9 pixels on a standard card); a level's name and a number's
+level squeezed the vital's name off a narrow card (the name now holds
+and the level's name wraps under); and on the card's back the vitals'
+names had no height at all, bars included, since the shelf sets
+`line-height: 0` and the row never set one back (`.dooms-pb-vital-row`),
+which is older than this work. SillyTavern itself was not run: the
+Settings page, the toast and the box's place in a real chat are as the
+tests and the drawing have them and no further.
+
+Tests: `tools/vital-limits-test.mjs` (the mark made safe, reaching it on
+a rise and a fall and once only, the roll and the narrator's words, a
+reply through to the next generation, a second pass and a new swipe, a
+swipe SillyTavern put away, a group's round, attributes on and off, the
+box, the off states, the low colour).
+
+## 73. A character as each player knows them (2026-11-23, D234)
+
+A world's stories share its cast (D216), and the Workshop kept one of
+everything about a character. Two of those things are not about the
+character alone but about them and the player: the relationship set by
+hand, and whatever of the description says who they are to the player
+("Jack's on-and-off girlfriend"). So the second story read the first
+story's: Eli's scenes were briefed with Jack's girlfriend, and her card
+in the roster wore Jack's heart. The owner, asked whether the cast's
+relationships should be one for both players: they "differ per persona".
+
+What a story has learned of a person was already its own: the tracker's
+relationship is the chat's, and where a person stands is the story's
+continuity (D189, D227). This is the part the player writes by hand.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D234 | A character may carry a relationship and a description written for one of the player's characters, read in that player's story in place of the ones everyone gets | **Held.** **One character.** The portrait, the voice, the look, the example lines, the knives and the lorebook are the character's and stay one; a version a player was weighed and left (below). **The store**: `extensionSettings.characterWith[character][user character] = { relationship?, description? }`, keyed by the Workshop user character's name, which is who a story is played as (D230). It is one of the version-backed stores (`PROFILE_FIELDS`, field `with`), so a campaign's version of a character carries its own, it is swapped with the campaign, cloned with a new version, dropped with the character and folded by an alias like the rest; a profile saved before this has none. **The rule** (`src/utils/characterWith.js`, pure): what a player's story reads is the player's own where one is written, else the shared one, a field at a time (`relationshipFor`, `descriptionFor`); a character with nothing written is as it was, and so is an install with one user character. Names are found whatever their case. **Read by**: the scene's brief and the openings (the Hub's `castLines`), Inject into Scene (the description and the relationship of its direction, and the relationship the tracker is given at once), the roster's relationship mark, the knife suggestions and the sheet suggestions (`cardTextFor`). Who is played is the one lookup there is (D226, D230). **The Workshop**: above the relationship chips on Identity and above the description on Injection, a switch, **For**: Everyone, then each user character, the one the chat is played as marked "playing" and one with something written marked with a dot. It is one switch drawn twice. On a player, the chips and the box show and set that player's own: no chip picked, or an empty box, is the shared one, and the box says so and offers **Start from the one for everyone**. Under the portrait is the relationship in effect. A card opens on the side of whoever is played when one is written for them, and on Everyone otherwise. The switch is not drawn where there is nothing to choose: fewer than two user characters and nothing written. A side written for someone who is no longer a user character stays on the switch, dashed, so it can be read and cleared. **Export and import** carry the sides (`with`), by the user character's name. |
+
+What it does not do. It does not make a second character: a version a
+player (its own portrait, voice and everything else) would have nested a
+second swap inside the campaign's, with the portrait files counted
+across both, for the sake of two fields; the owner was asked, with this
+as the recommendation, and chose it: a relationship and a description a
+player, on one character. The
+knives are shared: a secret spent in one story is spent in the world the
+stories share. A character's lorebook entries are not touched: where
+they name a player they do so in their own words. A description written
+for a player is read in place of the shared one, whole, not added to it:
+a change to what both share is made in both. The tracker's own
+relationship, which the AI writes each reply, was the chat's already and
+is as it was. A user character's name is the key, and the Workshop does
+not rename one.
+
+Tests: `tools/character-with-test.mjs` (the rule a field at a time, the
+names whatever their case, what is stored made safe, setting and
+clearing a side, the Workshop's choices, a campaign's version keeping
+its own sides through a switch and back, a character deleted, a profile
+saved before there were sides). `tools/hub-flow-test.mjs`: the same
+person in the brief of Eli's scene by the description written for him,
+and in the openings of Jack's story by the one for everyone.
+`tools/sheet-suggest-test.mjs` §4. The Workshop's switch was run in
+Chromium on the popup's own markup with the Workshop's own functions,
+against the live stylesheets, at 1200 and 390 pixels wide, and clicked
+through (36 checks: who a card opens on, a chip picked and cleared for
+a player, a description started from the shared one and typed over, the
+shared ones untouched, no switch with one user character, nothing past
+the window). SillyTavern itself was not run.
+
+## 74. A world's stories hear of each other (2026-11-23, D235)
+
+A world may hold a story for each of the player's characters (D216), with
+the map (D217) and the cast (D234) shared between them. Nothing that
+happened in one was known in the other: Jack could burn a warehouse down
+in his story, and in Eli's it still stood. The owner, asked what the
+stories should share: world events, on one timeline ("they share a time
+line"), with what is personal kept each story's own.
+
+So a scene's End now sends out what the wider world would hear of, and
+the world's other stories take it in at their next Start, as news, once
+their own date has come to it.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D235 | A scene's End sends its world events and its clock moves out to the world's other stories; a story takes them in at its next Start, as news, once its date has reached them | **Held.** **What is shared.** Two things: events (what happened in the scene that people elsewhere would hear of or see: a death, an arrest, a fire, a place closed, something made public) and how the scene moved the world's clocks. **What is not**: where people stand, relationships, the threads, the quests, inventory, anyone's whereabouts and the ledger itself stay each story's own (D189, D216, D234); the map was shared already (D217). **The store**: `hub.news[world] = { v, share, seq, items }`, beside `hub.maps`, an item `{ id, kind: 'event', about, text, story, scene, at, date, time, taken }` or `{ id, kind: 'clock', clock, from, to, … }`; `taken[story]` is the scene whose Start took it in; a world keeps its newest 120. `src/utils/worldNews.js` holds every rule, pure. **Sent out at End.** Only where the world has two or more stories and sharing is not switched off for it, the record's request (D176) also asks, in the same answer, for `"world": [{ "about", "what" }]`: one sentence each, told as someone who was not there would tell it, the player named only where people would know it was them, nothing private, at most 4 a request and 6 a scene, an empty list the usual case. A record written in passes (D198) gathers them a page at a time and each later page is told what is listed. The End sheet shows them ticked under who they are news to; an unticked one is not sent, and the player may add one line of their own. An End with no sheet (`/endscene`, a handover) sends what the record said. The clock moves are the world's clocks in the story's memory before the End against after it, so a clock the story only caught up with at its Start is not sent back. A scene ended a second time replaces what it sent and no story had taken; what was taken stays. **Taken in at Start.** What is due to a story: the other stories' items it has not taken, at most 8 events a Start (the oldest first, the rest wait for the next). **The date rule**: an item is told once the date the scene opens at is not before the item's. Dates are compared where both are of one kind (`storyDay`: a count such as "Day 12" or "Week 2, Day 3", or a calendar date, written out, ISO or in figures; the time of day settles the same day); a date in figures that reads two ways holds an order only where both readings agree. Where the two cannot be compared the news is told, with its date said, and where it is plainly ahead it waits and the sheet says how much does. A story with no date that has not ended a scene yet takes none: there is nothing to hold the news against. What is due is told to the openings' request ("News of the world since the last scene (it happened elsewhere; the player was not there)", with a rule that it is true, known as news is known, and never something the player was at), stands first in the brief's "Since last time" ("Elsewhere, Day 4: …"), and at commit is written into the story's memory: each clock caught up by direction (one that rose elsewhere is raised to at least where it got to, one that fell is lowered to at most), which is the same done twice and does not count twice the days both stories lived through, logged with the story it came from; and, where Canon is on, each event into the ledger as a fact marked "(news from elsewhere, DATE)", where it rides every reply and the record's contradiction check (D190) reads it. A fact the player pinned is not replaced. With Canon off the news is in the openings and the brief and no further. **Taken back.** Undo of an End takes back what that End sent and puts back what it replaced; a scene deleted takes back everything it sent. What another story took in already stays in that story: it was told. **The switch**: under the story chooser, "Stories share world events", a world at a time, with the news kept listed beneath it (whose story, its date, whom it has reached, a cross to take one out by hand). On by default, with the switch a world: the owner was asked, and chose it over off until switched on; `NEWS.onByDefault` is the one line that says so. **Nothing changes** for a world with one story: no request is longer, no field is drawn, no store is written. |
+
+What it does not do. It does not share what happened before the world
+had a second story: the record is asked for world events only from then
+on, so the first story's earlier scenes reach the second through the
+ledger and the lorebooks the player keeps, as before. It does not merge
+the two ledgers or let one story's ledger correct the other's: an event
+arrives as one fact, and what the story makes of it is its own. It does
+not move people: a person killed in one story is news in the other, and
+that story's continuity still holds where they last stood there, so the
+record's contradiction check is what catches a scene that then plays
+them alive. It does not reorder time: a story played behind another's
+date is told the other's news only when it reaches that date, and what
+it does before then cannot change what was already played ahead of it;
+two stories that contradict each other are for the player to settle. It
+does not send news back to the story it came from, and it does not send
+a clock's reason, only where it stands. The Settings status lines say
+nothing of it.
+
+Tests: `tools/world-news-test.mjs` (25: the store and the switch, the
+caps, reading the record's events, the request's words, the clocks'
+changes, sending, replacing and taking back, the dates and times and
+their order, a date that reads two ways, what is due, a story with no
+date, the limit a Start, the lines, the catch-up by direction and its
+public face, the ledger's facts and a pinned one, the list for the
+Atlas). `tools/hub-flow-test.mjs` §38 (23: one story shares nothing; two
+share; the record asked for the world; the sheet's ticks; one ticked
+event and a clock sent; the other story untouched until its Start; Undo;
+an End by command; the Start told the news with the clock's public face;
+the scene's chat seeded with the clock and the ledger's facts; the
+brief; what was taken marked; news ahead of a story's date held, then
+told after the gap; the switch; one taken out by hand; a scene deleted).
+`tools/hub-test.mjs` (8: both requests exactly as before without it,
+and with it; the result's words; the store made safe).
+`tools/atlas-browser-test.mjs` §5l (22, in Chromium against the live
+stylesheet at 1600, 412 and 390 pixels wide: the End sheet's field, its
+ticks kept, locked while ending, what was sent; the Start sheet's line,
+unfolded, clocks alone, what waits; the switch and the list under the
+story chooser, off, waiting, on a phone). SillyTavern itself was not
+run, and no model was asked what it would list as a world event: the
+request's wording is untried against a real narrator.

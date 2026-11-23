@@ -6,7 +6,7 @@ import { extensionSettings, committedTrackerData } from '../../core/state.js';
 import { getContext } from '../../../../../../extensions.js';
 import { i18n } from '../../core/i18n.js';
 import { getWeatherKeywordsAsPromptString } from '../ui/weatherEffects.js';
-import { vitalDefs, vitalsOn, playerVitalsOn } from '../../utils/vitals.js';
+import { vitalDefs, vitalsOn, playerVitalsOn, playerVitalDefs, castVitalDefs, namedVitalNotes, vitalGuideLines } from '../../utils/vitals.js';
 /**
  * Converts a field name to snake_case for use as JSON key
  * Example: "Test Tracker" -> "test_tracker"
@@ -262,8 +262,10 @@ export function buildCharactersJSONInstruction() {
     const relationshipsEnabled = presentCharsConfig?.relationships?.enabled !== false;
     const thoughtsConfig = presentCharsConfig?.thoughts;
     // Vitals (src/utils/vitals.js): the 0–100 bars on the shelf. Off means
-    // nothing is emitted, so a default install's spec is unchanged.
-    const enabledCharStats = vitalsOn(extensionSettings) ? vitalDefs(extensionSettings) : [];
+    // nothing is emitted, so a default install's spec is unchanged. The
+    // sample character shows the vitals every character carries; one for
+    // named characters is asked for in the guidance (D231).
+    const enabledCharStats = vitalsOn(extensionSettings) ? castVitalDefs(vitalDefs(extensionSettings)) : [];
     let instruction = '[\n';
     instruction += '  {\n';
     instruction += '    "name": "CharacterName",\n';
@@ -324,7 +326,7 @@ export function buildCharactersJSONInstruction() {
  * @returns {string} JSON format instruction for the player block
  */
 export function buildPlayerJSONInstruction() {
-    const defs = vitalDefs(extensionSettings);
+    const defs = playerVitalDefs(extensionSettings);   // the persona's own (D231)
     let instruction = '{\n';
     instruction += '  "stats": [\n';
     for (let i = 0; i < defs.length; i++) {
@@ -352,7 +354,30 @@ export function buildVitalsGuidance(compact, userName) {
         out = 'VITALS: every value inside "stats" is a percentage from 0 to 100 showing how that character is doing right now. Raise, lower or keep each one realistically based on what happens in the scene and on the passage of time (rest and food restore; wounds, exertion and fear drain), and leave it unchanged when nothing affects it. Always return every vital listed, and never invent vitals that are not listed.';
         if (playerOn) out += ` The "player" block holds ${userName}'s own vitals and follows the same rules.`;
     }
+    // A vital only named characters carry (D231) is not on the sample
+    // character, so each is asked for by name.
+    for (const note of namedVitalNotes(vitalDefs(extensionSettings))) {
+        const who = listNames(note.names);
+        const entry = `{"name": "${escapeSpecString(note.name)}", "value": X}`;
+        out += compact
+            ? ` Only ${who}: "stats" also holds ${entry}; nobody else's does.`
+            : ` Only ${who} ${note.names.length > 1 ? 'have' : 'has'} "${escapeSpecString(note.name)}": whenever ${note.names.length > 1 ? 'one of them is' : `${who} is`} listed in "characters", that entry's "stats" also holds ${entry}, and nobody else's does.`;
+    }
+    // What a vital measures and its named levels (D232), for the vitals
+    // that say: the value is still what is returned, the level follows.
+    const lines = vitalGuideLines(vitalDefs(extensionSettings));
+    if (lines.length) {
+        out += compact
+            ? ` ${lines.join(' ')} Return the number; the level follows from it.`
+            : ` ${lines.join(' ')} For a vital with levels, still return the number: the level follows from it, so move the number to where the story has brought it.`;
+    }
     return out;
+}
+/** "Roxy", "Roxy and Mara", "Roxy, Mara and Jun". */
+function listNames(names) {
+    const list = (names || []).map(n => String(n));
+    if (list.length <= 1) return list[0] || '';
+    return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
 }
 /**
  * Adds lock information to instruction text

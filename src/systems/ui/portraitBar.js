@@ -51,7 +51,7 @@ import { pickActiveUser } from '../../utils/activeUser.js';
 // The editors live in thoughts.js, which reaches this module through
 // characterAliases.js, so they are imported at click time rather than here
 // (a static edge would close a cycle).
-import { vitalsConfig, readVitals, vitalColor, clampVital } from '../../utils/vitals.js';
+import { vitalsConfig, readVitals, vitalColor, vitalIsLow, clampVital, vitalsFor, playerVitalDefs, rungOf, vitalText, vitalTip } from '../../utils/vitals.js';
 import { attributesOn } from '../../utils/d20.js';
 // Inventory (Project Short Fuse, Phase 5): the shelf's pages show while it is on.
 import { isInventoryOn, INVENTORY_CHANGED_EVENT } from '../features/inventory.js';
@@ -380,7 +380,8 @@ export function initPortraitBar() {
         e.stopPropagation();
         const $btn = $(this);
         if ($btn.siblings('input.dooms-pb-vital-input').length) return;
-        const current = clampVital($btn.text()) ?? 0;
+        // The value rides on the button: its text may be a level's name (D232).
+        const current = clampVital($btn.attr('data-value')) ?? clampVital($btn.text()) ?? 0;
         const $input = $('<input type="number" class="dooms-pb-vital-input" min="0" max="100" step="1" inputmode="numeric" />').val(current);
         $btn.hide().after($input);
         $input.trigger('focus').trigger('select');
@@ -744,7 +745,9 @@ function renderPortraitBarNow() {
     // Vitals: read the sheet once per render; each card reads its own values.
     const vitalsCfg = vitalsConfig(extensionSettings);
     const vitalsDefs = vitalsCfg.enabled ? vitalsCfg.customStats.filter(d => d.enabled) : [];
-    const playerVitalsMap = (vitalsDefs.length && vitalsCfg.player.enabled) ? readPlayerVitals(vitalsDefs) : null;
+    // Each card shows the vitals its character carries (D231): the persona's own, an NPC's by name.
+    const playerDefs = vitalsDefs.length ? playerVitalDefs(extensionSettings) : [];
+    const playerVitalsMap = playerDefs.length ? readPlayerVitals(playerDefs) : null;
 
     const cardData = characters.map((char, idx) => {
         const portraitSrc = resolvePortrait(char.name);
@@ -768,16 +771,17 @@ function renderPortraitBarNow() {
 
         // Vitals for this card: the persona reads the player block, an NPC its own record.
         let vitalsMap = null;
-        if (vitalsDefs.length) {
+        const cardDefs = char.isUser ? playerDefs : vitalsFor(vitalsDefs, { name: char.name });
+        if (cardDefs.length) {
             vitalsMap = char.isUser
                 ? playerVitalsMap
-                : readVitals((char.details || getCharacterDetails(char.name))?.stats, vitalsDefs);
+                : readVitals((char.details || getCharacterDetails(char.name))?.stats, cardDefs);
         }
-        const vitalsStrip = (vitalsMap && vitalsCfg.showOnCards) ? buildVitalsStrip(vitalsMap, vitalsDefs, vitalsCfg) : '';
+        const vitalsStrip = (vitalsMap && vitalsCfg.showOnCards) ? buildVitalsStrip(vitalsMap, cardDefs, vitalsCfg) : '';
 
         let backFace = '';
         try {
-            backFace = buildPortraitBackFace(char.name, emoji, char.details, { isUser: !!char.isUser, vitalsMap, vitalsDefs, vitalsCfg });
+            backFace = buildPortraitBackFace(char.name, emoji, char.details, { isUser: !!char.isUser, vitalsMap, vitalsDefs: cardDefs, vitalsCfg });
         } catch (e) {
             console.error(`[Dooms Portrait Bar] Error building back face for ${char.name}:`, e);
         }
@@ -1794,21 +1798,63 @@ function readPlayerVitals(defs) {
 }
 
 /**
- * The thin stacked bars on the card front: the first `maxBars` vitals with a
- * value, each in its own colour (the warning colour at or below `lowAt`),
- * every vital listed in the tooltip. Static markup, so the card's HTML
- * cache and the reconciler treat it like the rest of the card.
+ * The vitals on the card front: the first `maxBars` with a value, each as
+ * it is set to show (D232): a thin bar, or a small tag that says the
+ * number ("⚡ 62%") or the level the value is on ("Interested"). Each in
+ * its own colour (the warning colour at or below `lowAt`, for a bar or a
+ * number; a level has no warning), every vital listed in the tooltip.
+ * Static markup, so the card's HTML cache and the reconciler treat it like
+ * the rest of the card.
  */
-function buildVitalsStrip(map, defs, cfg) {
+export function buildVitalsStrip(map, defs, cfg) {
     const withValue = defs.filter(d => typeof map[d.name] === 'number');
     if (!withValue.length) return '';
-    const title = withValue.map(d => `${d.name} ${map[d.name]}%`).join(' · ');
-    const bars = withValue.slice(0, cfg.maxBars).map(d => {
+    const title = withValue.map(d => vitalTip(d, map[d.name])).join(' · ');
+    const shown = withValue.slice(0, cfg.maxBars);
+    const tags = shown.filter(d => d.show !== 'bar').map(d => {
         const v = map[d.name];
-        const low = v <= cfg.lowAt ? ' is-low' : '';
+        const color = d.show === 'level' ? d.color : vitalColor(d, v, cfg.lowAt);
+        const icon = d.icon ? `${escapeHtml(d.icon)} ` : '';
+        return `<span class="dooms-pb-vital-tag is-${d.show}" style="--c:${escapeHtml(color)}">${icon}${escapeHtml(vitalText(d, v))}</span>`;
+    }).join('');
+    const bars = shown.filter(d => d.show === 'bar').map(d => {
+        const v = map[d.name];
+        const low = vitalIsLow(d, v, cfg.lowAt) ? ' is-low' : '';
         return `<i class="dooms-pb-vital${low}" style="--v:${v}%;--c:${escapeHtml(vitalColor(d, v, cfg.lowAt))}"></i>`;
     }).join('');
-    return `<div class="dooms-pb-vitals" title="${escapeHtml(title)}">${bars}</div>`;
+    return `<div class="dooms-pb-vitals" title="${escapeHtml(title)}">${tags ? `<span class="dooms-pb-vital-tags">${tags}</span>` : ''}${bars}</div>`;
+}
+
+/**
+ * One vital's row on the card back, by how it is set to show (D232). A
+ * bar: icon, name, track, the number. A percent: icon, name, the level it
+ * is on when it has levels, the number. A level: icon, name, a step for
+ * each level (lit up to the one it is on), the level's name. The value at
+ * the row's end is a button either way: pressed, it becomes a number box.
+ */
+export function vitalRowHtml(d, v, { nameEsc, isUser, lowAt }) {
+    const nameAttr = escapeHtml(d.name);
+    const rung = rungOf(d, v);
+    const asLevel = d.show === 'level' && !!rung;
+    const low = !asLevel && vitalIsLow(d, v, lowAt);
+    const color = escapeHtml(asLevel ? d.color : vitalColor(d, v, lowAt));
+    let middle;
+    if (asLevel) {
+        const steps = Array.from({ length: rung.count }, (_, i) => `<i${i <= rung.index ? ' class="is-on"' : ''}></i>`).join('');
+        middle = `<span class="dooms-pb-vital-steps" style="--c:${color}">${steps}</span>`;
+    } else if (d.show === 'percent' || d.show === 'level') {
+        middle = `<span class="dooms-pb-vital-rung">${rung ? escapeHtml(rung.label) : ''}</span>`;
+    } else {
+        middle = `<span class="dooms-pb-vital-track"><i style="--v:${v}%;--c:${color}"></i></span>`;
+    }
+    const text = asLevel ? rung.label : `${v}%`;
+    const tip = asLevel ? `${v}%${rung.note ? ` · ${rung.note}` : ''} · click to edit the number` : (rung && rung.note ? `${rung.label}: ${rung.note} · click to edit` : 'Click to edit');
+    return `<div class="dooms-pb-vital-row is-${d.show}${low ? ' is-low' : ''}">
+                <span class="dooms-pb-vital-icon">${escapeHtml(d.icon || '')}</span>
+                <span class="dooms-pb-vital-name">${nameAttr}</span>
+                ${middle}
+                <button type="button" class="dooms-pb-vital-val${asLevel ? ' is-label' : ''}" style="${d.show === 'bar' ? '' : `color:${color}`}" data-char="${nameEsc}" data-user="${isUser ? '1' : '0'}" data-vital="${nameAttr}" data-value="${v}" title="${escapeHtml(tip)}">${escapeHtml(text)}</button>
+            </div>`;
 }
 
 /**
@@ -1829,17 +1875,8 @@ function buildPortraitBackFace(charName, emoji, details = null, extras = {}) {
     const { isUser = false, vitalsMap = null, vitalsDefs = [], vitalsCfg = null } = extras || {};
     if (vitalsMap && vitalsDefs.length) {
         const lowAt = vitalsCfg ? vitalsCfg.lowAt : 25;
-        const rows = vitalsDefs.filter(d => typeof vitalsMap[d.name] === 'number').map(d => {
-            const v = vitalsMap[d.name];
-            const color = escapeHtml(vitalColor(d, v, lowAt));
-            const nameAttr = escapeHtml(d.name);
-            return `<div class="dooms-pb-vital-row${v <= lowAt ? ' is-low' : ''}">
-                <span class="dooms-pb-vital-icon">${escapeHtml(d.icon || '')}</span>
-                <span class="dooms-pb-vital-name">${nameAttr}</span>
-                <span class="dooms-pb-vital-track"><i style="--v:${v}%;--c:${color}"></i></span>
-                <button type="button" class="dooms-pb-vital-val" data-char="${nameEsc}" data-user="${isUser ? '1' : '0'}" data-vital="${nameAttr}" title="Click to edit">${v}%</button>
-            </div>`;
-        }).join('');
+        const rows = vitalsDefs.filter(d => typeof vitalsMap[d.name] === 'number')
+            .map(d => vitalRowHtml(d, vitalsMap[d.name], { nameEsc, isUser, lowAt })).join('');
         if (rows) {
             sectionsHtml += `<div class="dooms-pb-back-section dooms-pb-back-vitals">
                 <div class="dooms-pb-back-label">💓 Vitals</div>

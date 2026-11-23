@@ -288,5 +288,154 @@ check('updatePlayerVital on an empty block seeds the rest from the sheet', (() =
     return m.Energy === 9 && m.Health === 100;
 })());
 
+// ── 8. Who a vital is for (D231) ──
+{
+    const scoped = (patch = {}) => ({ trackerConfig: { presentCharacters: { characterStats: { enabled: true, customStats: [
+        { id: 'health', name: 'Health', enabled: true, start: 100, ai: true },
+        { id: 'edge', name: 'Edge', enabled: true, start: 0, ai: true, who: 'named', names: ['Eli Vega'] },
+        { id: 'attention', name: 'Attention', enabled: true, start: 10, ai: true, who: 'named', names: ['Roxy', ' roxy ', 7] },
+        { id: 'hunger', name: 'Hunger', enabled: true, start: 50, ai: true, who: 'player' },
+        { id: 'threat', name: 'Threat', enabled: true, start: 20, ai: true, who: 'others' },
+    ], player: { enabled: true }, ...patch } } } });
+    const sd = V.vitalDefs(scoped());
+    const byName = (n) => sd.find(d => d.name === n);
+    check('D231: an entry without who is for everyone, with no names', defs[0].who === 'all' && Array.isArray(defs[0].names) && defs[0].names.length === 0);
+    check('D231: an unknown who reads as everyone', V.normalizeVitalDef({ name: 'X', who: 'aliens' }).who === 'all');
+    check('D231: names are trimmed, kept once, strings only', JSON.stringify(byName('Attention').names) === '["Roxy"]');
+    check('D231: parseVitalNames splits on commas and lines', JSON.stringify(V.parseVitalNames('Roxy, Eli Vega;\nroxy ,, ')) === '["Roxy","Eli Vega"]');
+    check('D231: sameWho takes a first name for the full one, either way', V.sameWho('Roxy', 'Roxy Vance') && V.sameWho('Eli Vega', 'eli') && V.sameWho('Élise', 'elise'));
+    check('D231: sameWho tells different people apart', !V.sameWho('Jack', 'Eli Vega') && !V.sameWho('Roxy', 'Roxanne') && !V.sameWho('', 'Roxy'));
+    check('D231: a vital for everyone is everyone\'s', V.vitalAppliesTo(byName('Health'), { name: 'Mara' }) && V.vitalAppliesTo(byName('Health'), { isPlayer: true }));
+    check('D231: ...and stops at the persona while "Your character too" is off', !V.vitalAppliesTo(byName('Health'), { isPlayer: true, shared: false }));
+    check('D231: a vital for the player is the persona\'s only', V.vitalAppliesTo(byName('Hunger'), { isPlayer: true, shared: false }) && !V.vitalAppliesTo(byName('Hunger'), { name: 'Mara' }));
+    check('D231: a vital for the others is never the persona\'s', V.vitalAppliesTo(byName('Threat'), { name: 'Mara' }) && !V.vitalAppliesTo(byName('Threat'), { isPlayer: true }));
+    check('D231: a named vital is its character\'s only', V.vitalAppliesTo(byName('Attention'), { name: 'Roxy Vance' }) && !V.vitalAppliesTo(byName('Attention'), { name: 'Mara' }));
+    check('D231: a named vital is the persona\'s when the name is one the player goes by',
+        V.vitalAppliesTo(byName('Edge'), { isPlayer: true, playerNames: ['Eli Vega'] }) && !V.vitalAppliesTo(byName('Edge'), { isPlayer: true, playerNames: ['Jack'] }));
+    check('D231: ...and that character\'s when another story meets them', V.vitalAppliesTo(byName('Edge'), { name: 'Eli Vega' }));
+    check('D231: a named vital with no names is nobody\'s', !V.vitalAppliesTo({ who: 'named', names: [] }, { name: 'Roxy' }) && !V.vitalAppliesTo({ who: 'named', names: [] }, { isPlayer: true, playerNames: ['Roxy'] }));
+    check('D231: vitalsFor hands the same list back when all of it applies', V.vitalsFor(defs, { name: 'Mara' }) === defs);
+    check('D231: vitalsFor keeps sheet order', V.vitalsFor(sd, { name: 'Roxy' }).map(d => d.name).join() === 'Health,Attention,Threat');
+    check('D231: the sample character shows what every character carries', V.castVitalDefs(sd).map(d => d.name).join() === 'Health,Threat');
+    check('D231: the named notes leave the player\'s own out',
+        JSON.stringify(V.namedVitalNotes(sd, ['Eli Vega'])) === '[{"name":"Attention","names":["Roxy"]}]' && V.namedVitalNotes(sd, ['Jack']).length === 2);
+    check('D231: the persona\'s vitals, played as Eli', V.playerVitalDefs(scoped(), ['Eli Vega']).map(d => d.name).join() === 'Health,Edge,Hunger');
+    check('D231: ...played as Jack', V.playerVitalDefs(scoped(), ['Jack']).map(d => d.name).join() === 'Health,Hunger');
+    check('D231: ...with "Your character too" off, the ones meant for the player stay',
+        V.playerVitalDefs(scoped({ player: { enabled: false } }), ['Eli Vega']).map(d => d.name).join() === 'Edge,Hunger' && V.playerVitalsOn(scoped({ player: { enabled: false } }), ['Eli Vega']));
+    check('D231: a plain sheet with "Your character too" off still gives the persona none', !V.playerVitalsOn(sheet({ player: { enabled: false } })) && V.playerVitalsOn(sheet()));
+    check('D231: vitals off gives the persona none', V.playerVitalDefs(scoped({ enabled: false }), ['Eli Vega']).length === 0);
+
+    const next = JSON.stringify({ characters: [
+        { name: 'Roxy Vance', stats: [{ name: 'Health', value: 80 }, { name: 'Attention', value: 55 }, { name: 'Edge', value: 90 }] },
+        { name: 'Mara', stats: [{ name: 'Health', value: 70 }, { name: 'Attention', value: 99 }, { name: 'Hunger', value: 1 }] },
+    ] });
+    const out = JSON.parse(V.applyVitalsToCharacters(next, null, sd)).characters;
+    check('D231: applying keeps a named vital on its character', out[0].stats.map(x => `${x.name}=${x.value}`).join() === 'Health=80,Attention=55,Threat=20', JSON.stringify(out[0].stats));
+    check('D231: ...and drops it from everyone else, the player\'s too', out[1].stats.map(x => `${x.name}=${x.value}`).join() === 'Health=70,Threat=20', JSON.stringify(out[1].stats));
+    const onlyNamed = V.vitalDefs({ trackerConfig: { presentCharacters: { characterStats: { enabled: true, customStats: [{ name: 'Attention', who: 'named', names: ['Roxy'] }] } } } });
+    const lone = JSON.parse(V.applyVitalsToCharacters('[{"name":"Mara","stats":[{"name":"Attention","value":5}]},{"name":"Roxy"}]', null, onlyNamed));
+    check('D231: a character who carries none has no stats at all', !('stats' in lone[0]) && lone[1].stats[0].name === 'Attention' && lone[1].stats[0].value === 100, JSON.stringify(lone));
+    const pl = JSON.parse(V.applyVitalsToPlayer('{"stats":[{"name":"Edge","value":62},{"name":"Attention","value":40}]}', null, V.playerVitalDefs(scoped(), ['Eli Vega'])));
+    check('D231: the persona\'s block holds the persona\'s vitals', pl.stats.map(x => `${x.name}=${x.value}`).join() === 'Health=100,Edge=62,Hunger=50', JSON.stringify(pl.stats));
+
+    // Through the prompt and a reply, as Eli and as Jack.
+    const jp = await import(`${DES}/src/systems/generation/jsonPromptHelpers.js`);
+    extensionSettings.trackerConfig.presentCharacters.characterStats = scoped().trackerConfig.presentCharacters.characterStats;
+    V.setPlayedNamesSource(() => ['Eli Vega', 'Jordan']);
+    const castSpec = jp.buildCharactersJSONInstruction();
+    check('D231: the characters spec asks for what every character carries', castSpec.includes('"Health"') && castSpec.includes('"Threat"') && !castSpec.includes('"Edge"') && !castSpec.includes('"Attention"') && !castSpec.includes('"Hunger"'), castSpec);
+    const playerSpec = jp.buildPlayerJSONInstruction();
+    check('D231: the player spec asks for the persona\'s own', playerSpec.includes('"Edge"') && playerSpec.includes('"Hunger"') && playerSpec.includes('"Health"') && !playerSpec.includes('"Attention"') && !playerSpec.includes('"Threat"'), playerSpec);
+    const guide = jp.buildVitalsGuidance(false, 'Eli Vega');
+    check('D231: the guidance asks for a named vital by name', guide.includes('Only Roxy has "Attention"') && guide.includes('{"name": "Attention", "value": X}'), guide);
+    check('D231: ...and not for the one that is the player\'s', !guide.includes('"Edge"'), guide);
+    check('D231: the compact guidance does the same in fewer words', (() => { const g = jp.buildVitalsGuidance(true, 'Eli Vega'); return g.includes('Only Roxy:') && g.includes('"Attention"') && !g.includes('"Edge"'); })());
+    V.setPlayedNamesSource(() => ['Jack']);
+    check('D231: played as Jack, Edge is asked for on Eli\'s entry instead', jp.buildVitalsGuidance(false, 'Jack').includes('Only Eli Vega has "Edge"') && !jp.buildPlayerJSONInstruction().includes('"Edge"'));
+    check('D231: a plain sheet\'s guidance is as it was', (() => {
+        extensionSettings.trackerConfig.presentCharacters.characterStats = sheet().trackerConfig.presentCharacters.characterStats;
+        const g = jp.buildVitalsGuidance(false, 'Jordan');
+        extensionSettings.trackerConfig.presentCharacters.characterStats = scoped().trackerConfig.presentCharacters.characterStats;
+        return !g.includes('Only ') && g.endsWith('follows the same rules.');
+    })());
+
+    V.setPlayedNamesSource(() => ['Eli Vega']);
+    state.committedTrackerData.characterThoughts = JSON.stringify([{ name: 'Roxy', stats: [{ name: 'Health', value: 90 }, { name: 'Attention', value: 30 }] }]);
+    state.committedTrackerData.player = '{"stats":[{"name":"Edge","value":40}]}';
+    chat.length = 0;
+    chat.push({ is_user: true, mes: 'I lean on the bar.', extra: {} });
+    chat.push({ is_user: false, mes: '```json\n' + JSON.stringify({
+        characters: [{ name: 'Roxy', stats: [{ name: 'Health', value: 88 }, { name: 'Attention', value: 45 }] }, { name: 'Mara', stats: [{ name: 'Health', value: 60 }] }],
+        player: { stats: [{ name: 'Health', value: 75 }, { name: 'Edge', value: 52 }, { name: 'Attention', value: 9 }] },
+    }) + '\n```\nRoxy looks up.', swipe_id: 0, swipes: ['x'], extra: {} });
+    state.setIsAwaitingNewMessage(true);
+    quiet(() => st.onMessageReceived());
+    const cast = JSON.parse(state.lastGeneratedData.characterThoughts);
+    check('D231: a reply leaves Roxy her Attention and gives Mara none',
+        cast[0].stats.some(x => x.name === 'Attention' && x.value === 45) && !cast[1].stats.some(x => x.name === 'Attention'), JSON.stringify(cast));
+    const me = JSON.parse(state.lastGeneratedData.player).stats;
+    check('D231: ...and the persona their Edge, not Roxy\'s Attention', me.map(x => `${x.name}=${x.value}`).join() === 'Health=75,Edge=52,Hunger=50', JSON.stringify(me));
+    check('D231: the persona\'s card takes an edit to their own vital only', th.updatePlayerVital('Edge', 70) === 70 && th.updatePlayerVital('Attention', 5) === null);
+    V.setPlayedNamesSource(() => []);
+    extensionSettings.trackerConfig.presentCharacters.characterStats = sheet().trackerConfig.presentCharacters.characterStats;
+}
+
+// ── 9. How a vital is shown, and its levels (D232) ──
+{
+    check('D232: an entry that says nothing is a bar with no levels', defs[0].show === 'bar' && defs[0].about === '' && defs[0].rungs.length === 0);
+    check('D232: an unknown way to show reads as a bar', V.normalizeVitalDef({ name: 'X', show: 'dial' }).show === 'bar');
+    const rungs = V.normalizeRungs([
+        { at: 75, label: 'Fixated', note: ' will not   look away. ' }, { at: 0, label: 'Unaware' }, { at: '50%', label: 'Interested' },
+        { at: 50, label: 'Twice' }, { at: 25, label: '  ' }, { at: 'x', label: 'Lost' }, null, { at: 140, label: 'Over' },
+    ]);
+    check('D232: levels come back lowest first, one a value, the nameless and unreadable dropped',
+        rungs.map(r => `${r.at}:${r.label}`).join() === '0:Unaware,50:Interested,75:Fixated,100:Over', JSON.stringify(rungs));
+    check('D232: a level\'s note is kept on one line', rungs[2].note === 'will not look away.');
+    check('D232: at most eight levels', V.normalizeRungs(Array.from({ length: 12 }, (_, i) => ({ at: i * 5, label: `L${i}` }))).length === V.MAX_VITAL_RUNGS);
+    check('D232: names alone spread evenly', V.evenRungs(['Unaware', 'Curious', ' ', 'Interested', 'Fixated']).map(r => r.at).join() === '0,25,50,75' && V.evenRungs([]).length === 0);
+
+    const ladder = V.normalizeVitalDef({ name: 'Attention', show: 'level', about: 'How closely Roxy is watching.  ', rungs: [
+        { at: 0, label: 'Unaware' }, { at: 25, label: 'Curious', note: 'asks around.' }, { at: 50, label: 'Interested' }, { at: 75, label: 'Fixated' },
+    ] });
+    const edge = V.normalizeVitalDef({ name: 'Edge', show: 'percent', rungs: [{ at: 40, label: 'Tells' }, { at: 100, label: 'Gone' }] });
+    check('D232: a value is on the highest level it has reached', V.rungOf(ladder, 49).label === 'Curious' && V.rungOf(ladder, 50).label === 'Interested' && V.rungOf(ladder, 100).label === 'Fixated');
+    check('D232: ...which knows where it sits and what it covers', (() => { const r = V.rungOf(ladder, 30); return r.index === 1 && r.count === 4 && r.at === 25 && r.upTo === 49 && r.note === 'asks around.'; })());
+    check('D232: under the lowest level there is none', V.rungOf(edge, 39) === null && V.rungOf(defs[0], 50) === null && V.rungOf(ladder, 'x') === null);
+    check('D232: a card says the level for a vital shown as its level', V.vitalText(ladder, 55) === 'Interested');
+    check('D232: ...the number for one shown as a number or a bar', V.vitalText(edge, 62) === '62%' && V.vitalText(defs[0], 72) === '72%');
+    check('D232: ...and the number where there is no level to say', V.vitalText(V.normalizeVitalDef({ name: 'X', show: 'level' }), 30) === '30%' && V.vitalText({ ...edge, show: 'level' }, 10) === '10%' && V.vitalText(ladder, null) === '');
+    check('D232: the tooltip says both', V.vitalTip(ladder, 55) === 'Attention: Interested (55%)' && V.vitalTip(defs[0], 72) === 'Health 72%' && V.vitalTip(edge, 20) === 'Edge 20%');
+    const lines = V.vitalGuideLines([defs[0], ladder, edge]);
+    check('D232: the AI is told what a vital measures and its levels by value', lines.length === 2
+        && lines[0] === '"Attention": How closely Roxy is watching. Its levels by value: 0-24 "Unaware"; 25-49 "Curious" (asks around); 50-74 "Interested"; 75-100 "Fixated".'
+        && lines[1] === '"Edge" has levels by value: 40-99 "Tells"; 100 "Gone".', lines.join(' | '));
+    check('D232: a sheet that says nothing more tells the AI nothing more', V.vitalGuideLines(defs).length === 0);
+    check('D232: the context line names the level', V.formatVitalsLine({ Attention: 55, Edge: 20 }, [ladder, edge]) === 'Attention 55% (Interested), Edge 20%');
+
+    const jp = await import(`${DES}/src/systems/generation/jsonPromptHelpers.js`);
+    const cs = extensionSettings.trackerConfig.presentCharacters.characterStats;
+    const kept = cs.customStats;
+    cs.customStats = [...kept, { ...ladder, who: 'named', names: ['Roxy'], id: 'attention', enabled: true }];
+    const guide = jp.buildVitalsGuidance(false, 'Jordan');
+    check('D232: the guidance carries the levels and says the number is still what is returned',
+        guide.includes('Its levels by value: 0-24 "Unaware"') && guide.includes('still return the number'), guide);
+    check('D232: ...in fewer words when compact', jp.buildVitalsGuidance(true, 'Jordan').endsWith('Return the number; the level follows from it.'));
+    state.committedTrackerData.characterThoughts = JSON.stringify([{ name: 'Roxy', stats: [{ name: 'Health', value: 90 }, { name: 'Attention', value: 45 }] }]);
+    const pb2 = await import(`${DES}/src/systems/generation/promptBuilder.js`);
+    check('D232: the context summary names the level a character is on', pb2.generateContextualSummary().includes('Attention 45% (Curious)'), pb2.generateContextualSummary());
+    cs.customStats = kept;
+
+    // The card front: a bar for a bar, a tag for a number or a level.
+    const pbar = await import(`${DES}/src/systems/ui/portraitBar.js`);
+    const cfg = { maxBars: 3, lowAt: 25 };
+    const strip = pbar.buildVitalsStrip({ Health: 72, Attention: 55, Edge: 20 }, [defs[0], ladder, { ...edge, icon: '⚡' }], cfg);
+    check('D232: the card front draws a bar for a bar', (strip.match(/class="dooms-pb-vital"/g) || []).length === 1 && strip.includes('--v:72%'), strip);
+    check('D232: ...a tag with the level for a level', strip.includes('dooms-pb-vital-tag is-level') && strip.includes('>Interested</span>'), strip);
+    check('D232: ...a tag with the number for a number, in the warning colour when low', strip.includes('is-percent') && strip.includes('⚡ 20%') && strip.includes(`--c:${V.LOW_VITAL_COLOR}`), strip);
+    check('D232: ...and every vital in the tooltip', strip.includes('title="Health 72% · Attention: Interested (55%) · Edge 20%"'), strip);
+    check('D232: a plain sheet\'s front is bars alone, as before', !pbar.buildVitalsStrip({ Health: 72, Energy: 50 }, defs, cfg).includes('dooms-pb-vital-tag'));
+}
+
 console.log(failures === 0 ? '\nAll vitals checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -30,7 +30,7 @@ import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFac
 import { ATLAS_ID, ATLAS_TABS, openersLabel, openersNote, BUSY_HINT_MS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml, atlasCampaignGateHtml, atlasWorldChoiceHtml, sceneSummaryText } from './atlasViews.js';
 import { isCanonOn } from '../features/canon.js';
 import { isVoicesEnabled, getEngine, getEngineIfLoaded, unlockVoicesAudio } from '../voices/voiceBoot.js';
-import { lastScenePresent, sceneAway, deletePlan, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, stopStartWait, openersWanted, setOpenersWanted, openerLengthWanted, setOpenerLengthWanted, openersWarning, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, campaignNow, campaignsDecide, campaignList, worldOfCampaign, worldsWithCampaigns, worldStories, lastStory, storyInFront, worldMap, setWorldMap, attachWorld, makeCampaignWorld, switchCampaign, makeCampaign, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
+import { lastScenePresent, sceneAway, deletePlan, scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, stopStartWait, openersWanted, setOpenersWanted, openerLengthWanted, setOpenerLengthWanted, openersWarning, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, worldNews, setNewsShared, removeWorldNews, campaignNow, campaignsDecide, campaignList, worldOfCampaign, worldsWithCampaigns, worldStories, lastStory, storyInFront, worldMap, setWorldMap, attachWorld, makeCampaignWorld, switchCampaign, makeCampaign, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
 import { describeStartResult, describeEndResult, describeDeleteResult, gapOf, hubConfig, packOf, readDirection, describeDirection, openersCount, openerLength, startStepWords, elapsedWords, MAX_NOTE } from '../../utils/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
@@ -110,6 +110,7 @@ let opening = '';         // the world being loaded to be shown
 let followWait = null;    // that load, for whoever must wait for it
 let justMoved = false;    // the chat in front was moved to the campaign's world in this sitting: Put it back is offered (D215)
 let storyChoice = '';     // the story picked in the list, where a world has more than one (D216); '' for the chat in front's, else the one played last
+let newsOpen = false;     // the world's news between its stories (D235) is unfolded under the story chooser
 let deleting = '';        // the scene whose Delete was pressed and waits for "Delete scene N" or "Keep it" (D197)
 let deletingNow = '';     // the scene being deleted
 let removal = null;       // what deleting the scene asked about would take back (D206): { id, loading } until its log is read, then the plan
@@ -621,7 +622,14 @@ function campaignHead() {
     let list = [];
     try { list = campaignList(); } catch (e) { list = []; }
     const mine = view.campaign && view.world ? worldRow(view.world) : null;
-    return { list, now: view.campaign, world: mine ? { id: mine.id, name: mine.name } : null, busy: campaignBusy, notice: mixup(), stories: view.stories, story: view.story };
+    // The world's news between its stories (D235), seen from the story shown: where it has more than one.
+    let news = null;
+    if (view.world && view.stories.length > 1) {
+        // The list stays as the player left it, unfolded or not, when the sidebar is drawn again.
+        try { const el = $(`${root()} .dooms-atlas-news-list`); if (el.length) newsOpen = !!el.prop('open'); } catch (e) { /* as it was */ }
+        try { news = { ...worldNews(view.story || view.world), open: newsOpen }; } catch (e) { news = null; }
+    }
+    return { list, now: view.campaign, world: mine ? { id: mine.id, name: mine.name } : null, busy: campaignBusy, notice: mixup(), stories: view.stories, story: view.story, news };
 }
 
 /** What the Atlas asks for in place of the tabs (D213): a campaign, the campaign's world, or that world chosen again. '' when it asks for nothing. */
@@ -1441,13 +1449,19 @@ async function endSceneGo({ thenContinue = false, thenNext = false } = {}) {
     const bans = counted ? [] : null;
     if (counted) $p.find('.dooms-atlas-end-ban:checked').each(function () { bans.push({ phrase: String($(this).val() || ''), kind: this.getAttribute('data-kind') === 'address' ? 'address' : 'phrase', count: Number(this.getAttribute('data-count')) || 0 }); });
     const chosen = new Set((bans || []).map(b => b.phrase));
+    // What the scene sends out to the world's other stories (D235): the events left ticked, and one of the player's own.
+    const newsPrep = setup.prep.news && Array.isArray(setup.prep.news.events) ? setup.prep.news : null;
+    const newsOn = new Set();
+    $p.find('.dooms-atlas-end-news:checked').each(function () { newsOn.add(Number($(this).val())); });
+    const newsOwn = String($p.find('.dooms-atlas-end-news-own').val() || '').trim();
+    const news = newsPrep ? [...newsPrep.events.filter((x, i) => newsOn.has(i)).map(x => ({ about: x.about, text: x.text })), ...(newsOwn ? [{ about: '', text: newsOwn }] : [])] : undefined;
     const keep = !!setup.prep.stale && !replaceMemory;
     const steps = setup.prep.steps || {};
     const states = { recap: recap ? 'ok' : 'skipped', canon: steps.canon ? (skipCanon ? 'skipped' : 'waiting') : 'off', world: steps.world ? (keep ? 'kept' : skipWorld ? 'skipped' : 'waiting') : 'off', snapshot: keep ? 'kept' : 'waiting', book: 'waiting' };
-    setup = { ...setup, prep: { ...setup.prep, recap, continuity: continuityShown(setup.prep.continuity, cont), ...(counted ? { style: { ...setup.prep.style, phrases: counted.map(h => ({ ...h, ticked: chosen.has(h.phrase) })) } } : {}) }, states, error: '' };
+    setup = { ...setup, prep: { ...setup.prep, recap, continuity: continuityShown(setup.prep.continuity, cont), ...(newsPrep ? { news: { ...newsPrep, events: newsPrep.events.map((x, i) => ({ ...x, off: !newsOn.has(i) })), own: newsOwn } } : {}), ...(counted ? { style: { ...setup.prep.style, phrases: counted.map(h => ({ ...h, ticked: chosen.has(h.phrase) })) } } : {}) }, states, error: '' };
     renderSetup();
     const onStep = (name, state) => { if (setup && setup.end) { setup = { ...setup, states: { ...setup.states, [name]: state } }; renderSetup(); } };
-    const r = await commitEnd({ recap, skipRecap: !recap, skipCanon, skipWorld, replaceMemory, onStep, bans, continuity: continuityChange(cont), conflicts: Array.isArray(setup.prep.conflicts) ? setup.prep.conflicts : undefined, wrap });
+    const r = await commitEnd({ recap, skipRecap: !recap, skipCanon, skipWorld, replaceMemory, onStep, bans, continuity: continuityChange(cont), conflicts: Array.isArray(setup.prep.conflicts) ? setup.prep.conflicts : undefined, wrap, news });
     if (!setup || !setup.end) return;
     if (!r.ok) { setup = { ...setup, states: { ...setup.states, snapshot: 'failed' }, error: describeEndResult(r) }; renderSetup(); return; }
     setup = { ...setup, result: r, states: { ...setup.states, canon: r.canon === 'ok' ? 'ok' : r.canon === 'failed' ? 'failed' : setup.states.canon, world: ['ok', 'failed', 'kept', 'skipped'].includes(r.world) ? r.world : setup.states.world, snapshot: r.snapshot === 'kept' ? 'kept' : 'ok', book: r.book === 'ok' ? 'ok' : r.book === 'failed' ? 'failed' : 'off' }, prep: { ...setup.prep, book: r.bookResult && r.bookResult.name ? r.bookResult.name : setup.prep.book } };
@@ -2043,6 +2057,8 @@ function build() {
             if (act === 'chat-move') { await moveChat(); return; }
             if (act === 'chat-move-undo') { await putChatBack(); return; }
             if (act === 'world-change') { changing = true; campaignError = ''; if (folded && isPhone()) setFolded(false); render(); return; }
+            // An event taken out of the world's news by hand (D235): it reaches no story it has not reached yet.
+            if (act === 'news-remove') { if (view.world && !midWrite()) { try { removeWorldNews(view.world, this.getAttribute('data-id') || ''); } catch (e) { /* as it was */ } render(); } return; }
             if (act === 'world-keep') { changing = false; campaignError = ''; render(); return; }
             if (act === 'world-use') { await useWorld(this.getAttribute('data-id') || ''); return; }
             if (act === 'world-detach') { await useWorld(''); return; }
@@ -2422,6 +2438,8 @@ function build() {
     document.addEventListener('dooms:voices-state', () => { if (isOpen && setup && setup.start && setup.step === 'pick') syncListening(); });
     $(document).on('change', `${root()} .dooms-atlas-campaign-select`, function () { switchTo(String($(this).val() || '')); });
     // Another story of the world (D216): shown from its memory, or as its scene stands when that is the chat in front.
+    // Whether the world's stories share their events (D235).
+    $(document).on('change', `${root()} .dooms-atlas-news-toggle`, function () { if (view.world && !midWrite()) { try { setNewsShared(view.world, this.checked === true); } catch (e) { /* as it was */ } } render(); });
     $(document).on('change', `${root()} .dooms-atlas-story-select`, async function () { if (midWrite()) return; storyChoice = String($(this).val() || ''); showFront = false; clearOverMap(); layer = ''; render(); if (followWait) await followWait; });
     $(document).on('keydown', `${root()} .dooms-atlas-gate-name`, function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); newCampaign(String($(this).val() || '')); } });
     $(document).on('input', `${root()} .dooms-atlas-gate-name`, function () { if (campaignError) { campaignError = ''; $(`${root()} .dooms-atlas-gate-error`).remove(); } });

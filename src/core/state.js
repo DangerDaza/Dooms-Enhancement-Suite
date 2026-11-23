@@ -285,6 +285,11 @@ export let extensionSettings = {
     // VoiceRef {source, id}. Versioned per campaign like the portrait
     // (campaignProfiles PROFILE_FIELDS). Absent = the Narrator reads them.
     characterVoices: {},
+    // A character as each of the player's characters knows them (D234,
+    // src/utils/characterWith.js): characterWith[name][userCharacter] =
+    // { relationship?, description? }, read in place of the shared ones in
+    // that player's story. Versioned per campaign like the rest.
+    characterWith: {},
     // DES voices settings (master toggle, auto-read, Narrator voice, model).
     voices: defaultVoiceSettings(),
     knownCharacters: {}, // Persistent roster of all characters ever seen (key: name, value: { emoji })

@@ -1969,6 +1969,140 @@ console.log('\n§5k the scenes of a world in the Atlas: the list, the ways in, t
     await page.evaluate(() => { window.__board.closeCard(); window.__set({ draw: null }); });
 }
 
+console.log('\n§5l a world\'s stories hear of each other (D235)');
+{
+    // The End sheet: what the scene sends out to the world's other stories.
+    const scene = { id: 's3', title: 'The gate at dusk' };
+    const prep = { ok: true, scene, recap: 'They met at the gate in the fog; Kiyoha carried the new healer\'s pack and said nothing about it.', from: 'Day 42', to: 'Day 42, night', stale: false, canonDone: false, steps: { canon: true, world: true } };
+    const out = { events: [{ about: 'Dock 9', text: 'A fire gutted the warehouse on Dock 9.' }, { about: 'Doc Renko', text: 'Doc Renko was found dead in his clinic.' }], to: ['Eli Vega'] };
+    const field = (o) => page.evaluate((x) => {
+        window.__endScene(x);
+        const card = document.querySelector('.dooms-atlas-setup-card');
+        const f = card.querySelector('.dooms-atlas-world-news');
+        if (!f) return null;
+        const c = card.getBoundingClientRect(); const b = f.getBoundingClientRect();
+        const own = f.querySelector('.dooms-atlas-end-news-own');
+        const go = card.querySelector('[data-act="end-go"]');
+        const notes = [...f.querySelectorAll('.dooms-atlas-start-note')];
+        return {
+            legend: f.querySelector('legend').textContent.replace(/\s+/g, ' ').trim(),
+            ticks: [...f.querySelectorAll('.dooms-atlas-end-news')].map(i => `${i.value}${i.checked ? '*' : ''}${i.disabled ? '!' : ''}`).join(),
+            lines: [...f.querySelectorAll('.dooms-atlas-news-out li')].map(li => li.textContent.replace(/\s+/g, ' ').trim()),
+            own: own ? { max: own.maxLength, value: own.value, ro: own.readOnly, wide: own.getBoundingClientRect().width } : null,
+            note: notes.length ? notes[notes.length - 1].textContent.replace(/\s+/g, ' ').trim() : '',
+            none: ((f.querySelector('.dooms-atlas-none') || {}).textContent || '').trim(),
+            above: go ? !!(f.compareDocumentPosition(go) & Node.DOCUMENT_POSITION_FOLLOWING) : true,
+            lined: Math.abs(f.querySelector('legend').getBoundingClientRect().left - card.querySelector('textarea.dooms-atlas-end-recap').closest('label').querySelector('.dooms-atlas-card-label').getBoundingClientRect().left) <= 1,
+            fits: b.left >= c.left - 1 && b.right <= c.right + 1 && card.scrollWidth <= card.clientWidth + 1 && [...f.querySelectorAll('.dooms-atlas-news-out li')].every(li => li.getBoundingClientRect().right <= b.right + 1),
+        };
+    }, o);
+    let f = await field({ prep });
+    check('a world with one story sends nothing out: the End sheet has no news field', f === null);
+    f = await field({ prep: { ...prep, news: out } });
+    check('with another story in the world the End sheet lists what the record found the world would hear of, each ticked, under who it goes to', !!f && f.legend === 'News for Eli Vega' && f.lined && f.ticks === '0*,1*' && same(f.lines, ['A fire gutted the warehouse on Dock 9. Dock 9', 'Doc Renko was found dead in his clinic. Doc Renko']) && f.above && f.fits, JSON.stringify(f));
+    check('…with a line for one of the player\'s own, and what ticking means', !!f && f.own && f.own.max === 150 && f.own.value === '' && !f.own.ro && f.own.wide > 200 && /^This world has more than one story\. The ticked lines reach Eli Vega as news, at the first scene started there on or after this scene's date, with how this scene moved the world's clocks\. Untick what the wider world would not know\. Where people stand and the threads stay this story's own\.$/.test(f.note), JSON.stringify(f && [f.own, f.note]));
+    await shot('75-end-world-news');
+    f = await field({ prep: { ...prep, news: { ...out, events: [out.events[0], { ...out.events[1], off: true }], own: 'The Red Lantern is closed until further notice.' } } });
+    check('a line unticked stays unticked, and the player\'s own stays written, when the sheet is drawn again', f.ticks === '0*,1' && f.own.value === 'The Red Lantern is closed until further notice.', JSON.stringify(f));
+    f = await field({ prep: { ...prep, news: { events: [], to: ['Eli Vega', 'Clover'] } } });
+    check('a scene with nothing for the world says so, and the player\'s own line is still there; two other stories are both named', f.legend === 'News for Eli Vega and Clover' && f.ticks === '' && f.none === 'The record found nothing in this scene that would be news elsewhere.' && !!f.own && /reach Eli Vega and Clover as news/.test(f.note), JSON.stringify(f));
+    f = await field({ prep: { ...prep, news: out }, states: { recap: 'ok', canon: 'running' } });
+    check('while the scene is being ended the ticks and the line cannot be changed', f.ticks === '0*!,1*!' && f.own.ro, JSON.stringify(f));
+    f = await field({ prep: { ...prep, news: { ...out, events: [out.events[0], { ...out.events[1], off: true }] } }, states: { recap: 'ok', canon: 'ok', world: 'ok', snapshot: 'ok' }, result: { ok: true, news: { events: 1, clocks: 1, to: ['Eli Vega'] } } });
+    check('ended, the sheet says what went out, when it is heard of, and that Undo takes it back', f.ticks === '0*!,1!' && f.own === null && f.note === 'Sent out: 1 event and a clock move. Eli Vega hears of it at the first scene started on or after this scene\'s date. One Undo takes it back with the End.', JSON.stringify(f));
+    await shot('75b-end-world-news-sent');
+    f = await field({ prep: { ...prep, news: { ...out, events: out.events.map(x => ({ ...x, off: true })) } }, states: { recap: 'ok', canon: 'ok', world: 'ok', snapshot: 'ok' }, result: { ok: true, news: { events: 0, clocks: 0, to: ['Eli Vega'] } } });
+    check('…and that nothing was, when nothing was ticked and no clock moved', f.note === 'Nothing was sent out.', f.note);
+    await page.setViewportSize({ width: 412, height: 800 });
+    f = await field({ prep: { ...prep, news: { ...out, events: [...out.events, { about: 'The waterfront', text: 'Corporate security sealed the whole of the waterfront district after the shooting at the night market, and nobody gets in or out without a pass.' }] } } });
+    check('on a phone the field stays inside the sheet, a long line wrapped', f.fits && f.ticks === '0*,1*,2*', JSON.stringify(f));
+    await shot('75c-end-world-news-phone');
+    await page.setViewportSize(VIEW);
+
+    // The Start sheet's picker: what reaches this scene, and what waits.
+    const form = { step: 'form', place: { id: 'pin:redfall-castle', label: 'Redfall Castle' }, sceneNo: 4, card: 'The Redward', people: [{ name: 'Kiyoha', here: true }], cast: ['Kiyoha'], gap: { id: 'when', words: 'about 2 days later' } };
+    const pending = { when: { date: 'Day 44', time: 'dusk' }, openers: [{ title: 'The gate', text: 'Fog lies on the causeway. Kiyoha is already at the gate, axe across her shoulders, singing badly.' }, { title: 'The yard', text: 'The castle yard is empty but for a boy with a bucket.' }] };
+    const arrives = (news) => page.evaluate((x) => {
+        window.__sceneStart(x);
+        const card = document.querySelector('.dooms-atlas-setup-card');
+        const d = card.querySelector('details.dooms-atlas-news-in');
+        const h = card.querySelector('.dooms-atlas-news-held');
+        const c = card.getBoundingClientRect();
+        const ops = card.querySelector('.dooms-atlas-openers');
+        return {
+            has: !!d, open: d ? d.open : false,
+            summary: d ? d.querySelector('summary').textContent.replace(/\s+/g, ' ').trim() : '',
+            items: d ? [...d.querySelectorAll('.dooms-atlas-news-items li')].map(li => li.textContent.replace(/\s+/g, ' ').trim()) : [],
+            said: d ? d.querySelector('p.dooms-atlas-start-note').textContent.replace(/\s+/g, ' ').trim() : '',
+            held: h ? h.textContent.replace(/\s+/g, ' ').trim() : '',
+            before: d && ops ? !!(d.compareDocumentPosition(ops) & Node.DOCUMENT_POSITION_FOLLOWING) : true,
+            fits: card.scrollWidth <= card.clientWidth + 1 && [d, h].filter(Boolean).every(el => { const b = el.getBoundingClientRect(); return b.left >= c.left - 1 && b.right <= c.right + 1; }),
+        };
+    }, { ...form, step: 'pick', pending: news === undefined ? pending : { ...pending, news } });
+    let a = await arrives();
+    check('a scene that no news reaches says nothing of it', !a.has && a.held === '');
+    a = await arrives({ events: [{ text: 'A fire gutted the warehouse on Dock 9.', date: 'Day 41', from: 'Jack' }, { text: 'Doc Renko was found dead in his clinic.', date: 'Day 43', from: 'Jack' }], clocks: 1, later: 0, waiting: 0 });
+    check('news that reaches the scene is said above the openings: whose story it came from, how much, folded', a.has && !a.open && a.summary === 'News from Jack reaches this scene: 2 events and a clock caught up.' && a.before && a.fits, JSON.stringify(a));
+    await page.evaluate(() => { document.querySelector('.dooms-atlas-setup-card details.dooms-atlas-news-in').open = true; });
+    const opened = await page.evaluate(() => { const card = document.querySelector('.dooms-atlas-setup-card'); const d = card.querySelector('details.dooms-atlas-news-in'); const c = card.getBoundingClientRect(); return { items: [...d.querySelectorAll('.dooms-atlas-news-items li')].map(li => li.textContent.replace(/\s+/g, ' ').trim()), said: d.querySelector('p.dooms-atlas-start-note').textContent.replace(/\s+/g, ' ').trim(), fits: card.scrollWidth <= card.clientWidth + 1 && [...d.querySelectorAll('li')].every(li => { const b = li.getBoundingClientRect(); return b.height > 0 && b.right <= c.right + 1; }) }; });
+    check('unfolded, each event with its date, and what is done with it', same(opened.items, ['A fire gutted the warehouse on Dock 9. Day 41', 'Doc Renko was found dead in his clinic. Day 43']) && opened.said === 'The openings were told it, the scene\'s brief says it, and starting the scene writes it into this story\'s ledger. It happened elsewhere: this story\'s player was not there.' && opened.fits, JSON.stringify(opened));
+    await shot('75d-start-world-news');
+    a = await arrives({ events: [], clocks: 2, later: 0, waiting: 0 });
+    check('clocks alone are said without a list', a.has && a.summary === 'News from the world\'s other stories reaches this scene: 2 clocks caught up.' && a.items.length === 0, JSON.stringify(a));
+    a = await arrives({ events: [], clocks: 0, later: 2, waiting: 1 });
+    check('news dated after the scene is not told: the sheet says it waits', !a.has && a.held === 'From the world\'s other stories: 2 pieces of news are dated after this scene and wait until the story reaches them; 1 more waits for the next scene.' && a.fits, JSON.stringify(a));
+    a = await arrives({ events: [{ text: 'A fire gutted the warehouse on Dock 9.', date: '', from: 'Jack' }, { text: 'The Red Lantern is closed.', date: 'Day 2', from: 'Clover' }], clocks: 0, later: 1, waiting: 0 });
+    check('two stories\' news names both, an event with no date has none, and one piece ahead is said beside', a.summary === 'News from Jack and Clover reaches this scene: 2 events.' && same(a.items, ['A fire gutted the warehouse on Dock 9.', 'The Red Lantern is closed. Day 2']) && a.held === 'From the world\'s other stories: 1 piece of news is dated after this scene and waits until the story reaches it.', JSON.stringify(a));
+    await page.evaluate(() => window.__setup(''));
+
+    // Under the story chooser: the switch, and the news kept.
+    const camps = [{ id: 'c1', name: 'First Descent', world: { id: 'first-descent', name: 'First Descent' } }, { id: 'c2', name: 'Nightcity', world: { id: 'night-city', name: 'Night City' } }];
+    const nc = { id: 'night-city', name: 'Night City' };
+    const two = [{ id: 'night-city', name: 'Jack', open: false }, { id: 'night-city~2', name: 'Eli Vega', open: false }];
+    const kept = { shared: true, clocks: 1, due: 1, later: 1, events: [
+        { id: 'n1', text: 'A fire gutted the warehouse on Dock 9.', about: 'Dock 9', date: 'Day 41', from: 'Jack', reached: ['Eli Vega'], waiting: [] },
+        { id: 'n2', text: 'Doc Renko was found dead in his clinic.', about: 'Doc Renko', date: 'Day 43', from: 'Jack', reached: [], waiting: ['Eli Vega'] },
+        { id: 'n4', text: 'The night market on Pier 4 is closed until further notice.', about: 'Pier 4', date: '', from: 'Eli Vega', reached: [], waiting: ['Jack'] },
+    ] };
+    const row = (o) => page.evaluate((x) => {
+        window.__side({ tab: 'places', body: '', scenesTab: true, ...x });
+        const h = document.querySelector('.dooms-atlas-head');
+        const s = document.querySelector('.dooms-atlas-side').getBoundingClientRect();
+        const box = h.querySelector('.dooms-atlas-news-share');
+        if (!box) return null;
+        const t = box.querySelector('.dooms-atlas-news-toggle');
+        const d = box.querySelector('details.dooms-atlas-news-list');
+        const sel = h.querySelector('.dooms-atlas-story-select');
+        return {
+            label: t.closest('label').textContent.replace(/\s+/g, ' ').trim(), on: t.checked, off: t.disabled, title: t.closest('label').getAttribute('title') || '',
+            list: !!d, open: d ? d.open : false, summary: d ? d.querySelector('summary').textContent.replace(/\s+/g, ' ').trim() : '',
+            items: d ? [...d.querySelectorAll('.dooms-atlas-news-item')].map(li => `${li.getAttribute('data-id')}|${li.querySelector('.dooms-atlas-news-text').textContent.trim()}|${li.querySelector('.dooms-atlas-news-meta').textContent.replace(/\s+/g, ' ').trim()}`) : [],
+            removes: d ? [...d.querySelectorAll('[data-act="news-remove"]')].map(b => `${b.getAttribute('data-id')}${b.disabled ? '!' : ''}:${b.getAttribute('aria-label')}`) : [],
+            under: sel ? !!(sel.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING) : false,
+            fits: h.scrollWidth <= h.clientWidth + 1 && (() => { const b = box.getBoundingClientRect(); return b.left >= s.left - 1 && b.right <= s.right + 1; })() && (d ? [...d.querySelectorAll('.dooms-atlas-news-item, [data-act="news-remove"]')].every(el => { const b = el.getBoundingClientRect(); return !d.open || (b.width > 0 && b.left >= s.left - 1 && b.right <= s.right + 1); }) : true),
+        };
+    }, o);
+    let r = await row({ campaign: { list: camps, now: camps[1], world: nc, stories: [two[0]], story: 'night-city', news: kept } });
+    check('a world with one story has no switch for sharing its events', r === null);
+    r = await row({ campaign: { list: camps, now: camps[1], world: nc, stories: two, story: 'night-city~2', news: { shared: true, clocks: 0, due: 0, later: 0, events: [] } } });
+    check('a world with more than one story has the switch under the story, on, and no list while nothing has been sent', !!r && r.label === 'Stories share world events' && r.on && !r.off && !r.list && r.under && r.fits && /Where people stand, relationships and threads stay each story's own\. Off, the stories know nothing of each other\./.test(r.title), JSON.stringify(r));
+    r = await row({ campaign: { list: camps, now: camps[1], world: nc, stories: two, story: 'night-city~2', news: kept } });
+    check('what has been sent out is counted on one folded line: the events, the clock moves, what the story shown is due and what is still ahead of it', r.list && !r.open && r.summary === 'World news · 3 events · 1 clock move · 1 due to this story\'s next scene · 1 still ahead of this story\'s date' && r.fits, JSON.stringify(r));
+    r = await row({ campaign: { list: camps, now: camps[1], world: nc, stories: two, story: 'night-city~2', news: { ...kept, open: true } } });
+    check('unfolded, each event says whose story it came from, its date and whom it has reached, with the way to take it out', r.open && same(r.items, ['n1|A fire gutted the warehouse on Dock 9.|from Jack · Day 41 · reached Eli Vega', 'n2|Doc Renko was found dead in his clinic.|from Jack · Day 43 · not yet Eli Vega', 'n4|The night market on Pier 4 is closed until further notice.|from Eli Vega · not yet Jack']) && same(r.removes, ['n1:Take this out of the world\'s news', 'n2:Take this out of the world\'s news', 'n4:Take this out of the world\'s news']) && r.fits, JSON.stringify(r));
+    await shot('75e-world-news-list');
+    r = await row({ campaign: { list: camps, now: camps[1], world: nc, stories: two, story: 'night-city', news: { ...kept, shared: false, open: true } } });
+    check('switched off, the switch says so and what was sent is still listed', !r.on && r.list && r.items.length === 3);
+    r = await row({ campaign: { list: camps, now: camps[1], world: nc, busy: true, stories: two, story: 'night-city', news: { ...kept, open: true } } });
+    check('while a campaign is being switched to, the switch and the list wait', r.off && same(r.removes.map(x => x.split(':')[0]), ['n1!', 'n2!', 'n4!']));
+    await page.setViewportSize({ width: 390, height: 844 });
+    r = await row({ campaign: { list: camps, now: camps[1], world: nc, stories: two, story: 'night-city~2', news: { ...kept, open: true } } });
+    check('on a phone the switch and the list stay inside the sidebar', r.fits && r.items.length === 3, JSON.stringify(r));
+    await shot('75f-world-news-list-phone');
+    await page.setViewportSize(VIEW);
+    await page.evaluate(() => window.__set({}));
+}
+
 console.log('\n§6 a world with a picture of its own (D154)');
 {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#3c5a4a"/><circle cx="600" cy="400" r="260" fill="#8a7a52"/></svg>';

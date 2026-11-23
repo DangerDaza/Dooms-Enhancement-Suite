@@ -903,5 +903,26 @@ console.log('\n§ whether the openings chosen will fit in the answer (D225)');
     check('an entry\'s keys are the names they stand for, each once', same(list[0].keys, ['Cash', 'Cashmere']));
 }
 
+console.log('\n§ a world\'s stories hear of each other: the requests and the words (D235)');
+{
+    const H = await import('../src/utils/hub.js');
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const plain = H.buildRecapPrompt({ transcript: 't', player: 'Jordan' });
+    const asked = H.buildRecapPrompt({ transcript: 't', player: 'Jordan', world: {} });
+    check('a scene in a world with one story is recorded exactly as before', !plain.system.includes('"world"') && !plain.user.includes('for the world') && same(plain, H.buildRecapPrompt({ transcript: 't', player: 'Jordan', world: null })));
+    check('where the world\'s stories share their events the record is asked, in the same answer, for what the wider world would hear of', asked.system.includes('"world": [{"about": "<who or what it concerns, a few words>", "what": "<what happened, one sentence>"}]') && asked.system.includes('other stories are being told in this same world') && asked.system.includes('how anyone stands with Jordan') && asked.system.includes('an empty list where the scene changed nothing the wider world would notice') && !asked.user.includes('Already listed for the world'));
+    const later = H.buildRecapPrompt({ transcript: 'more', player: 'Jordan', soFar: 'They went down.', last: false, world: { soFar: [{ about: 'The Kestrel', text: 'The Kestrel was burned at her moorings.' }] } });
+    check('a long scene\'s later request is told what the earlier parts listed, so nothing is listed twice', later.user.includes('Already listed for the world from the earlier part of the scene (not to be listed again):\n- The Kestrel was burned at her moorings.') && later.system.includes('none that is listed already'));
+    check('…and a first request is told of none, whatever it is handed', !H.buildRecapPrompt({ transcript: 't', player: 'Jordan', world: { soFar: [{ text: 'X happened.' }] } }).user.includes('Already listed'));
+    const base = { world: { name: 'Harbourside' }, place: 'The quay', cast: ['Marit: a ferryman'], player: 'Jordan' };
+    const quiet = H.buildOpenersPrompt(base);
+    const told = H.buildOpenersPrompt({ ...base, news: ['The Kestrel was burned at her moorings (Day 4)', '', 'The harbour watch: doubled on every gate (Day 5)'] });
+    check('with no news the openings are asked exactly as before', !quiet.system.includes('News of the world') && !quiet.user.includes('News of the world') && same(quiet, H.buildOpenersPrompt({ ...base, news: [] })));
+    check('news from the world\'s other stories is given to the openings as news: true, heard of, and not something the player was at', told.user.includes('News of the world since the last scene (it happened elsewhere; Jordan was not there):\n- The Kestrel was burned at her moorings (Day 4)\n- The harbour watch: doubled on every gate (Day 5)\n') && told.system.includes('News of the world is given: things that happened elsewhere since the last scene, which Jordan took no part in and did not see.') && told.system.includes('Jordan is never made to have been there'));
+    check('End says what went out as news, and to how many stories', /1 world event and 2 clock moves sent out as news to the world's other story/.test(H.describeEndResult({ ok: true, recap: 'kept', news: { events: 1, clocks: 2, to: ['Bard'] } })) && /3 world events sent out as news to the world's other stories/.test(H.describeEndResult({ ok: true, recap: 'kept', news: { events: 3, clocks: 0, to: ['Bard', 'Teller'] } })) && !/sent out as news/.test(H.describeEndResult({ ok: true, recap: 'kept', news: { events: 0, clocks: 0, to: ['Bard'] } })) && !/sent out as news/.test(H.describeEndResult({ ok: true, recap: 'kept' })));
+    const hubRaw = H.normalizeHub({ worlds: {}, news: { harbourside: { share: 'off', seq: 2, items: [{ id: 'n1', kind: 'event', text: 'The Kestrel was burned.', story: 'harbourside', scene: 's1', at: 5, date: 'Day 4' }, { junk: true }] }, '': { items: [] }, bad: 7 } });
+    check('a world\'s news is kept with the hub, by the world, made safe', same(Object.keys(hubRaw.news), ['harbourside']) && hubRaw.news.harbourside.share === 'off' && hubRaw.news.harbourside.items.length === 1 && hubRaw.news.harbourside.items[0].text === 'The Kestrel was burned.' && same(H.normalizeHub({}).news, {}));
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

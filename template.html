@@ -1468,8 +1468,9 @@
                     <div class="rpg-setting-row rpg-vitals-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Your character too</span>
-                            <span class="rpg-setting-hint">Your persona gets the same vitals, on its own card and
-                                in a "player" block of the tracker.</span>
+                            <span class="rpg-setting-hint">Your persona gets the vitals that are for everyone, on its
+                                own card and in a "player" block of the tracker. A vital set for your character alone
+                                stays either way.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-vitals-player" />
@@ -1487,14 +1488,17 @@
                     <p class="rpg-note-text rpg-vitals-sub" style="margin-top:4px;">Each vital has its own switch. <b>AI</b> lets
                         the AI move it; off, the value only changes when you edit it on a card. <b>Start</b> is the
                         value a character begins at. A vital's name is what the AI sees, so keep it plain;
-                        renaming one starts its values over.</p>
+                        renaming one starts its values over. The <i class="fa-solid fa-sliders"></i> button opens a
+                        vital's options: who it is for (everyone, your character, or the characters you name), how
+                        the cards show it (a bar, a number, or the level it is on), its levels, and what happens
+                        when it reaches a mark (the narrator is told, or a d20 is rolled).</p>
 
                     <div class="rpg-setting-divider rpg-vitals-sub">On the cards and in context</div>
                     <div class="rpg-setting-row rpg-vitals-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Bars on the card front</span>
-                            <span class="rpg-setting-hint">Thin bars above the name. The card's back always lists
-                                every vital.</span>
+                            <span class="rpg-setting-hint">Thin bars above the name, and a small tag for a vital
+                                shown as a number or a level. The card's back always lists every vital.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-vitals-show-cards" />
@@ -1504,7 +1508,7 @@
                     <div class="rpg-setting-row rpg-vitals-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Bars on the front</span>
-                            <span class="rpg-setting-hint">How many of the vitals, in sheet order, the front shows.</span>
+                            <span class="rpg-setting-hint">How many of the vitals a character has, in sheet order, the front shows.</span>
                         </div>
                         <input type="number" id="rpg-vitals-max-bars" class="rpg-accordion-input" min="1" max="6"
                             value="3" style="width: 64px;" />
@@ -4000,7 +4004,7 @@
                 <section class="rpg-editor-pane active" data-pane="identity">
                     <div class="rpg-editor-section">
                         <h4>Identity</h4>
-                        <p class="helper" id="cw-identity-helper-npc">Name is read-only. Click a relationship chip to set an override &mdash; it wins over the AI's per-turn classification and is included when you Inject into Scene. Click the selected chip again to clear.</p>
+                        <p class="helper" id="cw-identity-helper-npc">Name is read-only. Click a relationship chip to set an override &mdash; it wins over the AI's per-turn classification and is included when you Inject into Scene. Click the selected chip again to clear. With more than one user character, <strong>For</strong> keeps a relationship, and on the Injection tab a description, for one of them: their story reads those in place of the ones for everyone.</p>
                         <p class="helper" id="cw-identity-helper-user" hidden>Name is read-only. Pronouns and the linked SillyTavern persona shape how the AI references this user character. Pronouns are stored on the persona; switching the active persona in SillyTavern auto-switches this user character if they're linked.</p>
                         <div class="rpg-field">
                             <label for="cw-name">Character name</label>
@@ -4009,6 +4013,10 @@
                         <!-- NPC mode: relationship chips -->
                         <div class="rpg-field cw-npc-only">
                             <label>Relationship to player</label>
+                            <!-- Who the relationship on show is for (D234): everyone, or one of the
+                                 player's characters. Built by renderWithSwitch(); hidden where there
+                                 is nothing to choose between. -->
+                            <div class="cw-with-switch" role="radiogroup" aria-label="Who this relationship is for" hidden></div>
                             <!-- Chips are generated from the relationship list in
                                  Settings → Workshop (renderRelationshipChips), so anything
                                  added there appears here too. One non-wrapping row that
@@ -4023,6 +4031,7 @@
                                     aria-label="Scroll relationships right"><i
                                         class="fa-solid fa-chevron-right"></i></button>
                             </div>
+                            <p class="helper cw-with-hint" id="cw-with-hint-rel" hidden></p>
                         </div>
                         <!-- NPC mode: aliases -->
                         <div class="rpg-field cw-npc-only">
@@ -4211,9 +4220,13 @@
                             the AI portray them consistently. Plain text — be specific about what they look like since
                             most models won't actually see the portrait image.</p>
                         <div class="rpg-field">
+                            <!-- The same "For" switch as on the Identity tab (D234): the description
+                                 one of the player's characters' stories reads in place of this one. -->
+                            <div class="cw-with-switch cw-npc-only" role="radiogroup" aria-label="Who this description is for" hidden></div>
                             <label for="cw-inj-description" class="sr-only">Description (bio and appearance)</label>
                             <textarea id="cw-inj-description" class="rpg-textarea" rows="6"
                                 placeholder="e.g. A wiry 60-year-old archivist with silver-streaked hair tied back, rectangular glasses, and a rumpled charcoal wool coat. Soft-spoken, always carrying a sealed brass scroll case&hellip;"></textarea>
+                            <p class="helper cw-with-hint cw-npc-only" id="cw-with-hint-desc" hidden></p>
                         </div>
                     </div>
                     <div class="rpg-editor-section cw-npc-only">

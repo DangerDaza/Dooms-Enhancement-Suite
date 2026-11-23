@@ -2270,6 +2270,25 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 }
 
 
+/* A vital shown as a number or as the level it is on (D232): no bar, the
+   value in the vital's colour at the row's end. */
+.rpg-card-back-stat-level {
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    font-size: clamp(0.6rem, 0.6vw, 0.7rem);
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rpg-stat-rung {
+    opacity: 0.7;
+    font-style: italic;
+}
+
+
 /* Empty state for fields with no data */
 .rpg-card-back-empty {
     opacity: 0.4;
@@ -10491,6 +10510,35 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     transition: width 0.4s ease;
 }
 
+/* Front, for a vital shown as a number or as the level it is on (D232): a
+   small tag in the vital's colour, above the bars. */
+.dooms-pb-vital-tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px;
+    min-width: 0;
+}
+
+/* With no bar under them, the tags keep clear of the name. */
+.dooms-pb-vital-tags:last-child { margin-bottom: 3px; }
+
+.dooms-pb-vital-tag {
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0 4px;
+    border: 1px solid var(--c, #888);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.45);
+    color: var(--c, #ccc);
+    font-size: 0.86em;
+    font-weight: 600;
+    line-height: 1.45;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Back: one row per vital — icon, name, track, editable value */
 .dooms-pb-back-vitals { gap: 3px; }
 
@@ -10500,6 +10548,9 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     gap: 4px;
     min-width: 0;
     font-size: 0.6em;
+    /* The shelf's wrapper sets a line height of 0: without one of its own the
+       row's name, which clips what overflows it, had no height to show in. */
+    line-height: 1.4;
     color: #ccc;
 }
 
@@ -10567,6 +10618,55 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 .dooms-pb-vital-row.is-low .dooms-pb-vital-val { color: #ff8a8a; }
+
+/* A vital shown as a number or a level (D232): the name gives way, the
+   value's own colour and weight carry it. */
+.dooms-pb-vital-row.is-percent .dooms-pb-vital-val,
+.dooms-pb-vital-row.is-level .dooms-pb-vital-val { font-weight: 700; }
+
+.dooms-pb-vital-val.is-label {
+    width: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* On a card as narrow as these the name comes first: it keeps its width,
+   and what sits between it and the value gives way. */
+.dooms-pb-vital-row.is-percent .dooms-pb-vital-name,
+.dooms-pb-vital-row.is-level .dooms-pb-vital-name { flex-shrink: 0; }
+
+/* A level's name that does not fit beside its vital's goes under it, at the row's end. */
+.dooms-pb-vital-row.is-level { flex-wrap: wrap; row-gap: 1px; }
+.dooms-pb-vital-row.is-level .dooms-pb-vital-val.is-label { margin-left: auto; max-width: 100%; }
+
+/* The level a number is on, between the name and the number. */
+.dooms-pb-vital-rung {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+    opacity: 0.7;
+}
+
+/* One step a level, lit up to the one the value is on. */
+.dooms-pb-vital-steps {
+    flex: 1 1 auto;
+    display: flex;
+    gap: 2px;
+    min-width: 14px;
+}
+
+.dooms-pb-vital-steps i {
+    flex: 1 1 0;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.dooms-pb-vital-steps i.is-on { background: var(--c, #888); }
 
 
 .dooms-pb-back-label {
@@ -13970,6 +14070,32 @@ body[data-dooms-ui="inked"] .dooms-card[style*="--cb-fill"] .dooms-card-text {
 
 .dooms-roll-why { opacity: 0.75; font-style: italic; }
 .dooms-roll-attempt { font-style: normal; opacity: 0.95; }
+
+/* ── Vitals: a mark reached, under the reply it was reached in (D233) ──
+   The roll box's shape and inner classes; after .mes_text, since it is what
+   the reply led to. A note has no outcome and an amber edge. */
+.dooms-vital-card {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 8px 0 4px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-left-width: 3px;
+    border-left-color: #f5b301;
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 0.8em;
+    line-height: 1.45;
+    color: var(--rpg-text, #ddd);
+}
+
+.dooms-vital-card.is-success { border-left-color: #2fbf71; }
+.dooms-vital-card.is-failure { border-left-color: #e5484d; }
+.dooms-vital-card.is-crit { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+.dooms-vital-card.is-success .dooms-roll-outcome { color: #5fd38d; }
+.dooms-vital-card.is-failure .dooms-roll-outcome { color: #ff8a8a; }
+.dooms-vital-card .dooms-roll-label small { font-weight: 400; opacity: 0.75; }
 
 /* The die number as a button, with its arrows when open: a result the player sets (D57). */
 .dooms-roll-die-btn {

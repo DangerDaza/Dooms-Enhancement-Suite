@@ -167,6 +167,7 @@ import { messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMe
 import { initTrackerJsonInline, syncTrackerJsonForMessage, updateTrackerJsonDropdowns } from './src/systems/rendering/trackerJsonInline.js';
 // Dice (Project Short Fuse, Phase 2): the roll on a message, its card, the pending check
 import { initDiceRolls, onDiceMessageSent, onDiceChatChanged, onDiceReplyRendered, onDiceToolCallsPerformed, registerDiceTool, syncRollCardForMessage, updateRollCards, refreshDiceEntryPoints, notifyDiceChanged } from './src/systems/features/diceRolls.js';
+import { syncVitalCardForMessage, updateVitalCards } from './src/systems/features/vitalLimits.js';
 // Inventory (Project Short Fuse, Phase 5): the per-chat store, the end-of-reply tag and the tool
 import { initInventory, onInventoryChatChanged, onInventoryReplyRendered, onInventoryMessageDeleted, onInventoryToolCallsPerformed, registerInventoryTool, notifyInventoryChanged } from './src/systems/features/inventory.js';
 import { defaultInventoryConfig, inventoryConfig, MIN_SLOTS as INV_MIN_SLOTS, MAX_SLOTS as INV_MAX_SLOTS } from './src/utils/inventory.js';
@@ -203,7 +204,7 @@ import {
 import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
 import { escapeHtml } from './src/utils/html.js';
 // Vitals (Project Short Fuse): the Settings → Stats page edits the sheet
-import { vitalsConfig, defaultVitalsConfig, migrateVitalsConfig, normalizeVitalDef, vitalSlug, clampVital, isHexColor, VITAL_PRESETS, EXTRA_VITAL_COLORS, MAX_VITALS } from './src/utils/vitals.js';
+import { vitalsConfig, defaultVitalsConfig, migrateVitalsConfig, normalizeVitalDef, vitalSlug, clampVital, isHexColor, VITAL_PRESETS, EXTRA_VITAL_COLORS, MAX_VITALS, setPlayedNamesSource, parseVitalNames, normalizeRungs, evenRungs, MAX_VITAL_RUNGS, normalizeLimit } from './src/utils/vitals.js';
 import { attributesConfig, migrateAttributesConfig, normalizeAttributeDef, normalizeSkills, pruneProficiencies, clampProficiency, attributeDefs, attributeSlug, ATTRIBUTE_PRESETS, DIFFICULTIES, MAX_ATTRIBUTES } from './src/utils/d20.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
@@ -300,6 +301,137 @@ function uniqueVitalId(cs, base) {
     while (taken.has(id)) { n++; id = `${base || 'vital'}_${n}`; }
     return id;
 }
+// The rows whose options are open (by vital id): which is the page's own
+// business, so it is kept here and survives the re-render an edit causes.
+const _openVitals = new Set();
+
+const VITAL_WHO_LABELS = Object.freeze({
+    all: 'Everyone',
+    player: 'Your character only',
+    others: 'Everyone but your character',
+    named: 'Only these characters',
+});
+
+const VITAL_SHOW_LABELS = Object.freeze({
+    bar: 'A bar',
+    percent: 'A number (62%)',
+    level: 'The level it is on',
+});
+
+/** What a row's options come to, in a few words, for the row while they are closed ('' when all are as they come). */
+function vitalSummary(d) {
+    const parts = [];
+    if (d.who === 'player') parts.push('your character only');
+    else if (d.who === 'others') parts.push('everyone but your character');
+    else if (d.who === 'named') parts.push(d.names.length ? `only ${d.names.join(', ')}` : 'nobody yet (no names given)');
+    if (d.show === 'percent') parts.push('shown as a number');
+    else if (d.show === 'level') parts.push(d.rungs.length ? 'shown as its level' : 'shown as its level (no levels yet)');
+    if (d.rungs.length) parts.push(`${d.rungs.length} ${d.rungs.length === 1 ? 'level' : 'levels'}: ${d.rungs.map(r => r.label).join(', ')}`);
+    if (d.limit.when !== 'off') {
+        parts.push(`at ${d.limit.at}% ${d.limit.when === 'fall' ? 'or under' : 'or over'}, ${d.limit.does === 'roll' ? `a d20 against ${d.limit.dc}` : 'the narrator is told'}`);
+    }
+    return parts.join(' · ');
+}
+
+const VITAL_LIMIT_WHEN_LABELS = Object.freeze({
+    off: 'Nothing happens',
+    rise: 'When it rises to',
+    fall: 'When it falls to',
+});
+
+const VITAL_LIMIT_DOES_LABELS = Object.freeze({
+    note: 'Tell the narrator',
+    roll: 'Roll a d20',
+});
+
+/** The rows for a vital's mark (D233): when it is reached and what reaching it does. */
+function vitalLimitHtml(d) {
+    const l = d.limit;
+    const options = (labels, current) => Object.entries(labels).map(([value, label]) =>
+        `<option value="${escapeHtml(value)}"${current === value ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
+    let html = `<div class="rpg-vital-detail">
+            <span class="rpg-vital-detail-label">At a mark</span>
+            <select class="rpg-vital-limit rpg-accordion-select" data-key="when" title="When the mark is reached">${options(VITAL_LIMIT_WHEN_LABELS, l.when)}</select>`;
+    if (l.when === 'off') return `${html}
+        </div>`;
+    html += `
+            <label class="rpg-vital-field" title="The mark, 0 to 100"><input type="number" class="rpg-vital-limit" data-key="at" min="0" max="100" value="${l.at}" /><span>%</span></label>
+            <select class="rpg-vital-limit rpg-accordion-select" data-key="does" title="What reaching it does">${options(VITAL_LIMIT_DOES_LABELS, l.does)}</select>
+        </div>`;
+    if (l.does !== 'roll') {
+        return `${html}
+        <div class="rpg-vital-detail rpg-vital-detail-sub">
+            <input type="text" class="rpg-vital-limit rpg-vital-limit-text" data-key="note" value="${escapeHtml(l.note)}" maxlength="300" placeholder="What the narrator is told when it gets there" title="Told to the narrator once, in the prompt of the next reply" />
+        </div>`;
+    }
+    // The attribute whose modifier rides on the die, offered while attributes are on.
+    const attrsOn = attributesConfig(extensionSettings).enabled;
+    const attrs = attrsOn ? attributeDefs(extensionSettings) : [];
+    const attrLabels = { '': 'A bare d20' };
+    for (const a of attrs) attrLabels[a.id] = `${a.name} save`;
+    if (l.attr && !attrLabels[l.attr]) attrLabels[l.attr] = `${l.attr} (not on the sheet: a bare d20)`;
+    const attrSelect = attrs.length || l.attr
+        ? `<select class="rpg-vital-limit rpg-accordion-select" data-key="attr" title="An attribute whose modifier, and save proficiency, ride on the die">${options(attrLabels, l.attr)}</select>` : '';
+    const toField = (key, value) => `<label class="rpg-vital-field" title="The value the vital is left at afterwards. Empty leaves it where it is."><span>then set to</span><input type="number" class="rpg-vital-limit" data-key="${key}" min="0" max="100" value="${value === null ? '' : value}" placeholder="-" /><span>%</span></label>`;
+    return `${html}
+        <div class="rpg-vital-detail rpg-vital-detail-sub">
+            <label class="rpg-vital-field" title="What the d20 (and the modifier, with an attribute) has to reach"><span>DC</span><input type="number" class="rpg-vital-limit" data-key="dc" min="1" max="40" value="${l.dc}" /></label>
+            ${attrSelect}
+        </div>
+        <div class="rpg-vital-detail rpg-vital-detail-sub">
+            <span class="rpg-vital-limit-side is-pass">Passed</span>
+            <input type="text" class="rpg-vital-limit rpg-vital-limit-text" data-key="pass" value="${escapeHtml(l.pass)}" maxlength="300" placeholder="What the narrator is told on a pass" />
+            ${toField('passTo', l.passTo)}
+        </div>
+        <div class="rpg-vital-detail rpg-vital-detail-sub">
+            <span class="rpg-vital-limit-side is-fail">Failed</span>
+            <input type="text" class="rpg-vital-limit rpg-vital-limit-text" data-key="fail" value="${escapeHtml(l.fail)}" maxlength="300" placeholder="What the narrator is told on a failure" />
+            ${toField('failTo', l.failTo)}
+        </div>`;
+}
+
+/** The options under a vital's row: who it is for (D231), how it is shown, what it measures and its levels (D232), its mark (D233). */
+function vitalDetailsHtml(d) {
+    const options = (labels, current) => Object.entries(labels).map(([value, label]) =>
+        `<option value="${value}"${current === value ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
+    const rungRows = d.rungs.map((r, i) => `<div class="rpg-vital-rung" data-rung="${i}">
+                <label class="rpg-vital-field" title="The value this level starts at"><span>From</span><input type="number" class="rpg-vital-rung-at" min="0" max="100" value="${r.at}" /></label>
+                <input type="text" class="rpg-vital-rung-label" value="${escapeHtml(r.label)}" maxlength="30" placeholder="Name" title="The level's name: what the card shows" />
+                <input type="text" class="rpg-vital-rung-note" value="${escapeHtml(r.note)}" maxlength="200" placeholder="What it means (told to the AI)" title="What this level means, told to the AI" />
+                <button type="button" class="rpg-ws-rel-remove rpg-vital-rung-remove" title="Remove this level"><i class="fa-solid fa-xmark"></i></button>
+            </div>`).join('');
+    const levelHint = d.show === 'level' && !d.rungs.length
+        ? '<p class="rpg-vital-detail-hint">It has no levels yet, so the cards show the number until it does.</p>' : '';
+    return `<div class="rpg-vital-details">
+        <div class="rpg-vital-detail">
+            <span class="rpg-vital-detail-label">For</span>
+            <select class="rpg-vital-who rpg-accordion-select" title="Who carries this vital">${options(VITAL_WHO_LABELS, d.who)}</select>
+            <input type="text" class="rpg-vital-names${d.who === 'named' ? '' : ' is-hidden'}" value="${escapeHtml(d.names.join(', '))}" maxlength="400" placeholder="Roxy, Eli Vega" title="Names, separated by commas. A name your character goes by counts as your character." />
+        </div>
+        <div class="rpg-vital-detail">
+            <span class="rpg-vital-detail-label">Shown as</span>
+            <select class="rpg-vital-show rpg-accordion-select" title="What the cards make of the value">${options(VITAL_SHOW_LABELS, d.show)}</select>
+        </div>
+        ${levelHint}
+        <div class="rpg-vital-detail">
+            <span class="rpg-vital-detail-label">Measures</span>
+            <input type="text" class="rpg-vital-about" value="${escapeHtml(d.about)}" maxlength="240" placeholder="What it measures and what moves it (told to the AI)" title="One line told to the AI: what this vital measures, what raises it and what lowers it" />
+        </div>
+        <div class="rpg-vital-detail rpg-vital-detail-top">
+            <span class="rpg-vital-detail-label">Levels</span>
+            <div class="rpg-vital-rungs">
+                ${rungRows}
+                <div class="rpg-vital-rung-actions">
+                    <button type="button" class="rpg-vital-rung-add rpg-accordion-action-btn"${d.rungs.length >= MAX_VITAL_RUNGS ? ' disabled' : ''}><i class="fa-solid fa-plus"></i> Add a level</button>
+                    ${d.rungs.length > 1 ? '<button type="button" class="rpg-vital-rung-even rpg-accordion-action-btn" title="Start the levels at even steps from 0 to 100, in their order">Space evenly</button>' : ''}
+                </div>
+            </div>
+        </div>
+        ${vitalLimitHtml(d)}
+        <p class="rpg-vital-detail-hint">A vital for named characters shows on their cards only, and the AI is asked for it only for them; a first name is enough. The value is 0 to 100 whatever it is shown as: a level is the name for a stretch of it, starting at <b>From</b>, and the AI is told the levels and what each means. A mark is reached when a reply carries the value to it: the narrator is told once, in the next reply, and a roll is made on the spot and is final.</p>
+    </div>`;
+}
+
 function renderVitalsSettings() {
     const $list = $('#rpg-vitals-list');
     if (!$list.length) return;
@@ -320,7 +452,9 @@ function renderVitalsSettings() {
     const rows = list.map((raw, i) => {
         const d = normalizeVitalDef(raw, i);
         const id = escapeHtml(d.id);
-        return `<div class="rpg-vital-row${d.enabled ? '' : ' is-off'}" data-vital="${id}">
+        const open = _openVitals.has(d.id);
+        const summary = vitalSummary(d);
+        return `<div class="rpg-vital-row${d.enabled ? '' : ' is-off'}${open ? ' is-open' : ''}" data-vital="${id}">
             <label class="rpg-toggle-switch rpg-vital-switch" title="On or off">
                 <input type="checkbox" class="rpg-vital-enabled"${d.enabled ? ' checked' : ''} />
                 <span class="rpg-toggle-slider"></span>
@@ -334,7 +468,9 @@ function renderVitalsSettings() {
                 <button type="button" class="rpg-vital-move" data-dir="-1" title="Move up"${i === 0 ? ' disabled' : ''}><i class="fa-solid fa-chevron-up"></i></button>
                 <button type="button" class="rpg-vital-move" data-dir="1" title="Move down"${i === list.length - 1 ? ' disabled' : ''}><i class="fa-solid fa-chevron-down"></i></button>
             </span>
+            <button type="button" class="rpg-vital-more${summary ? ' has-custom' : ''}" title="${open ? 'Close the options' : 'Options: who it is for, how it is shown, its levels, its mark'}" aria-expanded="${open ? 'true' : 'false'}"><i class="fa-solid fa-sliders"></i></button>
             <button type="button" class="rpg-ws-rel-remove rpg-vital-remove" title="Remove this vital"><i class="fa-solid fa-trash"></i></button>
+            ${open ? vitalDetailsHtml(d) : (summary ? `<div class="rpg-vital-summary">${escapeHtml(summary.charAt(0).toUpperCase() + summary.slice(1))}</div>` : '')}
         </div>`;
     });
     $list.html(rows.join('') || '<p class="rpg-note-text">No vitals yet. Add one, or pick a preset below.</p>');
@@ -881,6 +1017,15 @@ function updateGenerationModeUI() {
 function resolveActiveUserCharacterName() {
     return resolveActiveUserName();
 }
+
+// The names the player goes by, for a vital meant for one character (D231):
+// the user character being played and the persona's own name. Asked each
+// time, so a change of chat, card or persona needs no telling.
+setPlayedNamesSource(() => {
+    let persona = '';
+    try { persona = String(getContext().name1 || ''); } catch (e) { persona = ''; }
+    return [resolveActiveUserName(), persona];
+});
 
 /**
  * If "Show User in PCP" is on AND the active user character has a color,
@@ -1806,6 +1951,7 @@ function bindSettingsUI() {
         try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] vitals save failed', e); }
         if (rerender) renderVitalsSettings();
         try { renderThoughts(); updatePortraitBar(); } catch (e) { /* non-fatal */ }
+        try { updateVitalCards(); } catch (e) { /* no chat open */ }    // the boxes under the replies follow the sheet (D233)
     };
     const _vitalFromRow = (el) => {
         const cs = getVitalsSheet();
@@ -1885,7 +2031,139 @@ function bindSettingsUI() {
         const { cs, entry } = _vitalFromRow(this);
         if (!entry) return;
         cs.customStats = cs.customStats.filter(e => e !== entry);
+        _openVitals.delete(entry.id);
         _saveVitals();
+    });
+    // The options under a row (D231): who the vital is for.
+    $(document).on('click', '.rpg-vital-more', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        if (_openVitals.has(entry.id)) _openVitals.delete(entry.id); else _openVitals.add(entry.id);
+        renderVitalsSettings();
+    });
+    $(document).on('change', '.rpg-vital-who', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        const who = String($(this).val() || 'all');
+        if (who === 'all') delete entry.who; else entry.who = who;
+        _saveVitals();
+        if (who === 'named') $(`#rpg-vitals-list .rpg-vital-row[data-vital="${entry.id}"] .rpg-vital-names`).trigger('focus');
+    });
+    $(document).on('change', '.rpg-vital-names', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        const names = parseVitalNames($(this).val());
+        if (names.length) entry.names = names; else delete entry.names;
+        $(this).val(names.join(', '));
+        _saveVitals({ rerender: false });
+    });
+    // How it is shown, what it measures and its levels (D232).
+    $(document).on('change', '.rpg-vital-show', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        const show = String($(this).val() || 'bar');
+        if (show === 'bar') delete entry.show; else entry.show = show;
+        _saveVitals();
+    });
+    $(document).on('change', '.rpg-vital-about', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        const about = String($(this).val() || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+        if (about) entry.about = about; else delete entry.about;
+        $(this).val(about);
+        _saveVitals({ rerender: false });
+    });
+    // A level is found by where it sits in the list, which is kept in
+    // order and safe on every write, so the rows and the list agree.
+    const _rungFromRow = (el) => {
+        const { entry } = _vitalFromRow(el);
+        if (!entry) return { entry: null, rungs: [], i: -1 };
+        const rungs = normalizeRungs(entry.rungs);
+        const i = parseInt($(el).closest('.rpg-vital-rung').attr('data-rung'), 10);
+        return { entry, rungs, i: Number.isInteger(i) && i >= 0 && i < rungs.length ? i : -1 };
+    };
+    const _setRungs = (entry, rungs) => {
+        const safe = normalizeRungs(rungs);
+        if (safe.length) entry.rungs = safe; else delete entry.rungs;
+        _saveVitals();
+    };
+    $(document).on('click', '.rpg-vital-rung-add', function () {
+        const { entry, rungs } = _rungFromRow(this);
+        if (!entry || rungs.length >= MAX_VITAL_RUNGS) return;
+        // Halfway between the last level and the top; the first starts at 0.
+        const last = rungs.length ? rungs[rungs.length - 1].at : -1;
+        let at = last < 0 ? 0 : Math.min(100, last + Math.max(1, Math.round((100 - last) / 2)));
+        const taken = new Set(rungs.map(r => r.at));
+        while (taken.has(at) && at > 0) at--;
+        if (taken.has(at)) return;
+        const names = new Set(rungs.map(r => r.label.toLowerCase()));
+        let n = rungs.length + 1;
+        while (names.has(`level ${n}`)) n++;
+        _setRungs(entry, [...rungs, { at, label: `Level ${n}`, note: '' }]);
+        const $row = $(`#rpg-vitals-list .rpg-vital-row[data-vital="${entry.id}"] .rpg-vital-rung`).filter(function () { return Number($(this).find('.rpg-vital-rung-at').val()) === at; });
+        $row.find('.rpg-vital-rung-label').trigger('focus').trigger('select');
+    });
+    $(document).on('click', '.rpg-vital-rung-even', function () {
+        const { entry, rungs } = _rungFromRow(this);
+        if (!entry || rungs.length < 2) return;
+        const even = evenRungs(rungs.map(r => r.label));
+        _setRungs(entry, even.map((r, i) => ({ ...r, note: rungs[i] ? rungs[i].note : '' })));
+    });
+    $(document).on('click', '.rpg-vital-rung-remove', function () {
+        const { entry, rungs, i } = _rungFromRow(this);
+        if (!entry || i < 0) return;
+        _setRungs(entry, rungs.filter((_, k) => k !== i));
+    });
+    $(document).on('change', '.rpg-vital-rung-at', function () {
+        const { entry, rungs, i } = _rungFromRow(this);
+        if (!entry || i < 0) return;
+        const at = clampVital($(this).val());
+        if (at === null || at === rungs[i].at) { renderVitalsSettings(); return; }
+        if (rungs.some((r, k) => k !== i && r.at === at)) {
+            try { toastr.warning(`Another level already starts at ${at}.`, 'Vitals'); } catch (e) { /* no toastr */ }
+            renderVitalsSettings();
+            return;
+        }
+        rungs[i] = { ...rungs[i], at };
+        _setRungs(entry, rungs);
+    });
+    $(document).on('change', '.rpg-vital-rung-label', function () {
+        const { entry, rungs, i } = _rungFromRow(this);
+        if (!entry || i < 0) return;
+        const label = String($(this).val() || '').replace(/\s+/g, ' ').trim().slice(0, 30);
+        if (!label || label === rungs[i].label) { renderVitalsSettings(); return; }
+        rungs[i] = { ...rungs[i], label };
+        entry.rungs = normalizeRungs(rungs);
+        $(this).val(label);
+        _saveVitals({ rerender: false });
+    });
+    // A vital's mark (D233): every field of it is one handler, the field
+    // named on the control. The mark is kept whole and safe; one that says
+    // nothing is not kept at all.
+    $(document).on('change', '.rpg-vital-limit', function () {
+        const { entry } = _vitalFromRow(this);
+        const key = String($(this).attr('data-key') || '');
+        if (!entry || !key) return;
+        const before = normalizeLimit(entry.limit);
+        const raw = { ...before };
+        let value = $(this).val();
+        if (key === 'passTo' || key === 'failTo') value = String(value ?? '').trim() === '' ? null : value;
+        raw[key] = value;
+        // A mark still where its direction put it follows a change of direction: the top for a rise, the bottom for a fall.
+        if (key === 'when' && before.at === (before.when === 'fall' ? 0 : 100)) delete raw.at;
+        const safe = normalizeLimit(raw);
+        if (JSON.stringify(safe) === JSON.stringify(normalizeLimit(null))) delete entry.limit; else entry.limit = safe;
+        const redraw = key === 'when' || key === 'does';
+        if (!redraw) $(this).val(safe[key] === null ? '' : safe[key]);
+        _saveVitals({ rerender: redraw });
+    });
+    $(document).on('change', '.rpg-vital-rung-note', function () {
+        const { entry, rungs, i } = _rungFromRow(this);
+        if (!entry || i < 0) return;
+        rungs[i] = { ...rungs[i], note: String($(this).val() || '') };
+        entry.rungs = normalizeRungs(rungs);
+        $(this).val(entry.rungs[i] ? entry.rungs[i].note : '');
+        _saveVitals({ rerender: false });
     });
     $(document).on('click', '.rpg-vital-move', function () {
         const { cs, entry } = _vitalFromRow(this);
@@ -4840,7 +5118,7 @@ jQuery(async () => {
             // original relative registration order within each event type.
             // The chat-change handlers, in the order SillyTavern calls them. Kept as a list so that they can be run again
             // when the extension's data turns out to be another chat's (src/core/chatGuard.js, D215).
-            const chatLoaders = [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, onWorldChatChanged, onCanonChatChanged, onHubChatChanged, onSceneChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged];
+            const chatLoaders = [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, updateVitalCards, onInventoryChatChanged, onWorldChatChanged, onCanonChatChanged, onHubChatChanged, onSceneChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged];
             setChatLoaders(chatLoaders);
             registerAllEvents({
                 // onDiceMessageSent rolls and attaches; refreshDiceInjection then
@@ -4858,26 +5136,26 @@ jQuery(async () => {
                 [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
                 // chatLoaded last: the handlers before it have run for the chat in front (src/core/chatGuard.js, D215).
                 [event_types.CHAT_CHANGED]: [...chatLoaders, chatLoaded],
-                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage],
+                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage, syncVitalCardForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices, onGlintUserMessageRendered],
                 [event_types.SETTINGS_UPDATED]: [updatePersonaAvatar, onHubPlayerChanged],    // the persona in use may be another: who is played, and the continuity books that follow (D230)
                 // onDiceReplyRendered reads a game-master call from the reply and
                 // decorates its tag; it runs after the bubble decorations so it
                 // sees the final markup, and before the roll box sync.
-                [event_types.CHARACTER_MESSAGE_RENDERED]: [onCharacterMessageRenderedDecorations, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage, onGlintMessageRendered],
-                [event_types.MESSAGE_UPDATED]: [onMessageUpdatedDecorations, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage],
+                [event_types.CHARACTER_MESSAGE_RENDERED]: [onCharacterMessageRenderedDecorations, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage, syncVitalCardForMessage, onGlintMessageRendered],
+                [event_types.MESSAGE_UPDATED]: [onMessageUpdatedDecorations, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage, syncVitalCardForMessage],
                 // Regenerate deletes the last reply after GENERATION_STARTED has
                 // set the slots, so the inventory it put back must be re-injected
                 // here, before the prompt is built (wrapped: the event's argument
                 // is a number, not the options object).
-                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, onInventoryMessageDeleted, onWorldMessageDeleted, onCanonMessageDeleted, onHubMessageDeleted, () => refreshDiceInjection()],
+                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, updateVitalCards, onInventoryMessageDeleted, onWorldMessageDeleted, onCanonMessageDeleted, onHubMessageDeleted, () => refreshDiceInjection()],
                 [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_DELETED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_UPDATED]: onConnectionProfilesChanged,
                 // Guarded: MORE_MESSAGES_LOADED doesn't exist on some older ST
                 // builds; a spread of {} registers nothing there.
                 ...(event_types.MORE_MESSAGES_LOADED
-                    ? { [event_types.MORE_MESSAGES_LOADED]: [onMoreMessagesLoadedFullsheet, updateRollCards] }
+                    ? { [event_types.MORE_MESSAGES_LOADED]: [onMoreMessagesLoadedFullsheet, updateRollCards, updateVitalCards] }
                     : {}),
                 // A scene's chat deleted in SillyTavern marks its record (docs/hub-plan.md D128); older builds have no such event.
                 ...(event_types.CHAT_DELETED

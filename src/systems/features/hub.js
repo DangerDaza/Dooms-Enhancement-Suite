@@ -47,6 +47,10 @@ import { narratorTexts, countStyle, applyStyle } from '../../utils/styleLaw.js';
 import { continuityDraft, readContinuity, stepDraft, draftChanges, applyContinuity, changeCounts, standingLines, threadLines, hasContinuity } from '../../utils/continuity.js';
 import { continuityBookName, readBook, planBook, trackWritten, forgetBook, renameBook } from '../../utils/continuityBook.js';
 import { diffEntry, undoChanges, areasInWords } from '../../utils/sceneLog.js';
+import {
+    normalizeNews, newsShared, setNewsShare, readWorldEvents, mergeEvents, cleanEvents, clockChanges, postNews, withdrawNews, restoreNews, removeNewsItem,
+    newsDue, stillDue, markTaken, newsLine, newsBriefLine, applyNewsClocks, clockNewsLines, takeNews, newsList,
+} from '../../utils/worldNews.js';
 
 export const BRIEF_SLOT = 'dooms-scene-brief';
 import { ensureCss } from '../../core/cssLoader.js';
@@ -56,6 +60,7 @@ import { dialogueConfig, dialogueOf, dialogueText, DIALOGUE } from '../../utils/
 import { resolvePersonaName } from './diceRolls.js';
 import { setStoryAnchor, userOfCard } from '../../utils/activeUser.js';
 import { premiseOf, setStoryPremise } from '../../utils/storyPremise.js';
+import { descriptionFor } from '../../utils/characterWith.js';
 
 export const HUB_CHANGED_EVENT = 'dooms:hub-changed';
 
@@ -390,6 +395,65 @@ export function setWorldMap(packId, book) {
     if (!s.maps || typeof s.maps !== 'object') s.maps = {};
     s.maps[pack] = normalizeBook(book);
     saveStore({ source: 'map', world: pack });
+    return true;
+}
+
+// ─── A world's news between its stories (D235) ───────────────────────────
+
+/** A world's news as it is kept; null where it has none yet (reading makes none). */
+function readNews(packId) {
+    const s = store();
+    const pack = packOf(packId);
+    return s.news && typeof s.news === 'object' && s.news[pack] ? s.news[pack] : null;
+}
+
+function putNews(packId, news, detail) {
+    const s = store();
+    if (!s.news || typeof s.news !== 'object') s.news = {};
+    s.news[packOf(packId)] = normalizeNews(news);
+    saveStore(detail);
+}
+
+/** Whether the stories of a story's world share their events (D235): it has two or more, and sharing is not switched off for it. */
+export function isNewsShared(storyId) {
+    const pack = packOf(storyId);
+    if (!pack) return false;
+    return newsShared(readNews(pack), storyIdsOf(store().worlds, pack).length);
+}
+
+/** The switch for a world: its stories share their events, or keep them to themselves. What was sent out already is kept either way. */
+export function setNewsShared(packId, on) {
+    const pack = packOf(packId);
+    if (!pack) return false;
+    putNews(pack, setNewsShare(readNews(pack), on === true), { source: 'news', world: pack });
+    return true;
+}
+
+/**
+ * A world's news for the Atlas (D235), seen from one of its stories:
+ * whether its stories share, the events kept (newest first, each with
+ * where it came from and whom it has reached), how many clock moves, and
+ * how much is due to that story's next scene or still in its future.
+ * @returns {{ stories: number, shared: boolean, events: object[], clocks: number, due: number, later: number }}
+ */
+export function worldNews(storyId) {
+    const id = String(storyId || '');
+    const pack = packOf(id);
+    const news = readNews(pack);
+    let stories = [];
+    try { stories = worldStories(pack); } catch (e) { stories = []; }
+    const entry = store().worlds[id] || null;
+    const facts = entry && entry.memory && entry.memory.facts ? entry.memory.facts : { date: '', time: '' };
+    const due = newsDue(news, { story: id, date: facts.date, time: facts.time, fresh: !(entry && entry.memory && entry.memory.takenAt > 0) });
+    return { stories: stories.length, shared: newsShared(news, stories.length), ...newsList(news, stories), due: due.events.length + due.clocks.length + due.waiting, later: due.later };
+}
+
+/** One event taken out of a world's news by hand: it reaches no story it has not reached yet. */
+export function removeWorldNews(packId, id) {
+    const pack = packOf(packId);
+    const r = removeNewsItem(readNews(pack), id);
+    if (!r.removed) return false;
+    putNews(pack, r.news, { source: 'news', world: pack });
     return true;
 }
 
@@ -1059,12 +1123,15 @@ function regionOf(pack, placeId) {
     return top && top.id !== id ? top.label : '';
 }
 
-/** The people's lines for the brief and the openers: the Workshop's description, else the tier the world knows them by. */
+/** The people's lines for the brief and the openers: the Workshop's description (the one written for whoever is played, where there is one: D234), else the tier the world knows them by. */
 function castLines(names, worldState) {
     const inj = extensionSettings.characterInjection && typeof extensionSettings.characterInjection === 'object' ? extensionSettings.characterInjection : {};
+    const sides = extensionSettings.characterWith && typeof extensionSettings.characterWith === 'object' ? extensionSettings.characterWith : {};
+    const playedAs = resolvePersonaName() || '';
     return names.map(name => {
-        const key = Object.keys(inj).find(k => sameName(k, name));
-        const description = key && inj[key] && typeof inj[key].description === 'string' ? inj[key].description : '';
+        // The stores are keyed as the Workshop spells a name; a scene's cast is as the story does (accents, a longer form).
+        const key = Object.keys(inj).find(k => sameName(k, name)) || Object.keys(sides).find(k => sameName(k, name)) || name;
+        const description = descriptionFor(extensionSettings, key, playedAs);
         const tier = worldState && worldState.known ? (worldState.known[name] || Object.entries(worldState.known).find(([k]) => sameName(k, name))?.[1] || '') : '';
         return { name, line: personLine(name, { description, tier }) };
     });
@@ -1275,6 +1342,11 @@ async function prepareSceneRun({ worldId, seed = null, place = null, cast = [], 
         else notes.push(`The world did not move for the gap (${moved.reason}${moved.errors ? `: ${moved.errors.join(' ')}` : moved.error ? `: ${moved.error}` : ''}).`);
     }
     const worldState = normalizeWorldState(memory.stores.dooms_world);
+    // The news of the world's other stories (D235): what their scenes sent out, has not reached this story and is not in
+    // its future by the date this scene opens at. Held with the Start and taken in with the record, as the gap run is.
+    const due = isNewsShared(g.id) ? newsDue(readNews(g.id), { story: g.id, date: memory.facts.date, time: memory.facts.time, fresh: !(g.entry.memory && g.entry.memory.takenAt > 0) }) : null;
+    const caught = due && due.clocks.length ? applyNewsClocks(worldState, due.clocks, pack).state : worldState;    // the clocks as they stand once caught up
+    const heard = due ? [...due.events.map(newsLine), ...clockNewsLines(worldState, caught, pack, { spoilerFree: liveWorldConfig(extensionSettings).spoilerFree })] : [];
     const placeId = place && place.id ? resolvePlace(pack, place.id) || String(place.id) : '';
     const label = (place && place.label) || (placeId ? labelOf(pack, placeId) : '') || memory.facts.location || '';
     const region = placeId ? regionOf(pack, placeId) : '';
@@ -1345,7 +1417,7 @@ async function prepareSceneRun({ worldId, seed = null, place = null, cast = [], 
         pool = untouchedLore(notesOf.entries, { people: storyPeople, text: storyText, workshop: Object.keys(extensionSettings.characterInjection && typeof extensionSettings.characterInjection === 'object' ? extensionSettings.characterInjection : {}), words: note });
     }
     const fresh = loreSample(pool, { from: 0, count: freshCount(n) });
-    const ask = { wrap: wrapBefore, then, thenPeople, voices, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads, premise: storyPremiseOf(g.id) };
+    const ask = { wrap: wrapBefore, then, thenPeople, voices, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads, premise: storyPremiseOf(g.id), news: heard };
     const prompt = buildOpenersPrompt({ ...ask, count: n, fresh, length: len });
     let openers = [];
     let when = null;
@@ -1372,17 +1444,25 @@ async function prepareSceneRun({ worldId, seed = null, place = null, cast = [], 
         log('the openers request failed', errors[0]);
     }
     if (token !== pendingToken) return { ok: false, reason: 'cancelled' };    // stopped while it waited: nothing is kept
-    const since = recentChanges(worldState, pack, { limit: 8, spoilerFree: liveWorldConfig(extensionSettings).spoilerFree }).map(c => `${c.gameDate ? `${c.gameDate}: ` : ''}${c.text}`);
+    // Since last time, for the brief: the other stories' events first, then what moved in the world (a clock that caught
+    // up with another story's among them, by its public face).
+    const since = [...(due ? due.events.map(newsBriefLine) : []), ...recentChanges(caught, pack, { limit: 8, spoilerFree: liveWorldConfig(extensionSettings).spoilerFree }).map(c => `${c.gameDate ? `${c.gameDate}: ` : ''}${c.text}`)];
+    // What the sheet says of it: each event with the story it came from, and how much is still to come.
+    const storyNames = {};
+    if (due && due.events.length) { try { for (const x of worldStories(pack.id)) storyNames[x.id] = x.name; } catch (e) { /* unnamed */ } }
+    const newsShown = due && (due.events.length || due.clocks.length || due.later || due.waiting)
+        ? { events: due.events.map(x => ({ text: x.text, date: x.date, from: storyNames[x.story] || 'another story' })), clocks: clockNewsLines(worldState, caught, pack, { spoilerFree: liveWorldConfig(extensionSettings).spoilerFree }).length, later: due.later, waiting: due.waiting }
+        : null;
     pending = {
         token, worldId: g.id, pack, card: g.card, memory, seed: seed && typeof seed === 'object' ? seed : { kind: 'anywhere', text: seedText }, given: { id: placeId, label, region }, place: placeBy(pack, { id: placeId, label, region }, note ? said : ''), cast: names, lines, gap: theGap, note: String(note || ''),
-        weather, since, recaps, player: players, openers, when, errors, notes, prompt, movedMemory,
+        weather, since, recaps, player: players, openers, when, errors, notes, prompt, movedMemory, news: due && (due.events.length || due.clocks.length) ? { events: due.events, clocks: due.clocks } : null, newsShown,
         count: n, length: len, ask, pool, poolAt: 0, fresh,    // how many were asked for (D221) and how long (D224); the lorebooks' untouched entries, kept in turn (D223)
         heldWhen: rightAfter && !then.back && (then.date || then.time) ? { date: then.date, time: then.time } : null,
         lore: { found: notesOf.found, missing: notesOf.missing, standing: !!notesOf.standing, books: notesOf.books, ...(voices.length ? { voices: voices.map(x => x.name) } : {}), ...(asksForLore(note) ? { fresh: fresh.map(f => f.name), unmet: pool.length } : {}) },
         stand, threads, continuity: { stand: stand.map(x => x.name), threads: threads.length },
         tail: { messages: lastLines.messages, scene: lastLines.scene, right: theGap.id === 'now', ...(then.date || then.time || then.weather || thenPeople.length ? { then: { date: then.date, time: then.time, weather: [then.weather, then.temperature].filter(Boolean).join(', '), fromTracker: !!lf, ...(thenPeople.length ? { people: thenPeople.map(x => x.name) } : {}) } } : {}) },
     };
-    return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes, lore: pending.lore, continuity: pending.continuity, tail: pending.tail, count: n, length: len };
+    return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes, lore: pending.lore, continuity: pending.continuity, tail: pending.tail, count: n, length: len, news: newsShown };
 }
 
 /** What the sheet is told when an answer ran out before its end (D221): the openings that came whole are kept. */
@@ -1677,6 +1757,15 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     const moved = p.movedMemory && (!live || live.takenAt === p.movedMemory.takenAt) ? p.movedMemory : null;
     let memoryNow = live || p.memory;
     if (moved) memoryNow = { ...memoryNow, stores: { ...memoryNow.stores, dooms_world: moved.stores.dooms_world }, facts: moved.facts };
+    // The other stories' news is taken in with the Start (D235): the world's clocks catch up and, where the ledger is
+    // kept, the events are written into it as facts, so the scene's chat is seeded with them and the story goes on
+    // knowing them. Only what is still there to take: an End undone meanwhile took its own back.
+    let took = [];
+    if (p.news) try {
+        const still = stillDue(readNews(p.worldId), p.news, p.worldId);
+        memoryNow = takeNews(memoryNow, still, p.pack, { at: now, canon: isCanonOn() }).memory;
+        took = [...still.events, ...still.clocks].map(x => x.id);
+    } catch (e) { log('the other stories\' news could not be taken in', String(e && e.message || e)); }
     const hooked = p.seed && p.seed.kind === 'hook' && p.seed.id ? { id: p.seed.id, title: p.seed.label || '', text: p.seed.text || '' } : null;
     const seeded = seedStores(memoryNow, { chatId: fileName, place: p.place.label, cast, player: p.player, weather: p.weather, when: p.when, hookId: hooked ? hooked.id : '', hook: hooked, now });
     // With the continuity book switched on, SillyTavern's own World Info carries where people stand and the open threads
@@ -1706,6 +1795,7 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
         memoryOut = { ...memoryOut, stores: { ...memoryOut.stores, dooms_hooks: hooks } };
     }
     putEntry(p.worldId, memoryOut ? { ...opened.entry, memory: memoryOut } : opened.entry, { source: 'start', world: p.worldId });
+    if (took.length) putNews(p.worldId, markTaken(readNews(p.worldId), p.worldId, took, opened.scene.id), { source: 'start-news', world: packOf(p.worldId) });    // it has reached this story (D235)
     pending = null;
     lastEnd = null;    // the world has gone on: the last End is not put back from here (D190)
     log(`scene ${n} written: "${fileName}"`);
@@ -1819,12 +1909,16 @@ export async function prepareEnd({ onStep = null, wrap = '' } = {}) {
     let conflicts = [];
     let recap = '';
     let error = '';
+    // What the scene did that the world's other stories would hear of (D235), where the world's stories share their
+    // events: asked for in the same request, a record written in passes gathering it a page at a time.
+    const share = isNewsShared(g.cur.worldId);
+    let events = [];
     try {
         const count = Math.max(1, pages.length);
         for (let i = 0; i < count; i++) {
             // Which request is being asked for, for the sheet's bars (D198).
             try { if (typeof onStep === 'function') onStep({ page: i + 1, pages: count, states: Array.from({ length: count }, (x, k) => (k < i ? 'done' : k === i ? 'run' : 'wait')) }); } catch (e) { /* the sheet is gone */ }
-            const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1, continuity: draft, check, lead: i > 0 ? parts[i].lead : '', wrap, before });
+            const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1, continuity: draft, check, lead: i > 0 ? parts[i].lead : '', wrap, before, world: share ? { soFar: events } : null });
             const r = await request(prompt, { transport: recapTransport, label: 'recap' });
             if (r.busy) { error = 'Another request holds the line.'; break; }
             const p = parseRecapReply(r.text, { maxChars: cfg().recapChars });
@@ -1833,6 +1927,7 @@ export async function prepareEnd({ onStep = null, wrap = '' } = {}) {
             error = '';
             draft = stepDraft(draft, readContinuity(p.reply, draft, { players, known: people.known, text: pages.slice(0, i + 1).join('\n') }));
             conflicts = mergeConflicts(conflicts, readConflicts(p.reply));
+            if (share) events = mergeEvents(events, readWorldEvents(p.reply));
         }
     } catch (e) { error = String(e && e.message || e); }
     if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
@@ -1841,9 +1936,14 @@ export async function prepareEnd({ onStep = null, wrap = '' } = {}) {
     const canonDone = !!(g.cur.mark.end && g.cur.mark.end.canonAt && g.cur.mark.end.canonAt === lastReplyId());
     const continuity = draftChanges(draft);
     // Kept for an End that has no sheet to hand it back (the command, the handover): this chat's, for this last reply.
-    const result = { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, stale, canonDone, steps: { canon: isCanonOn() && !canonDone, world: isLiveWorldOn() && !!getWorldState() }, pages: pages.length, style: isStyleLawOn() ? sceneStyle() : null, continuity, book: continuityBookOf(g.cur.worldId), conflicts, checked: { ledger: !!check.canon, notes: check.lore.map(l => l.name), standing: !!check.standing }, before: !!before };
-    prepared = { id: token.id, reply: lastReplyId(), change: { people: continuity.people.map(x => ({ name: x.name, now: x.now })), opened: continuity.opened.map(t => t.text), closed: continuity.closed.map(t => t.id) }, conflicts, result, held: false };
+    const result = { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, stale, canonDone, steps: { canon: isCanonOn() && !canonDone, world: isLiveWorldOn() && !!getWorldState() }, pages: pages.length, style: isStyleLawOn() ? sceneStyle() : null, continuity, book: continuityBookOf(g.cur.worldId), conflicts, checked: { ledger: !!check.canon, notes: check.lore.map(l => l.name), standing: !!check.standing }, before: !!before, news: share ? { events, to: otherStories(g.cur.worldId) } : null };
+    prepared = { id: token.id, reply: lastReplyId(), change: { people: continuity.people.map(x => ({ name: x.name, now: x.now })), opened: continuity.opened.map(t => t.text), closed: continuity.closed.map(t => t.id) }, conflicts, news: share ? events : null, result, held: false };
     return result;
+}
+
+/** The names of a world's other stories, as the Atlas lists them: who a story's world events are news to (D235). */
+function otherStories(storyId) {
+    try { return worldStories(packOf(storyId)).filter(x => x.id !== String(storyId)).map(x => x.name); } catch (e) { return []; }
 }
 
 /**
@@ -1865,10 +1965,13 @@ async function establishedFor(worldId, cast, players) {
  * End (D122): Canon over the scene, the advancer after the scene, the chat
  * flushed, the snapshot taken and sealed, the record and the mark ended,
  * and where the scene's people stand and the threads kept (D188).
+ * Where the world's stories share their events (D235), what the scene
+ * did that the others would hear of is sent out for them: `news` as the
+ * End sheet has it (the events left ticked), else as the record said.
  * Each step says how it went; a chat that changes under End stops it
  * before anything of the world is touched.
  */
-export async function commitEnd({ recap = '', skipRecap = false, skipCanon = false, skipWorld = false, replaceMemory = false, onStep = null, bans = null, continuity = undefined, conflicts = undefined, wrap = '' } = {}) {
+export async function commitEnd({ recap = '', skipRecap = false, skipCanon = false, skipWorld = false, replaceMemory = false, onStep = null, bans = null, continuity = undefined, conflicts = undefined, wrap = '', news = undefined } = {}) {
     const step = (name, state) => { if (typeof onStep === 'function') { try { onStep(name, state); } catch (e) { /* the sheet's own */ } } };
     if (ending) return { ok: false, reason: 'running' };
     const g = guardEnd();
@@ -1958,6 +2061,8 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
             out.continuity = changeCounts(change);
             if (cont.kept && cont.kept.length) { out.continuity.people -= cont.kept.length; out.continuityKept = cont.kept.slice(); }
         } catch (e) { log('the continuity was not updated', String(e && e.message || e)); }
+        // The scene's world events (D235): as the End sheet has them, else as the record said when it was written for this chat and this last reply.
+        const saidNews = news !== undefined ? news : (prepared && prepared.id === token.id && prepared.reply === replyId ? prepared.news : null);
         prepared = null;
         putEntry(g.cur.worldId, { ...ended.entry, memory: keep ? entry.memory : memory, style, continuity: cont }, { source: 'end', world: g.cur.worldId });
         out.snapshot = keep ? 'kept' : 'ok';
@@ -1965,6 +2070,22 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         try { await bridge().saveChat(); } catch (e) { log('the mark could not be saved', String(e && e.message || e)); }
         current = { worldId: g.cur.worldId, mark: m[HUB_META_KEY] };
         step('snapshot', out.snapshot);
+        // The world's other stories hear of the scene (D235): what it did that the wider world would notice, and how it
+        // moved the world's clocks (the memory before the End against the memory after it), kept with the world for their
+        // next scenes. A scene the world has moved past sends its events and no clock: its memory was not kept.
+        if (isNewsShared(g.cur.worldId)) try {
+            const pk = packOf(g.cur.worldId);
+            let moves = [];
+            if (!keep && memory.stores.dooms_world) {
+                const res = await loadPack(pk);
+                const was = undo.entry.memory && undo.entry.memory.stores ? undo.entry.memory.stores.dooms_world : null;
+                if (res.ok) moves = clockChanges(was ? normalizeWorldState(was) : null, normalizeWorldState(memory.stores.dooms_world), res.pack);
+            }
+            const sent = postNews(readNews(pk), { story: g.cur.worldId, scene: sceneId, at: now, date: facts.date, time: timeReached(facts.time), events: cleanEvents(saidNews), clocks: moves });
+            if (sent.posted || sent.replaced.length) putNews(pk, sent.news, { source: 'end-news', world: pk });
+            undo.news = { pack: pk, replaced: sent.replaced };
+            out.news = { events: sent.news.items.filter(i => i.kind === 'event' && i.story === g.cur.worldId && i.scene === sceneId && i.at === now).length, clocks: moves.length, to: otherStories(g.cur.worldId) };
+        } catch (e) { log('the scene\'s world events were not sent out', String(e && e.message || e)); }
         // The continuity book (D189): the world's own lorebook, brought up to what the continuity now says.
         step('book', 'running');
         const mirrored = await mirrorBook(g.cur.worldId);
@@ -2030,7 +2151,8 @@ export function canUndoEnd() {
  * record, the memory with the world as it stood, where people stand, the
  * threads, the style law); the chat's ledger is as it was before Canon
  * read the scene; and in the continuity book the entries that End made
- * are taken out and the texts it replaced are put back. The chat's
+ * are taken out and the texts it replaced are put back. What it sent out
+ * for the world's other stories (D235) is taken back. The chat's
  * messages were never touched by End and are not touched here.
  * @returns {Promise<{ ok: boolean, reason?: string, scene?: string, book?: string, error?: string }>}
  */
@@ -2062,6 +2184,11 @@ export async function undoEnd() {
         const before = normalizeWorldEntry(u.entry);
         if (u.book && u.book.made && book === 'ok') before.continuity = trackWritten(before.continuity, u.book.name, []);
         putEntry(u.worldId, before, { source: 'undo-end', world: u.worldId });
+        // What that End sent out for the world's other stories goes (D235), and what it replaced of an earlier End is back.
+        if (u.news) try {
+            const took = withdrawNews(readNews(u.news.pack), { story: u.worldId, scene: u.scene, at: u.endedAt });
+            putNews(u.news.pack, restoreNews(took.news, u.news.replaced), { source: 'undo-end-news', world: u.news.pack });
+        } catch (e) { log('the scene\'s world events could not be taken back', String(e && e.message || e)); }
         // The chat: the scene's mark and the ledger as they were before End.
         m[HUB_META_KEY] = u.mark;
         if (u.hadCanon) m.dooms_canon = u.canon; else delete m.dooms_canon;
@@ -3187,6 +3314,12 @@ export async function deleteScene(worldId, id) {
         if (lastEnd && lastEnd.worldId === world && lastEnd.scene === id) lastEnd = null;    // its End is not there to undo any more
         const trackBefore = latest && latest.continuity ? latest.continuity.book : null;
         putEntry(world, r.entry, { source: 'delete', world });
+        // What the scene sent out for the world's other stories goes with it (D235). What its Start took in from them
+        // stays in the story's memory, as what the world moved by before it began does (D197).
+        try {
+            const sent = withdrawNews(readNews(world), { story: world, scene: id });
+            if (sent.removed) putNews(world, sent.news, { source: 'delete-news', world: packOf(world) });
+        } catch (err) { log('the scene\'s world events could not be taken back', String(err && err.message || err)); }
         let taken = null;
         if (remembered) {
             taken = back ? { log: true, ...shownCounts(back), book: await bookAfterTakeBack(world, trackBefore) } : { log: false, undone: 0, kept: 0, areas: [] };

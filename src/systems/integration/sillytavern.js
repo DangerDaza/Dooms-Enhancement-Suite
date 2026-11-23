@@ -37,7 +37,8 @@ import { updateWeatherEffect } from '../ui/weatherEffects.js';
 // Name Ban
 import { applyCharacterAliases } from '../features/characterAliases.js';
 // Vitals (Project Short Fuse)
-import { vitalsOn, playerVitalsOn, vitalDefs, applyVitalsToCharacters, applyVitalsToPlayer } from '../../utils/vitals.js';
+import { vitalsOn, playerVitalsOn, vitalDefs, playerVitalDefs, applyVitalsToCharacters, applyVitalsToPlayer } from '../../utils/vitals.js';
+import { settleVitalLimits } from '../features/vitalLimits.js';
 // Expression classification
 import { classifyAllCharacterExpressions, classifyActiveUserExpression, isExpressionSpritesModeEnabled } from './expressionSync.js';
 import { generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '../features/avatarGenerator.js';
@@ -243,7 +244,16 @@ export async function onMessageReceived(data) {
                     parsedData.characterThoughts = applyVitalsToCharacters(parsedData.characterThoughts, committedTrackerData.characterThoughts, defs);
                 }
                 if (playerVitalsOn(extensionSettings)) {
-                    parsedData.player = applyVitalsToPlayer(parsedData.player, committedTrackerData.player, defs);
+                    parsedData.player = applyVitalsToPlayer(parsedData.player, committedTrackerData.player, playerVitalDefs(extensionSettings));
+                }
+                // A vital carried to its mark (D233): the note or the roll is
+                // settled here, once a swipe, and kept on the reply; a roll
+                // that leaves the value somewhere writes it before the data
+                // is stored below.
+                try {
+                    settleVitalLimits(parsedData, lastMessage);
+                } catch (e) {
+                    console.warn('[Dooms Tracker] Vital marks could not be settled:', e);
                 }
             }
             // Update display data with newly parsed response
