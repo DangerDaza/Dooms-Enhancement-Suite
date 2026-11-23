@@ -8,6 +8,7 @@
  * not offered again. Kept per chat in chat_metadata.dooms_hooks. The pure
  * parts are src/utils/questHooks.js. Loaded with the Map window.
  */
+import { getStoryPremise } from '../../utils/storyPremise.js';
 import { getContext } from '../../../../../../extensions.js';
 import { chat, chat_metadata, saveChatDebounced, saveChatConditional } from '../../../../../../../script.js';
 import { extensionSettings, lastGeneratedData, committedTrackerData, addDebugLog } from '../../core/state.js';
@@ -116,7 +117,7 @@ export async function proposeHooks({ reason = 'manual' } = {}) {
         const players = playerNames();
         const now = sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox);
         const recent = buildRecentText(chatArray(), { count: 12, persona: players[0] || 'Player' });
-        const prompt = buildHooksPrompt({ pack, state, quests, done, taken: current.taken, aside: current.aside, recent, now, player: players });
+        const prompt = buildHooksPrompt({ pack, state, quests, done, taken: current.taken, aside: current.aside, recent, now, player: players, premise: getStoryPremise() });
         const external = extensionSettings.generationMode === 'external';
         const messages = [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }];
         const run = async () => {

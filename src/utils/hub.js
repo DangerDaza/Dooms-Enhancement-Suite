@@ -20,6 +20,7 @@ import { sceneFactsFrom, cleanWhen } from './questCut.js';
 import { isOffScene } from './offScene.js';
 import { normalizeBook } from './atlas.js';
 import { normalizeStyle, styleLawText } from './styleLaw.js';
+import { premiseLine, BRIEF_PREMISE } from './storyPremise.js';
 import { normalizeContinuity, emptyContinuity, draftBlocks, CONT } from './continuity.js';
 
 export const HUB_META_KEY = 'dooms_hub';
@@ -902,7 +903,7 @@ export function personLine(name, { description = '', line = '', tier = '' } = {}
  * time, then the open threads, then last time, then where the people
  * stand, then the people's lines, then the seed.
  */
-export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', date = '', time = '', weather = '', gapWords = '', cast = [], seed = '', since = [], lastRecap = '', beforeRecap = '', player = '', note = '', style = null, stand = [], threads = [] } = {}) {
+export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', date = '', time = '', weather = '', gapWords = '', cast = [], seed = '', since = [], lastRecap = '', beforeRecap = '', player = '', note = '', style = null, stand = [], threads = [] , premise = '' } = {}) {
     const head = `[SCENE BRIEF: ${clean(world, 80) || 'the world'}${sceneNo ? `, scene ${sceneNo}` : ''}.`;
     const whereParts = [];
     if (place) whereParts.push(`Where: ${clean(place, 80)}${region && !sameName(region, place) ? ` (${clean(region, 80)})` : ''}.`);
@@ -910,6 +911,8 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
     if (when || gapWords) whereParts.push(`When: ${[when, gapWords ? `${clean(gapWords, 80)} since the last scene` : ''].filter(Boolean).join('; ')}.`);
     if (weather) whereParts.push(`Weather: ${clean(weather, 120)}.`);
     const parts = {
+        // What the story is about, from its narrator card (D228): given only for a scene on a card of its own, which does not carry it.
+        premise: premise ? `This story: ${cutText(clean(premise, 4000), BRIEF_PREMISE)}` : '',
         where: whereParts.join(' '),
         who: cast.length ? `Who is here: ${cast.slice(0, MAX_CAST).map(c => noStop(typeof c === 'string' ? clean(c, 260) : personLine(c.name, c))).join('; ')}.` : '',
         // Where the people here stand as the last scene with each of them left it, and what the story has left open (D188).
@@ -923,8 +926,8 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
     };
     const end = (s) => (s && !/[.!?…"”\]]$/.test(s) ? `${s}.` : s);
     const law = styleLawText(style, { max: 500 });    // the style law (D179): short, and never cut to make room
-    const assemble = () => [head, parts.where, parts.who, parts.stand, end(parts.seed), parts.since, end(parts.last), end(parts.before), parts.threads, end(parts.note), law].filter(Boolean).join('\n') + ']';
-    const order = ['before', 'since', 'threads', 'last', 'stand', 'who', 'seed', 'note'];
+    const assemble = () => [head, end(parts.premise), parts.where, parts.who, parts.stand, end(parts.seed), parts.since, end(parts.last), end(parts.before), parts.threads, end(parts.note), law].filter(Boolean).join('\n') + ']';
+    const order = ['before', 'since', 'threads', 'last', 'premise', 'stand', 'who', 'seed', 'note'];
     let text = assemble();
     for (const key of order) {
         if (text.length <= MAX_BRIEF) break;
@@ -946,7 +949,7 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
  * the narrator's template; and the exact JSON asked for.
  * @returns {{ system: string, user: string }}
  */
-export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [], tail = '', then = null, now = null, thenPeople = [], voices = [], wrap = '', fresh = [], length = 'narrator' } = {}) {
+export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null, stand = [], threads = [], tail = '', then = null, now = null, thenPeople = [], voices = [], wrap = '', fresh = [], length = 'narrator', premise = '' } = {}) {
     const name = clean(world.name, 80) || 'the world';
     // How long each opener is (D224): a size the player chose, said outright; else as it was (as the narrator writes).
     const size = (OPENER_LENGTHS.find(x => x.id === openerLength(length)) || OPENER_LENGTHS[0]).words;
@@ -996,7 +999,7 @@ Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording
         : `${size || 'a paragraph or two'}, plain prose, no markup, no headings, no dice, nothing resolved or decided. `}Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${wish ? `What ${who} says happens next is given in their own words, and it comes first: open the scene the way it asks. Where it names the place, says who is there, or says how much time has passed, follow it over the place, the people and the time given elsewhere here; what it leaves unsaid is as given. "where" is the place the scene opens in by that. ` : ''}${ended ? `Where it is given how the scene before ended in ${who}'s own words, that happened, after its last lines: this scene opens from that end, not from the lines, and nothing in it is undone. ` : ''}${unmet.length ? `Entries of the lorebooks that are not in the story yet are given, because ${who}'s words ask for someone or something out of them: bring them in as those words ask${n > 1 ? ', a different one in each opener' : ''}, each written as their entry says and met here for the first time (${who} does not know them). Whoever of them is in an opener is named in its "who", by the name in brackets. ` : ''}${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standNow.length ? 'Where it is said how a person stands now, that is how the story left them: they pick up from there, and it holds over older notes where the two differ. ' : ''}${speak.length ? 'Where example lines are given for a person, they show that person\'s voice (their words, their rhythm, their manner): write what they say in it. The lines are examples and were never said in this story: do not repeat or quote them. ' : ''}${asTracked.length ? `Where it is said how the tracker had a person when the scene before stopped, they are still so as this scene opens: dressed as they were, in the state they were in${gapWords ? ', unless the time that has passed would have changed it' : ''}. What was on a person's mind is theirs: it shapes what they do and is not said aloud. ` : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${law ? `${law} ` : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
     const people = cast.length ? cast.map(c => (typeof c === 'string' ? clean(c, 260) : personLine(c.name, c))).join('\n- ') : 'no one in particular';
     const q = [quests && quests.main && quests.main !== 'None' ? `Main: ${clean(quests.main, 200)}` : '', ...((quests && Array.isArray(quests.optional)) ? quests.optional.map(x => clean(x, 200)).filter(Boolean).slice(0, 6) : [])].filter(Boolean);
-    const user = `World: ${name}${world.blurb ? `. ${clean(world.blurb, 600)}` : ''}
+    const user = `World: ${name}${world.blurb ? `. ${clean(world.blurb, 600)}` : ''}${premiseLine(premise)}
 Where the scene opens: ${clean(place, 80) || 'anywhere that fits'}${region && !sameName(region, place) ? ` (${clean(region, 80)})` : ''}${!known && weather ? `. Weather: ${clean(weather, 120)}` : ''}
 ${known
         ? `When the scene before stopped, by its tracker${t.back ? ` (${t.back} ${t.back === 1 ? 'message' : 'messages'} before its last, the latest it has)` : ' at its last message'}: ${[t.date, t.time].filter(Boolean).join(', ') || 'the date and time unknown'}${t.location ? `, at ${t.location}` : ''}.${t.weather || t.temperature ? ` Weather then: ${[t.weather, t.temperature].filter(Boolean).join(', ')}.` : ''}
