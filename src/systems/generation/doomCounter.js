@@ -22,6 +22,7 @@ import { DEFAULT_TWIST_GENERATOR_RULES_PROMPT, DEFAULT_KNIFE_GENERATOR_RULES_PRO
 import { escapeHtml } from '../../utils/html.js';
 import { repairJSON } from '../../utils/jsonRepair.js';
 import { resolvePersonaName } from '../features/diceRolls.js';
+import { relationshipFor, descriptionFor } from '../../utils/characterWith.js';
 
 /** Logs to the debug panel only when debugMode is on — parts of this module run per AI message. */
 function debugLog(message, data = null) {
@@ -308,8 +309,10 @@ export async function generateKnifeSuggestions(characterName, { isUser = false, 
     if (isUser) {
         description = extensionSettings.userCharacters?.[characterName]?.injection?.description || '';
     } else {
-        description = extensionSettings.characterInjection?.[characterName]?.description || '';
-        relationship = extensionSettings.characterRelationships?.[characterName] || '';
+        // As whoever is played knows them (D234): their own where written, else the shared ones.
+        const playedAs = resolvePersonaName() || '';
+        description = descriptionFor(extensionSettings, characterName, playedAs);
+        relationship = relationshipFor(extensionSettings, characterName, playedAs);
     }
 
     // Recent conversation for tone/setting (same budget as the twist generator)

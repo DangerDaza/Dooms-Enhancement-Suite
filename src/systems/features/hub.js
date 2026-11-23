@@ -56,6 +56,7 @@ import { dialogueConfig, dialogueOf, dialogueText, DIALOGUE } from '../../utils/
 import { resolvePersonaName } from './diceRolls.js';
 import { setStoryAnchor, userOfCard } from '../../utils/activeUser.js';
 import { premiseOf, setStoryPremise } from '../../utils/storyPremise.js';
+import { descriptionFor } from '../../utils/characterWith.js';
 
 export const HUB_CHANGED_EVENT = 'dooms:hub-changed';
 
@@ -1059,12 +1060,15 @@ function regionOf(pack, placeId) {
     return top && top.id !== id ? top.label : '';
 }
 
-/** The people's lines for the brief and the openers: the Workshop's description, else the tier the world knows them by. */
+/** The people's lines for the brief and the openers: the Workshop's description (the one written for whoever is played, where there is one: D234), else the tier the world knows them by. */
 function castLines(names, worldState) {
     const inj = extensionSettings.characterInjection && typeof extensionSettings.characterInjection === 'object' ? extensionSettings.characterInjection : {};
+    const sides = extensionSettings.characterWith && typeof extensionSettings.characterWith === 'object' ? extensionSettings.characterWith : {};
+    const playedAs = resolvePersonaName() || '';
     return names.map(name => {
-        const key = Object.keys(inj).find(k => sameName(k, name));
-        const description = key && inj[key] && typeof inj[key].description === 'string' ? inj[key].description : '';
+        // The stores are keyed as the Workshop spells a name; a scene's cast is as the story does (accents, a longer form).
+        const key = Object.keys(inj).find(k => sameName(k, name)) || Object.keys(sides).find(k => sameName(k, name)) || name;
+        const description = descriptionFor(extensionSettings, key, playedAs);
         const tier = worldState && worldState.known ? (worldState.known[name] || Object.entries(worldState.known).find(([k]) => sameName(k, name))?.[1] || '') : '';
         return { name, line: personLine(name, { description, tier }) };
     });

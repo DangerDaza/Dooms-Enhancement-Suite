@@ -2415,3 +2415,51 @@ a rise and a fall and once only, the roll and the narrator's words, a
 reply through to the next generation, a second pass and a new swipe, a
 swipe SillyTavern put away, a group's round, attributes on and off, the
 box, the off states, the low colour).
+
+## 73. A character as each player knows them (2026-11-23, D234)
+
+A world's stories share its cast (D216), and the Workshop kept one of
+everything about a character. Two of those things are not about the
+character alone but about them and the player: the relationship set by
+hand, and whatever of the description says who they are to the player
+("Jack's on-and-off girlfriend"). So the second story read the first
+story's: Eli's scenes were briefed with Jack's girlfriend, and her card
+in the roster wore Jack's heart. The owner, asked whether the cast's
+relationships should be one for both players: they "differ per persona".
+
+What a story has learned of a person was already its own: the tracker's
+relationship is the chat's, and where a person stands is the story's
+continuity (D189, D227). This is the part the player writes by hand.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D234 | A character may carry a relationship and a description written for one of the player's characters, read in that player's story in place of the ones everyone gets | **Held.** **One character.** The portrait, the voice, the look, the example lines, the knives and the lorebook are the character's and stay one; a version a player was weighed and left (below). **The store**: `extensionSettings.characterWith[character][user character] = { relationship?, description? }`, keyed by the Workshop user character's name, which is who a story is played as (D230). It is one of the version-backed stores (`PROFILE_FIELDS`, field `with`), so a campaign's version of a character carries its own, it is swapped with the campaign, cloned with a new version, dropped with the character and folded by an alias like the rest; a profile saved before this has none. **The rule** (`src/utils/characterWith.js`, pure): what a player's story reads is the player's own where one is written, else the shared one, a field at a time (`relationshipFor`, `descriptionFor`); a character with nothing written is as it was, and so is an install with one user character. Names are found whatever their case. **Read by**: the scene's brief and the openings (the Hub's `castLines`), Inject into Scene (the description and the relationship of its direction, and the relationship the tracker is given at once), the roster's relationship mark, the knife suggestions and the sheet suggestions (`cardTextFor`). Who is played is the one lookup there is (D226, D230). **The Workshop**: above the relationship chips on Identity and above the description on Injection, a switch, **For**: Everyone, then each user character, the one the chat is played as marked "playing" and one with something written marked with a dot. It is one switch drawn twice. On a player, the chips and the box show and set that player's own: no chip picked, or an empty box, is the shared one, and the box says so and offers **Start from the one for everyone**. Under the portrait is the relationship in effect. A card opens on the side of whoever is played when one is written for them, and on Everyone otherwise. The switch is not drawn where there is nothing to choose: fewer than two user characters and nothing written. A side written for someone who is no longer a user character stays on the switch, dashed, so it can be read and cleared. **Export and import** carry the sides (`with`), by the user character's name. |
+
+What it does not do. It does not make a second character: a version a
+player (its own portrait, voice and everything else) would have nested a
+second swap inside the campaign's, with the portrait files counted
+across both, for the sake of two fields; the owner was asked, with this
+as the recommendation, and the answer is awaited as this is written. The
+knives are shared: a secret spent in one story is spent in the world the
+stories share. A character's lorebook entries are not touched: where
+they name a player they do so in their own words. A description written
+for a player is read in place of the shared one, whole, not added to it:
+a change to what both share is made in both. The tracker's own
+relationship, which the AI writes each reply, was the chat's already and
+is as it was. A user character's name is the key, and the Workshop does
+not rename one.
+
+Tests: `tools/character-with-test.mjs` (the rule a field at a time, the
+names whatever their case, what is stored made safe, setting and
+clearing a side, the Workshop's choices, a campaign's version keeping
+its own sides through a switch and back, a character deleted, a profile
+saved before there were sides). `tools/hub-flow-test.mjs`: the same
+person in the brief of Eli's scene by the description written for him,
+and in the openings of Jack's story by the one for everyone.
+`tools/sheet-suggest-test.mjs` §4. The Workshop's switch was run in
+Chromium on the popup's own markup with the Workshop's own functions,
+against the live stylesheets, at 1200 and 390 pixels wide, and clicked
+through (36 checks: who a card opens on, a chip picked and cleared for
+a player, a description started from the shared one and typed over, the
+shared ones untouched, no switch with one user character, nothing past
+the window). SillyTavern itself was not run.

@@ -4004,7 +4004,7 @@
                 <section class="rpg-editor-pane active" data-pane="identity">
                     <div class="rpg-editor-section">
                         <h4>Identity</h4>
-                        <p class="helper" id="cw-identity-helper-npc">Name is read-only. Click a relationship chip to set an override &mdash; it wins over the AI's per-turn classification and is included when you Inject into Scene. Click the selected chip again to clear.</p>
+                        <p class="helper" id="cw-identity-helper-npc">Name is read-only. Click a relationship chip to set an override &mdash; it wins over the AI's per-turn classification and is included when you Inject into Scene. Click the selected chip again to clear. With more than one user character, <strong>For</strong> keeps a relationship, and on the Injection tab a description, for one of them: their story reads those in place of the ones for everyone.</p>
                         <p class="helper" id="cw-identity-helper-user" hidden>Name is read-only. Pronouns and the linked SillyTavern persona shape how the AI references this user character. Pronouns are stored on the persona; switching the active persona in SillyTavern auto-switches this user character if they're linked.</p>
                         <div class="rpg-field">
                             <label for="cw-name">Character name</label>
@@ -4013,6 +4013,10 @@
                         <!-- NPC mode: relationship chips -->
                         <div class="rpg-field cw-npc-only">
                             <label>Relationship to player</label>
+                            <!-- Who the relationship on show is for (D234): everyone, or one of the
+                                 player's characters. Built by renderWithSwitch(); hidden where there
+                                 is nothing to choose between. -->
+                            <div class="cw-with-switch" role="radiogroup" aria-label="Who this relationship is for" hidden></div>
                             <!-- Chips are generated from the relationship list in
                                  Settings → Workshop (renderRelationshipChips), so anything
                                  added there appears here too. One non-wrapping row that
@@ -4027,6 +4031,7 @@
                                     aria-label="Scroll relationships right"><i
                                         class="fa-solid fa-chevron-right"></i></button>
                             </div>
+                            <p class="helper cw-with-hint" id="cw-with-hint-rel" hidden></p>
                         </div>
                         <!-- NPC mode: aliases -->
                         <div class="rpg-field cw-npc-only">
@@ -4215,9 +4220,13 @@
                             the AI portray them consistently. Plain text — be specific about what they look like since
                             most models won't actually see the portrait image.</p>
                         <div class="rpg-field">
+                            <!-- The same "For" switch as on the Identity tab (D234): the description
+                                 one of the player's characters' stories reads in place of this one. -->
+                            <div class="cw-with-switch cw-npc-only" role="radiogroup" aria-label="Who this description is for" hidden></div>
                             <label for="cw-inj-description" class="sr-only">Description (bio and appearance)</label>
                             <textarea id="cw-inj-description" class="rpg-textarea" rows="6"
                                 placeholder="e.g. A wiry 60-year-old archivist with silver-streaked hair tied back, rectangular glasses, and a rumpled charcoal wool coat. Soft-spoken, always carrying a sealed brass scroll case&hellip;"></textarea>
+                            <p class="helper cw-with-hint cw-npc-only" id="cw-with-hint-desc" hidden></p>
                         </div>
                     </div>
                     <div class="rpg-editor-section cw-npc-only">

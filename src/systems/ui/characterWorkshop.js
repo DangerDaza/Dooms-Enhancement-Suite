@@ -39,7 +39,7 @@ import {
     saveCharacterRosterChange,
 } from '../../core/persistence.js';
 import { contrastInkHex } from '../rendering/chatBubbles.js';
-import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait, resolveFullPortrait, upscaleImage } from './portraitBar.js';
+import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait, resolveFullPortrait, upscaleImage, resolveActiveUserName } from './portraitBar.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
 import { getSafeThumbnailUrl, deletePortraitsIfUnreferenced, takePortraitHistoryValues } from '../../utils/avatars.js';
@@ -82,6 +82,7 @@ import { invalidateVoices, getEngineIfLoaded } from '../voices/voiceBoot.js';
 import { applyPopupLayout } from './settingsRail.js';
 import { DIALOGUE, cleanDialogue } from '../../utils/exampleDialogue.js';
 import { cardsOf, setCardsOf, cardOptions } from '../../utils/activeUser.js';
+import { withOf, cleanWith, withChoices, relationshipFor } from '../../utils/characterWith.js';
 
 /**
  * Runs a save function, surfacing failures instead of silently discarding
@@ -590,7 +591,7 @@ function pushPendingInputs() {
 function hasVersionedEdits() {
     if (!draft) return false;
     const d = draft.dirty || {};
-    if (d.avatar || d.injection || d.relationship || d.knives || d.appearance || d.voice) return true;
+    if (d.avatar || d.injection || d.relationship || d.knives || d.appearance || d.voice || d.with) return true;
     // A half-typed knife or alias lives only in the input until Add is
     // clicked; count it so a switch never silently drops it.
     if (String($modal.find('#cw-knife-input').val() || '').trim()) return true;
@@ -1271,7 +1272,59 @@ function ensureModal() {
     return true;
 }
 
+/**
+ * The draft of one version of a character, with the sides written for the
+ * player's characters (D234): the relationship and the description kept
+ * for one of them, read in their story in place of the shared ones. They
+ * ride with the version, like the relationship itself. `withFor` is who
+ * the Workshop's "For" switch is on: '' for everyone, else a user
+ * character. A card opens on the side of whoever is played when one is
+ * written for them, and on everyone otherwise.
+ */
 function buildDraft(name, isUser = false, versionId = null) {
+    const d = buildVersionDraft(name, isUser, versionId);
+    if (d.isUser) return d;
+    d.with = d.isLive ? withOf(extensionSettings, name) : (cleanWith((readVersion(d.versionId, name) || {}).with) || {});
+    d.withFor = sideKey(d.with, resolveActiveUserName());
+    d.dirty.with = false;
+    return d;
+}
+
+/** The key a user character's side is kept under in a draft's sides, whatever its case; '' when none is written. */
+function sideKey(sides, player) {
+    const want = String(player || '').trim().toLowerCase();
+    if (!want || !sides || typeof sides !== 'object') return '';
+    return Object.keys(sides).find(k => k.toLowerCase() === want) || '';
+}
+
+/** Whether the "For" switch is on one of the player's characters (D234). Never for the player's own card. */
+function editingSide() {
+    return !!(draft && !draft.isUser && draft.withFor);
+}
+
+/** The relationship the chips show: the side's own while the switch is on a player, else the shared one. */
+function shownRelationship() {
+    if (!draft) return '';
+    return editingSide() ? String((draft.with[draft.withFor] || {}).relationship || '') : String(draft.relationship || '');
+}
+
+/** The description the box shows: the side's own while the switch is on a player, else the shared one. */
+function shownDescription() {
+    if (!draft) return '';
+    return editingSide() ? String((draft.with[draft.withFor] || {}).description || '') : String(draft.injection.description || '');
+}
+
+/** Sets a field of the side the switch is on; an empty field is dropped, and a side with neither is. */
+function setSideField(field, value) {
+    if (!editingSide()) return;
+    const side = { ...(draft.with[draft.withFor] || {}) };
+    const v = String(value || '');
+    if (v.trim()) side[field] = v; else delete side[field];
+    if (Object.keys(side).length) draft.with[draft.withFor] = side; else delete draft.with[draft.withFor];
+    draft.dirty.with = true;
+}
+
+function buildVersionDraft(name, isUser = false, versionId = null) {
     if (isUser) {
         const u = extensionSettings?.userCharacters?.[name] || {};
         const inj = u.injection || {};
@@ -1650,6 +1703,7 @@ async function openAttributesPane() {
 
 function renderIdentity() {
     $modal.find('#cw-name').val(draft.name);
+    renderWithSwitch();    // hidden for the player's own card, and where there is nothing to choose
     if (draft.isUser) {
         renderPronounChips();
         renderLinkedPersonaSelect();
@@ -1658,22 +1712,7 @@ function renderIdentity() {
         $modal.find('#cw-preview-rel').text(draft.pronouns ? `(${draft.pronouns})` : '');
     } else {
         renderRelationshipChips();
-        const rel = (draft.relationship || '').toLowerCase();
-        $modal.find('#cw-rel-chips .rpg-rel-chip').each(function () {
-            const $chip = $(this);
-            const matches = ($chip.attr('data-rel') || '').toLowerCase() === rel;
-            $chip.toggleClass('selected', matches);
-            $chip.attr('aria-checked', matches ? 'true' : 'false');
-        });
-        const $rel = $modal.find('#cw-preview-rel');
-        if (draft.relationship) {
-            // Attribute-selector lookup would break on a name containing a
-            // quote, and these are user-typed now — match in JS instead.
-            const emoji = relationshipEmojiFor(draft.relationship);
-            $rel.text(`${emoji} ${draft.relationship}`.trim());
-        } else {
-            $rel.text('');
-        }
+        paintRelationship();
         // NB: the carousel's scroll position and arrow states are NOT set
         // here — this runs while the modal is still display:none, so the
         // strip has no width to measure. openCharacterWorkshop syncs them
@@ -1681,6 +1720,76 @@ function renderIdentity() {
     }
     $modal.find('#cw-preview-name').text(draft.name);
     applyPreviewColor(draft.color || '#e94560');
+}
+
+/**
+ * Marks the chip of the relationship the "For" switch shows, and says the
+ * one in effect under the portrait: a player with none of their own reads
+ * the shared one (D234).
+ */
+function paintRelationship() {
+    const shown = shownRelationship().toLowerCase();
+    // Attribute-selector lookup would break on a name containing a
+    // quote, and these are user-typed now — match in JS instead.
+    $modal.find('#cw-rel-chips .rpg-rel-chip').each(function () {
+        const $chip = $(this);
+        const matches = !!shown && ($chip.attr('data-rel') || '').toLowerCase() === shown;
+        $chip.toggleClass('selected', matches);
+        $chip.attr('aria-checked', matches ? 'true' : 'false');
+    });
+    const inEffect = shownRelationship() || String(draft.relationship || '');
+    $modal.find('#cw-preview-rel').text(inEffect ? `${relationshipEmojiFor(inEffect)} ${inEffect}`.trim() : '');
+}
+
+/**
+ * The "For" switch (D234): who the relationship and the description on
+ * show are written for. Everyone, then each of the player's characters.
+ * It is drawn above both fields and is one switch; with fewer than two
+ * user characters and nothing written for one, there is nothing to choose
+ * and it is not drawn.
+ */
+function renderWithSwitch() {
+    const $hosts = $modal.find('.cw-with-switch');
+    if (!$hosts.length) return;
+    const users = Object.keys(extensionSettings.userCharacters && typeof extensionSettings.userCharacters === 'object' ? extensionSettings.userCharacters : {});
+    const choices = draft && !draft.isUser ? withChoices(users, draft.with) : [];
+    if (draft && !draft.isUser && draft.withFor && !choices.some(c => c.id === draft.withFor)) draft.withFor = '';
+    if (!choices.length) {
+        $hosts.prop('hidden', true).empty();
+        $modal.find('.cw-with-hint').prop('hidden', true).empty();
+        syncDescriptionBox();
+        return;
+    }
+    const played = String(resolveActiveUserName() || '').toLowerCase();
+    const html = `<span class="cw-with-label">For</span>${choices.map(c => {
+        const on = c.id === draft.withFor;
+        const isPlayed = !!c.id && c.id.toLowerCase() === played;
+        const title = !c.id ? 'What every story reads, unless something is written for its player'
+            : `${c.written ? 'Written' : 'Nothing written'} for ${c.label}${isPlayed ? ', who this chat is played as' : ''}${c.gone ? '. No longer one of your user characters' : ''}`;
+        return `<button type="button" class="cw-with-chip${on ? ' selected' : ''}${c.id && c.written ? ' is-written' : ''}${c.gone ? ' is-gone' : ''}" role="radio" aria-checked="${on ? 'true' : 'false'}" data-with="${escapeHtml(c.id)}" title="${escapeHtml(title)}">${escapeHtml(c.label)}${isPlayed ? '<span class="cw-with-played">playing</span>' : ''}</button>`;
+    }).join('')}`;
+    $hosts.prop('hidden', false).html(html);
+    const who = draft.withFor;
+    const shared = String(draft.relationship || '');
+    $modal.find('#cw-with-hint-rel').prop('hidden', !who).text(who
+        ? `Set for ${who} only. With no chip picked, ${who}'s story uses the one for everyone${shared ? ` (${shared})` : ''}.`
+        : '');
+    syncDescriptionBox();
+}
+
+/** The description box under the "For" switch: its text, and what an empty one means for a player. */
+function syncDescriptionBox() {
+    const $box = $modal.find('#cw-inj-description');
+    if (!$box.length || !draft) return;
+    if ($box.attr('data-placeholder') === undefined) $box.attr('data-placeholder', $box.attr('placeholder') || '');
+    const who = editingSide() ? draft.withFor : '';
+    if ($box.val() !== shownDescription()) $box.val(shownDescription());    // never rewritten under the caret
+    $box.attr('placeholder', who ? `Nothing written for ${who}: their story reads the description for everyone. Write here what it should read in its place.` : $box.attr('data-placeholder'));
+    const shared = String(draft.injection.description || '').trim();
+    const $hint = $modal.find('#cw-with-hint-desc');
+    if (!who) { $hint.prop('hidden', true).empty(); return; }
+    const empty = !shownDescription().trim();
+    $hint.prop('hidden', false).html(`${escapeHtml(`Read in ${who}'s story in place of the description for everyone.`)}${empty && shared ? ' <button type="button" class="cw-with-copy" id="cw-with-copy">Start from the one for everyone</button>' : ''}`);
 }
 
 /**
@@ -1720,7 +1829,7 @@ function renderRelationshipChips() {
     if (!$host.length) return;
     const options = getRelationshipOptions();
     const names = Object.keys(options);
-    const current = String(draft?.relationship || '');
+    const current = shownRelationship();
     if (current && !names.some(n => n.toLowerCase() === current.toLowerCase())) {
         names.push(current);
     }
@@ -1889,7 +1998,7 @@ function renderDialogueCount() {
 }
 
 function renderInjection() {
-    $modal.find('#cw-inj-description').val(draft.injection.description || '');
+    syncDescriptionBox();    // the description for whoever the "For" switch is on (D234)
     $modal.find('#cw-inj-prompt').val(draft.injection.promptTemplate || '');
     $modal.find('#cw-dialogue').val(draft.injection.dialogue || '');
     renderDialogueCount();
@@ -2300,22 +2409,35 @@ function bindStaticListeners() {
         if (!draft || draft.isUser) return;
         const $chip = $(this);
         const picked = String($chip.attr('data-rel') || '');
-        const current = String(draft.relationship || '');
+        const current = shownRelationship();
         const next = (current.toLowerCase() === picked.toLowerCase()) ? '' : picked;
-        draft.relationship = next;
-        draft.dirty.relationship = true;
-        $modal.find('#cw-rel-chips .rpg-rel-chip').each(function () {
-            const match = ($(this).attr('data-rel') || '').toLowerCase() === next.toLowerCase() && !!next;
-            $(this).toggleClass('selected', match);
-            $(this).attr('aria-checked', match ? 'true' : 'false');
-        });
-        const $rel = $modal.find('#cw-preview-rel');
-        if (next) {
-            const emoji = $chip.attr('data-emoji') || '';
-            $rel.text(`${emoji} ${next}`.trim());
+        // For one of the player's characters while the "For" switch is on them (D234), else for everyone.
+        if (editingSide()) {
+            setSideField('relationship', next);
+            renderWithSwitch();
         } else {
-            $rel.text('');
+            draft.relationship = next;
+            draft.dirty.relationship = true;
         }
+        paintRelationship();
+    });
+
+    // The "For" switch (D234): who the relationship and the description on show are written for.
+    $modal.on('click.cw', '.cw-with-chip', function () {
+        if (!draft || draft.isUser) return;
+        draft.withFor = String($(this).attr('data-with') || '');
+        renderWithSwitch();
+        renderRelationshipChips();
+        paintRelationship();
+        scrollSelectedRelationshipIntoView();
+        updateRelationshipArrows();
+    });
+    $modal.on('click.cw', '#cw-with-copy', function (e) {
+        e.preventDefault();
+        if (!editingSide()) return;
+        setSideField('description', String(draft.injection.description || ''));
+        renderWithSwitch();
+        if (window.innerWidth > 1000) $modal.find('#cw-inj-description').trigger('focus');
     });
 
     // Relationship carousel arrows. Scrolls by most of a screenful, leaving a
@@ -2652,7 +2774,15 @@ function bindStaticListeners() {
     });
     $modal.on('input.cw change.cw', '#cw-inj-description', function () {
         if (!draft) return;
-        draft.injection.description = String($(this).val() || '');
+        const value = String($(this).val() || '');
+        if (editingSide()) {
+            // Written for the player the "For" switch is on (D234): the shared description is left as it is.
+            const wasEmpty = !shownDescription().trim();
+            setSideField('description', value);
+            if (wasEmpty !== !value.trim()) renderWithSwitch();    // the chip's mark and the hint follow; the box is left as typed
+            return;
+        }
+        draft.injection.description = value;
         draft.dirty.injection = true;
     });
 
@@ -3166,6 +3296,15 @@ function commitDraft() {
             changed = true;
         }
 
+        if (draft.dirty.with) {
+            // The sides written for the player's characters (D234): kept when any, dropped when none.
+            if (!extensionSettings.characterWith || typeof extensionSettings.characterWith !== 'object') extensionSettings.characterWith = {};
+            const sides = cleanWith(draft.with);
+            if (sides) extensionSettings.characterWith[name] = sides;
+            else delete extensionSettings.characterWith[name];
+            changed = true;
+        }
+
         if (draft.dirty.knives) {
             if (!extensionSettings.characterKnives) extensionSettings.characterKnives = {};
             if (Array.isArray(draft.knives) && draft.knives.length) {
@@ -3212,7 +3351,7 @@ function commitDraft() {
             else delete extensionSettings.characterVoices[name];
             changed = true;
         }
-    } else if (draft.dirty.avatar || draft.dirty.relationship || draft.dirty.knives || draft.dirty.appearance || draft.dirty.loras || draft.dirty.injection || draft.dirty.voice) {
+    } else if (draft.dirty.avatar || draft.dirty.relationship || draft.dirty.with || draft.dirty.knives || draft.dirty.appearance || draft.dirty.loras || draft.dirty.injection || draft.dirty.voice) {
         // A saved copy (shadowed Base or an inactive campaign): merge the
         // dirty fields into the stored version and write it back whole.
         const profile = readVersion(draft.versionId, name) || {};
@@ -3229,6 +3368,11 @@ function commitDraft() {
         if (draft.dirty.relationship) {
             if (draft.relationship) profile.relationship = draft.relationship;
             else delete profile.relationship;
+        }
+        if (draft.dirty.with) {
+            const sides = cleanWith(draft.with);
+            if (sides) profile.with = sides;
+            else delete profile.with;
         }
         if (draft.dirty.knives) {
             if (Array.isArray(draft.knives) && draft.knives.length) profile.knives = draft.knives.map(k => ({ ...k }));
@@ -3649,9 +3793,12 @@ function injectIntoScene(name) {
 
     // 2. Resolve any persisted injection extras (description + lorebook + relationship + prompt template).
     const stored = extensionSettings?.characterInjection?.[trimmed] || {};
-    const description = (draft.injection?.description ?? stored.description ?? '').trim();
+    // The description and the relationship are the ones written for whoever
+    // is played, where there are any (D234), else the shared ones.
+    const side = (draft.with && draft.with[sideKey(draft.with, resolveActiveUserName())]) || {};
+    const description = (side.description || (draft.injection?.description ?? stored.description ?? '')).trim();
     const lorebook = (draft.injection?.lorebook ?? stored.lorebook ?? '').trim();
-    const relationship = (draft.relationship || extensionSettings?.characterRelationships?.[trimmed] || '').trim();
+    const relationship = (side.relationship || draft.relationship || extensionSettings?.characterRelationships?.[trimmed] || '').trim();
     const promptTemplate = (draft.injection?.promptTemplate ?? stored.promptTemplate ?? '').trim();
 
     // 3. If a lorebook is attached and not already active, activate it so
@@ -3779,7 +3926,7 @@ function markCharacterPresentNow(name) {
         return false;
     }
 
-    const rel = extensionSettings?.characterRelationships?.[trimmed];
+    const rel = relationshipFor(extensionSettings, trimmed, resolveActiveUserName());    // the one for whoever is played (D234)
     charactersArr.push({
         name: trimmed,
         emoji: '🙂',
@@ -3922,6 +4069,9 @@ function exportDraft() {
             dialogue: draft.isUser ? '' : cleanDialogue(draft.injection?.dialogue),    // example lines of how they speak (D212)
         },
     };
+    // The sides written for the player's characters (D234) travel by the user character's name.
+    const sides = draft.isUser ? null : cleanWith(draft.with);
+    if (sides) payload.with = sides;
     // Standard voices travel as-is. A designed voice belongs to one Google
     // project, so it travels as its description and is re-created on import.
     // The character's own delivery note travels with either kind.

@@ -3295,13 +3295,17 @@ console.log('\n§37 the character card is the anchor: who is played, what the st
     check('the second story has no book of its own yet, and the first story\'s is held back in it all the same', hub.anchorStory() === W2 && !hub.continuityBookOf(W2) && same(hub.storyBooksHeldBack(), [BOOK]), JSON.stringify([hub.anchorStory(), hub.continuityBookOf(W2), hub.storyBooksHeldBack()]));
     check('what the story is about is its card\'s description, with the tied user character for {{user}}', hub.storyPremiseOf(W2) === 'Eli Vega is the Minotaur. Minotaur tells it.', hub.storyPremiseOf(W2));
 
-    // A scene of Eli's story, on a card made for the scene: it follows the card its story began on.
-    const pr = await hub.prepareScene({ worldId: W2, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'now' } });
+    // A scene of Eli's story, on a card made for the scene: it follows the card its story began on. One of the cast has a
+    // description written for Eli in the Workshop (D234), beside the one everyone gets.
+    const withWas = extensionSettings.characterWith;
+    extensionSettings.characterWith = { 'old marit': { 'Eli Vega': { description: 'Keeps the Anchor; she patched Eli up after the pit fight.' } } };
+    const pr = await hub.prepareScene({ worldId: W2, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: ['Old Marit'], gap: { id: 'now' } });
     const c2 = pr.ok ? await hub.commitScene(pr.token, { choice: 0 }) : pr;
     const sceneCard = c2.ok ? hub.worldEntry(W2).scenes.find(x => x.status === 'open').card : '';
     check('a scene on its own card is anchored to its story\'s narrator card: played as Eli Vega under Jack\'s persona and pick', c2.ok && sceneCard && sceneCard !== 'Minotaur.png' && hub.currentScene().worldId === W2 && same(au.getStoryAnchor().cards, ['Minotaur.png', sceneCard]) && dice.resolvePersonaName() === 'Eli Vega' && same(hub.storyBooksHeldBack(), [BOOK]), JSON.stringify([c2.ok, c2.reason, sceneCard, au.getStoryAnchor(), dice.resolvePersonaName()]));
     const brief = c2.ok ? String(files.get(c2.file).header.chat_metadata.dooms_hub.brief || '') : '';
     check('and its brief begins with what the story is about, since its card says nothing of it', /^\[SCENE BRIEF: Anchorland, scene 1\.\nThis story: Eli Vega is the Minotaur\. Minotaur tells it\./.test(brief), brief.slice(0, 160));
+    check('a person of the scene is in its brief by the description written for the story\'s player, not the one for everyone (D234)', brief.includes('Who is here: Old Marit: Keeps the Anchor; she patched Eli up after the pit fight.') && !brief.includes('a net-mender with debts'), brief);
 
     // Another chat on Jack's card, opened by hand: not a scene, not the chat the story began from.
     persona('eli.png');
@@ -3314,6 +3318,15 @@ console.log('\n§37 the character card is the anchor: who is played, what the st
     extensionSettings.hub.worlds[W2].continuity = { ...extensionSettings.hub.worlds[W2].continuity, book: { name: 'Anchorland (Eli Vega) - Scenes Continuity', people: {}, threads: null } };
     hub.onHubPlayerChanged();
     check('once the second story has its book, that one is held back in Jack\'s chats', same(hub.storyBooksHeldBack(), ['Anchorland (Eli Vega) - Scenes Continuity']));
+    {
+        // Jack's story reads the description everyone gets: nothing is written for him.
+        let askedJack = null;
+        hub.__setOpenersTransport(async (prompt) => { askedJack = prompt; return '{"when":{"date":"Day 9","time":"morning"},"openers":[{"title":"The docks","text":"The docks are wet.","who":[]}]}'; });
+        const pj = await hub.prepareScene({ worldId: W, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: ['Old Marit'], gap: { id: 'now' } });
+        check('the same person in the first story, played as Jack, is read by the description for everyone', pj.ok && !!askedJack && askedJack.user.includes('Old Marit: Keeps the Anchor; a net-mender with debts.') && !askedJack.user.includes('patched Eli up'), JSON.stringify([pj.ok, pj.reason, askedJack && askedJack.user.slice(0, 600)]));
+        hub.cancelStart();
+    }
+    extensionSettings.characterWith = withWas;
     extensionSettings.userCharacters.Jack.cards = ['Fixer.png'];
     extensionSettings.hub.worlds[W].memory.player = 'Someone Renamed';
     hub.onHubPlayerChanged();

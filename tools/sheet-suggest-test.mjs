@@ -133,5 +133,16 @@ extensionSettings.attributes.enabled = false;
 S.__resetSuggestions({ timeout: 2000 });
 check('with attributes off, nothing is asked', await S.maybeAutoSuggestSheets() === 0 && calls === 2);
 
+// ── 4. The card text is the one written for whoever is played (D234) ──
+extensionSettings.userCharacters = { Jack: {}, 'Eli Vega': {} };
+extensionSettings.characterWith = { 'Ines Arden': { 'Eli Vega': { description: 'A clerk at the Office who owes Eli a favour.' } } };
+extensionSettings.activeUserCharacter = 'Eli Vega';
+check('played as one a description is written for, the card text is theirs', S.cardTextFor('Ines Arden').description === 'A clerk at the Office who owes Eli a favour.' && S.cardTextFor('Ines Arden').appearance === 'Small, dark coat.', JSON.stringify(S.cardTextFor('Ines Arden')));
+extensionSettings.activeUserCharacter = 'Jack';
+check('played as another, it is the one for everyone', S.cardTextFor('ines arden').description === 'A clerk at the Office, twenty, nervous and quick.', JSON.stringify(S.cardTextFor('ines arden')));
+extensionSettings.userCharacters = {};
+extensionSettings.characterWith = {};
+extensionSettings.activeUserCharacter = null;
+
 console.log(failures === 0 ? '\nAll sheet suggestion checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

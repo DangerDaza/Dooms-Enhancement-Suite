@@ -437,7 +437,7 @@ export async function adoptVariantAsAlias(canonical, variant) {
     }
     for (const store of ['characterColors', 'bubbleFills', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
         'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance', 'characterLoras',
-        'generatedPortraits', 'characterVoices']) {
+        'generatedPortraits', 'characterVoices', 'characterWith']) {
         transferIfMissing(extensionSettings[store]);
     }
     bankColorAlias(extensionSettings.characterColors, extensionSettings.knownCharacters);
@@ -465,7 +465,7 @@ export async function adoptVariantAsAlias(canonical, variant) {
     }
     for (const store of ['knownCharacters', 'characterColors', 'bubbleFills', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
         'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance', 'characterLoras',
-        'generatedPortraits', 'characterVoices']) {
+        'generatedPortraits', 'characterVoices', 'characterWith']) {
         scrub(extensionSettings[store]);
     }
     try {

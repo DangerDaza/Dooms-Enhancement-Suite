@@ -6681,6 +6681,103 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     color: #fff;
 }
 
+/* The "For" switch (D234): who the relationship and the description on show
+   are written for. A row of small tabs above the field, wrapping when the
+   user characters do not fit on one line. */
+#character-workshop-popup .cw-with-switch {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    margin-bottom: 6px;
+    min-width: 0;
+}
+
+#character-workshop-popup .cw-with-switch[hidden],
+#character-workshop-popup .cw-with-hint[hidden] { display: none !important; }
+
+#character-workshop-popup .cw-with-label {
+    font-size: var(--modal-font-small, 0.8rem);
+    opacity: 0.7;
+    margin-right: 2px;
+}
+
+#character-workshop-popup .cw-with-chip {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 100%;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--rpg-text, #eaeaea);
+    font-size: var(--modal-font-small, 0.8rem);
+    cursor: pointer;
+    opacity: 0.75;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: background 0.2s, border-color 0.2s, opacity 0.2s;
+}
+
+#character-workshop-popup .cw-with-chip:hover {
+    opacity: 1;
+    border-color: var(--rpg-highlight, #e94560);
+}
+
+#character-workshop-popup .cw-with-chip.selected {
+    opacity: 1;
+    background: rgba(233, 69, 96, 0.18);
+    border-color: var(--rpg-highlight, #e94560);
+    color: #fff;
+}
+
+/* Something is written for this one: a dot before the name. */
+#character-workshop-popup .cw-with-chip.is-written::before {
+    content: '';
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--rpg-highlight, #e94560);
+}
+
+#character-workshop-popup .cw-with-chip.is-gone {
+    border-style: dashed;
+}
+
+#character-workshop-popup .cw-with-played {
+    flex: 0 0 auto;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    font-size: 0.82em;
+    opacity: 0.85;
+}
+
+#character-workshop-popup .cw-with-hint {
+    margin-top: 6px;
+    margin-bottom: 0;
+}
+
+#character-workshop-popup .cw-with-copy {
+    appearance: none;
+    margin: 2px 0 0 0.4rem;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--rpg-text, #eaeaea);
+    font: inherit;
+    cursor: pointer;
+}
+
+#character-workshop-popup .cw-with-copy:hover {
+    border-color: var(--rpg-highlight, #e94560);
+}
+
 
 /* Dialogue color palette — 10-column grid. Override the DES default .rpg-color-swatch
    (32x32) locally so swatches fill the grid cells. */
