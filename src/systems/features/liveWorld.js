@@ -22,6 +22,7 @@
  * The pure parts are src/utils/liveWorld.js and src/utils/worldMap.js; the
  * window is the Atlas, src/systems/ui/atlas.js (lazy).
  */
+import { getStoryPremise } from '../../utils/storyPremise.js';
 import { getContext } from '../../../../../../extensions.js';
 import { saveBase64AsFile } from '../../../../../../utils.js';
 import { chat, chat_metadata, saveChatDebounced, saveChatConditional, setExtensionPrompt, extension_prompt_types, extension_prompt_roles, eventSource } from '../../../../../../../script.js';
@@ -1042,7 +1043,7 @@ export async function advanceNow({ reason = 'manual' } = {}) {
         const players = playerNames();
         const now = sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox);
         const recent = buildRecentText(chatArray(), { count: c.recentMessages, persona: players[0] || 'Player' });
-        const prompt = buildAdvancePrompt({ pack, state, recent, now, maxStep: c.maxStep, spoilerFree: c.spoilerFree, player: players });
+        const prompt = buildAdvancePrompt({ pack, state, recent, now, maxStep: c.maxStep, spoilerFree: c.spoilerFree, player: players, premise: getStoryPremise() });
         const external = extensionSettings.generationMode === 'external';
         const messages = [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }];
         const run = async () => {

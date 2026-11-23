@@ -2231,3 +2231,28 @@ Tests: `tools/hub-test.mjs` (D227: the books held back for a story in
 front, for none, for one story; the names); `tools/campaign-switch-test.mjs`
 (a book held back stays off, comes on when let go, goes off when held
 back later, a hold-back that fails).
+
+## 67. What a story is about comes from its card (2026-11-23, D228)
+
+A world shared by several stories is described once, in the World
+Builder, and that one description was all a background request was
+told about the story: the openings, the hooks, the world's moves
+between replies and between scenes. The Night City world's description
+names the Escrow Man, so Eli's story would have been told it was Jack's.
+The owner's answer: what a story is about comes from its own narrator
+card (each story has its own card, D216), and the world's description is
+written neutral.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D228 | A story's premise is its narrator card's description, told to every request that sees no card, and to a scene's brief when the scene runs on a card of its own | **Held.** **The premise** (`premiseOf`, `src/utils/storyPremise.js`; `storyPremiseOf`, hub.js): the description of the story's narrator card (the card the story is bound to, `cardOf`), with `{{user}}` read as the story's player (D226) and `{{char}}` as the card's name, cut to 1,200 characters at a sentence's end where one is near. A story with no card, or a card with no description, has none, and nothing is told. **Told to**: the openings (after the world's line, kept for Ask again), a hooks round over the memory, the world's move by the gap before a scene and after one ended (`buildGapPrompt`); in a chat, the world's move between replies (`buildAdvancePrompt`) and a hooks round, from the story in front (`setStoryPremise`, set with the story's player whenever the hub says something changed). Each request has it on one line after the world's own: "This story (what it is about and who the player is in it, from its narrator card): …". **A scene's brief** begins with it ("This story: …", 600 characters, among the first parts cut when the brief is too long) only when the scene runs on a card made for it (D209), which says nothing of the story; a scene on the story's card is not told it twice. **The world's description** is left as the World Builder has it: writing it neutral, for a world with more than one story, is the player's. |
+
+What it does not do. It does not read the card's personality, scenario
+or greetings, only its description. It does not change a card. A world
+with one story is told its card's description beside the world's, which
+may say the same thing twice in a request; the cost is a few hundred
+characters.
+
+Tests: `tools/hub-test.mjs` (D228: the premise from a card, the macros,
+the description under data, none, a long one cut, the line, the brief
+of a scene on its own card and on the story's, the openings).

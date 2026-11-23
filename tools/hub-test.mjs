@@ -865,5 +865,23 @@ console.log('\n§ whether the openings chosen will fit in the answer (D225)');
     check('a later story\'s book says who it is played as, else its name, else its number; the first story\'s is the campaign\'s alone', H.storyBookBase('Nightcity', 'nc', worlds.nc) === 'Nightcity' && H.storyBookBase('Nightcity', 'nc~2', worlds['nc~2']) === 'Nightcity (Eli Vega)' && H.storyBookBase('Nightcity', 'nc~3', { name: 'The Minotaur' }) === 'Nightcity (The Minotaur)' && H.storyBookBase('Nightcity', 'nc~3', {}) === 'Nightcity (story 3)');
 }
 
+// D228: the premise from the story's card
+{
+    const P = await import('../src/utils/storyPremise.js');
+    const H = await import('../src/utils/hub.js');
+    const card = { name: 'Minotaur Narrator', description: '{{user}} is the Minotaur, a fixer in Night City. {{char}} narrates.' };
+    check('a card\'s description as the premise, the macros read as names', P.premiseOf(card, { player: 'Eli Vega' }) === 'Eli Vega is the Minotaur, a fixer in Night City. Minotaur Narrator narrates.');
+    check('the description under data where the card keeps it there; nothing for no card or an empty one', P.premiseOf({ name: 'N', data: { description: 'Rain.' } }) === 'Rain.' && P.premiseOf(null) === '' && P.premiseOf({ name: 'N' }) === '');
+    const long = 'A sentence that goes on. '.repeat(100);
+    const cut = P.premiseOf({ description: long }, { max: 200 });
+    check('a long premise is cut at a sentence\'s end', cut.length <= 200 && cut.endsWith('.'));
+    check('the line a request is told it on; none for none', /^\nThis story \(.*\): Rain\.$/.test(P.premiseLine('Rain.')) && P.premiseLine('') === '');
+    const brief = H.buildBrief({ world: 'Night City', sceneNo: 2, place: 'The Afterlife', premise: 'Eli Vega is the Minotaur.' });
+    check('a scene on a card of its own is told the premise in its brief, first', /^\[SCENE BRIEF: Night City, scene 2\.\nThis story: Eli Vega is the Minotaur\.\nWhere: The Afterlife\./.test(brief));
+    check('a scene on the story\'s card is not told it twice', !/This story/.test(H.buildBrief({ world: 'Night City', sceneNo: 2, place: 'The Afterlife' })));
+    const op = H.buildOpenersPrompt({ world: { name: 'Night City' }, place: 'The Afterlife', premise: 'Eli Vega is the Minotaur.' });
+    check('the openings are told the premise after the world', /World: Night City\nThis story \([^)]*\): Eli Vega is the Minotaur\./.test(op.user));
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

@@ -14,6 +14,7 @@
  * src/systems/features/liveWorld.js; the dashboard in
  * the Atlas (src/systems/ui/atlas.js).
  */
+import { premiseLine } from './storyPremise.js';
 import { normalizeAtlas, cleanKind } from './atlas.js';
 
 export const WORLD_SLOT = 'dooms-world-state';
@@ -624,7 +625,7 @@ function lastSeenDate(state, name) {
  * street-level common knowledge.
  * @returns {{ system: string, user: string }}
  */
-export function buildAdvancePrompt({ pack, state, recent = '', now = {}, maxStep = 1, spoilerFree = false, player = '' } = {}) {
+export function buildAdvancePrompt({ pack, state, recent = '', now = {}, maxStep = 1, spoilerFree = false, player = '', premise = '' } = {}) {
     const players = playerList(player);
     const clocks = pack.clocks.map(c => {
         const v = clockValue(state, c);
@@ -637,7 +638,7 @@ export function buildAdvancePrompt({ pack, state, recent = '', now = {}, maxStep
     const system = `You are the clockwork of the world of ${pack.name}, running between scenes. You never write story. You read the recent scenes and the time that passed, and you answer with one JSON object and nothing else, in exactly this shape:
 {"elapsed": "<how much story time passed since the last run, in words>", "clocks": {"<clock id>": <new integer value>}, "moved": [{"who": "<character name>", "to": "<place id from the places list>", "reason": "<a few words>"}], "blurb": "<two or three sentences of what people in the streets would say is going on>", "heard": ["<names of people mentioned for the first time>"]}
 Rules: clocks move with story time, not with how many messages were exchanged; a clock may move by at most the step given, up or down, and stays within its range; include a clock only when it moves; "to" must be a place id from the tree, the deepest that fits; move a character only when the scenes showed or plainly implied it; "moved" may be empty; names are strings exactly as the story spells them; no prose outside the JSON.${players.length ? ` The player is ${players[0]}${players.length > 1 ? ` (also written ${players.slice(1).join(', ')})` : ''}: never move them and never list them as heard of; the places are for everyone else.` : ''}${spoilerFree ? ' The blurb is common knowledge only: rumours, prices, news, weather; never a clock\'s value, name or mechanism, and nothing the player has not had a chance to learn.' : ''}`;
-    const user = `World: ${pack.name}${pack.description ? ` — ${pack.description}` : ''}
+    const user = `World: ${pack.name}${pack.description ? ` — ${pack.description}` : ''}${premiseLine(premise)}
 
 Clocks:
 ${clocks || '- none'}
@@ -823,8 +824,8 @@ export function applyAdvance(state, clean, pack, { msgId = null, gameDate = '', 
  * and asked for the new date and time too.
  * @returns {{ system: string, user: string }}
  */
-export function buildGapPrompt({ pack, state, facts = {}, gap = '', recaps = [], maxStep = 1, spoilerFree = false, player = '', mode = 'between', from = '', to = '' } = {}) {
-    const base = buildAdvancePrompt({ pack, state, recent: '', now: facts, maxStep, spoilerFree, player });
+export function buildGapPrompt({ pack, state, facts = {}, gap = '', recaps = [], maxStep = 1, spoilerFree = false, player = '', mode = 'between', from = '', to = '', premise = '' } = {}) {
+    const base = buildAdvancePrompt({ pack, state, recent: '', now: facts, maxStep, spoilerFree, player, premise });
     const words = clean(gap, 80) || 'a little time';
     const players = playerList(player);
     const after = mode === 'after';

@@ -7,6 +7,7 @@
  * offered, a hook taken or set aside, the quest a hook becomes. No
  * SillyTavern: tools/quest-hooks-test.mjs imports this directly.
  */
+import { premiseLine } from './storyPremise.js';
 import { jsonObjectsIn, publicEffects, placeLabel } from './liveWorld.js';
 import { MAX_QUEST } from './questCut.js';
 
@@ -66,7 +67,7 @@ const playerList = (player) => (Array.isArray(player) ? player : [player]).map(p
  * last-seen places of known people, the places visited.
  * @returns {{ system: string, user: string }}
  */
-export function buildHooksPrompt({ pack = null, state = null, quests = { main: 'None', optional: [] }, done = [], taken = [], aside = [], recent = '', now = {}, player = '', count = HOOKS_PER_ROUND } = {}) {
+export function buildHooksPrompt({ pack = null, state = null, quests = { main: 'None', optional: [] }, done = [], taken = [], aside = [], recent = '', now = {}, player = '', count = HOOKS_PER_ROUND, premise = '' } = {}) {
     const name = (pack && pack.name) || 'the world';
     const effects = pack && state ? publicEffects(state, pack) : [];
     const blurb = state && state.blurb ? state.blurb : '';
@@ -81,7 +82,7 @@ export function buildHooksPrompt({ pack = null, state = null, quests = { main: '
     const system = `You offer story hooks for a roleplay set in ${name}: things the player could do next, each grounded in what the world is doing right now. You never write story and you never invent what the world has not shown. Answer with ONE JSON object and nothing else:
 {"hooks":[{"title":"<four to six words>","text":"<one or two sentences: what the player could do, where, with whom, and what makes it pressing now>","grounds":"<the clock, person, place or rumour it comes from, in a few words>","kind":"clock|person|place|quest|other"}]}
 Rules: ${count} hooks, as different in kind as the world allows; each names a place from the places given or a person from the people given; each follows from a public effect, a rumour, where someone was last seen or a quest that is open; none repeats a quest open, completed, taken or set aside; nothing the player could not know; the player decides, so offer, never command${players.length ? `; the player (${players.join(' / ')}) is never cast as someone to meet` : ''}; no commentary, no code fences.`;
-    const user = `World: ${name}${pack && pack.description ? ` — ${pack.description}` : ''}
+    const user = `World: ${name}${pack && pack.description ? ` — ${pack.description}` : ''}${premiseLine(premise)}
 
 What the street sees now:
 ${effects.length ? effects.map(e => `- ${e.text}`).join('\n') : '- nothing in particular'}

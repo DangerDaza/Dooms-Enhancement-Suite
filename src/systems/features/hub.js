@@ -55,6 +55,7 @@ import { isCanonOn, updateCanon, onCanonChatChanged, canonContextNow, applyCanon
 import { dialogueConfig, dialogueOf, dialogueText, DIALOGUE } from '../../utils/exampleDialogue.js';
 import { resolvePersonaName } from './diceRolls.js';
 import { setStoryPlayer } from '../../utils/activeUser.js';
+import { premiseOf, setStoryPremise } from '../../utils/storyPremise.js';
 
 export const HUB_CHANGED_EVENT = 'dooms:hub-changed';
 
@@ -269,7 +270,19 @@ function refreshStoryPlayer() {
         const id = storyInFront();
         const e = id ? store().worlds[id] : null;
         setStoryPlayer(e && e.memory && e.memory.player ? e.memory.player : '');
-    } catch (e) { setStoryPlayer(''); }
+        setStoryPremise(id ? storyPremiseOf(id) : '');
+    } catch (e) { setStoryPlayer(''); setStoryPremise(''); }
+}
+
+/** What a story is about (D228): its narrator card's description, with the player its memory keeps for {{user}}. '' when it has no card, or the card says nothing. */
+export function storyPremiseOf(storyId) {
+    try {
+        const c = cardOf(storyId);
+        if (!c) return '';
+        const card = bridge().characters()[c.index];
+        const e = store().worlds[String(storyId || '')];
+        return premiseOf(card, { player: (e && e.memory && e.memory.player) || playerNames()[0] || '' });
+    } catch (e) { return ''; }
 }
 
 /**
@@ -1042,7 +1055,7 @@ async function moveWorldByGap(worldId, pack, memory, gap, recaps, { mode = 'betw
     const state = normalizeWorldState(memory.stores.dooms_world);
     const lw = liveWorldConfig(extensionSettings);
     const players = playerNames();
-    const prompt = buildGapPrompt({ pack, state, facts: memory.facts, gap: gap.words, recaps, maxStep: lw.maxStep, spoilerFree: lw.spoilerFree, player: players, mode, from, to });
+    const prompt = buildGapPrompt({ pack, state, facts: memory.facts, gap: gap.words, recaps, maxStep: lw.maxStep, spoilerFree: lw.spoilerFree, player: players, mode, from, to, premise: storyPremiseOf(worldId) });
     log(mode === 'after' ? 'the world moves for the scene just ended' : `the world moves by "${gap.words}" before the scene`, { world: worldId });
     try {
         const r = await request(prompt, { transport: gapTransport, label: 'gap', maxMs, stop, onWait });
@@ -1296,7 +1309,7 @@ async function prepareSceneRun({ worldId, seed = null, place = null, cast = [], 
         pool = untouchedLore(notesOf.entries, { people: storyPeople, text: storyText, workshop: Object.keys(extensionSettings.characterInjection && typeof extensionSettings.characterInjection === 'object' ? extensionSettings.characterInjection : {}), words: note });
     }
     const fresh = loreSample(pool, { from: 0, count: freshCount(n) });
-    const ask = { wrap: wrapBefore, then, thenPeople, voices, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads };
+    const ask = { wrap: wrapBefore, then, thenPeople, voices, now: movedMemory ? { date: memory.facts.date, time: memory.facts.time } : null, tail: lastLines.text, world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads, premise: storyPremiseOf(g.id) };
     const prompt = buildOpenersPrompt({ ...ask, count: n, fresh, length: len });
     let openers = [];
     let when = null;
@@ -1385,7 +1398,7 @@ export async function proposeHubHooks(worldId) {
         const done = Array.isArray(memory.stores.dooms_quests_done) ? memory.stores.dooms_quests_done : [];
         const recent = lastRecaps(entry, 3).map((r, i) => `${i + 1}. ${r}`).join('\n');
         const now = { date: memory.facts.date, time: memory.facts.time, location: memory.facts.location };
-        const prompt = buildHooksPrompt({ pack, state, quests, done, taken: current.taken, aside: current.aside, recent, now, player: memory.player || playerNames() });
+        const prompt = buildHooksPrompt({ pack, state, quests, done, taken: current.taken, aside: current.aside, recent, now, player: memory.player || playerNames(), premise: storyPremiseOf(id) });
         log('hooks requested over the memory', { world: id });
         const r = await request(prompt, { transport: hooksTransport, label: 'hooks' });
         if (r.busy) return { ok: false, reason: 'busy' };
@@ -1633,7 +1646,7 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     // With the continuity book switched on, SillyTavern's own World Info carries where people stand and the open threads
     // into every reply (D189); the brief says them only when the book is not there to.
     const bookOn = await bookIsLive(p.worldId);
-    const brief = buildBrief({ world: p.pack.name, sceneNo: n, place: p.place.label, region: p.place.region, date: seeded.facts.date, time: seeded.facts.time, weather: seeded.facts.weather, gapWords: p.gap.words, cast: lines.map(l => l.line), seed: p.seed.text || p.seed.label || '', since: p.since, lastRecap: p.recaps[0] || '', beforeRecap: p.recaps[1] || '', player: p.player[0] || '', note: p.note, style: isStyleLawOn() ? g.entry.style : null, stand: bookOn ? [] : (p.stand || []), threads: bookOn ? [] : (p.threads || []) });
+    const brief = buildBrief({ premise: ownCard ? storyPremiseOf(p.worldId) : '', world: p.pack.name, sceneNo: n, place: p.place.label, region: p.place.region, date: seeded.facts.date, time: seeded.facts.time, weather: seeded.facts.weather, gapWords: p.gap.words, cast: lines.map(l => l.line), seed: p.seed.text || p.seed.label || '', since: p.since, lastRecap: p.recaps[0] || '', beforeRecap: p.recaps[1] || '', player: p.player[0] || '', note: p.note, style: isStyleLawOn() ? g.entry.style : null, stand: bookOn ? [] : (p.stand || []), threads: bookOn ? [] : (p.threads || []) });
     const mark = hubMark({ world: p.worldId, scene: `s${n}`, title, seed: p.seed, place: p.place, cast, gap: p.gap, startedAt: now, startDate: seeded.facts.date, file: fileName, brief });
     // The brief rides DES's own slot every generation (D120): a chat-completion preset may not send the scenario at all.
     const header = sceneHeader({ stores: seeded.stores, mark, scenario: '', worldInfo: '', integrity: b.uuid(), persona: b.userAvatar() });
