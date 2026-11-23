@@ -81,6 +81,7 @@ import { DIALOGUE_COLOR_LIST } from '../../utils/dialogueColors.js';
 import { invalidateVoices, getEngineIfLoaded } from '../voices/voiceBoot.js';
 import { applyPopupLayout } from './settingsRail.js';
 import { DIALOGUE, cleanDialogue } from '../../utils/exampleDialogue.js';
+import { cardsOf, setCardsOf, cardOptions } from '../../utils/activeUser.js';
 
 /**
  * Runs a save function, surfacing failures instead of silently discarding
@@ -1284,6 +1285,7 @@ function buildDraft(name, isUser = false, versionId = null) {
             avatarFullRes: typeof u.avatarFullRes === 'string' ? u.avatarFullRes : '',
             pronouns: typeof u.pronouns === 'string' ? u.pronouns : '',
             linkedPersona: typeof u.linkedPersona === 'string' ? u.linkedPersona : '',
+            cards: cardsOf(u),    // the character cards this one is played on (D230)
             // The Portrait prompt and the LoRAs of the player's card live on
             // its entry (D91): the generator and scene pictures read them there.
             appearance: typeof u.appearance === 'string' ? u.appearance : '',
@@ -1305,7 +1307,7 @@ function buildDraft(name, isUser = false, versionId = null) {
             // Aliases are NPC-only (a persona's name is the player's own);
             // kept on the draft so shared render code can no-op safely.
             aliases: [],
-            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, knives: false, aliases: false, voice: false, attributes: false, appearance: false, loras: false },
+            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, cards: false, knives: false, aliases: false, voice: false, attributes: false, appearance: false, loras: false },
         };
     }
     const version = versionId || defaultVersionFor(name);
@@ -1651,6 +1653,7 @@ function renderIdentity() {
     if (draft.isUser) {
         renderPronounChips();
         renderLinkedPersonaSelect();
+        renderPlayedCards();
         // Show pronouns in the preview slot in place of the relationship label
         $modal.find('#cw-preview-rel').text(draft.pronouns ? `(${draft.pronouns})` : '');
     } else {
@@ -1793,6 +1796,50 @@ function renderLinkedPersonaSelect() {
         $sel[0].appendChild(opt);
     }
     $sel.val(draft.linkedPersona || '');
+}
+
+/** SillyTavern's character cards as { avatar, name }, by name; the cards the scenes feature made for single scenes (D209) left out. */
+function cardChoices() {
+    let list = [];
+    try { list = getContext().characters || []; } catch (e) { list = []; }
+    const sceneCards = new Set();
+    try {
+        const worlds = extensionSettings.hub && extensionSettings.hub.worlds && typeof extensionSettings.hub.worlds === 'object' ? extensionSettings.hub.worlds : {};
+        for (const w of Object.values(worlds)) for (const s of (w && Array.isArray(w.scenes) ? w.scenes : [])) if (s && s.ownCard && s.card) sceneCards.add(String(s.card));
+    } catch (e) { /* no scenes */ }
+    return list
+        .filter(c => c && typeof c.avatar === 'string' && c.avatar && !sceneCards.has(c.avatar))
+        .map(c => ({ avatar: c.avatar, name: String(c.name || c.avatar) }))
+        .sort((a, b) => a.name.localeCompare(b.name) || a.avatar.localeCompare(b.avatar));
+}
+
+/**
+ * "Played on these character cards" (D230): the cards tied to this user
+ * character as chips, and a list of the others to add from. A card tied
+ * to another user character says so; adding it here moves it on Save.
+ */
+function renderPlayedCards() {
+    const $tags = $modal.find('#cw-played-tags');
+    const $add = $modal.find('#cw-played-add');
+    if (!$tags.length || !$add.length || !draft || !draft.isUser) return;
+    const choices = cardChoices();
+    const nameOf = (avatar) => { const c = choices.find(x => x.avatar === avatar); return c ? c.name : `${avatar} (card not found)`; };
+    const mine = Array.isArray(draft.cards) ? draft.cards : [];
+    $tags.html(mine.length
+        ? mine.map(a => `
+        <span class="cw-alias-tag" title="${escapeHtml(a)}">${escapeHtml(nameOf(a))}
+            <button type="button" class="cw-card-remove" data-card="${escapeHtml(a)}" title="Stop playing on this card" aria-label="Stop playing on ${escapeHtml(nameOf(a))}">&times;</button>
+        </span>`).join('')
+        : '<span class="cw-alias-empty">No cards yet: who is played follows the SillyTavern persona in use.</span>');
+    $add.empty();
+    $add.append('<option value="">Add a card&hellip;</option>');
+    for (const o of cardOptions(choices, extensionSettings.userCharacters || {}, draft.name, mine)) {
+        const opt = document.createElement('option');
+        opt.value = o.avatar;
+        opt.textContent = o.label;
+        $add[0].appendChild(opt);
+    }
+    $add.val('');
 }
 
 function renderAppearance() {
@@ -2332,6 +2379,23 @@ function bindStaticListeners() {
         if (!draft || !draft.isUser) return;
         draft.linkedPersona = String($(this).val() || '');
         draft.dirty.linkedPersona = true;
+    });
+
+    // Played on these character cards (D230): add from the list, remove by the chip's x.
+    $modal.on('change.cw', '#cw-played-add', function () {
+        if (!draft || !draft.isUser) return;
+        const avatar = String($(this).val() || '');
+        if (!avatar) return;
+        if (!Array.isArray(draft.cards)) draft.cards = [];
+        if (!draft.cards.includes(avatar)) { draft.cards.push(avatar); draft.dirty.cards = true; }
+        renderPlayedCards();
+    });
+    $modal.on('click.cw', '.cw-card-remove', function () {
+        if (!draft || !draft.isUser) return;
+        const avatar = String($(this).attr('data-card') || '');
+        draft.cards = (Array.isArray(draft.cards) ? draft.cards : []).filter(a => a !== avatar);
+        draft.dirty.cards = true;
+        renderPlayedCards();
     });
 
     // "Set as active persona" footer button — flips DES's activeUserCharacter,
@@ -2922,9 +2986,13 @@ function commitDraft() {
         const loras = String(draft.loras || '').trim();
         if (loras) next.loras = loras; else delete next.loras;
         extensionSettings.userCharacters[name] = next;
+        // The cards this one is played on (D230): a card taken here is let go by whoever had it.
+        setCardsOf(extensionSettings.userCharacters, name, draft.cards);
         if (draft.dirty.attributes) setSheet(extensionSettings, name, true, draft.attributes, null, draft.proficiencies || []);
         invalidateVoices();
         saveOrWarn(saveSettings, 'settings');
+        // Who is played on which card may have changed: the hub reads its anchor again, and the continuity books follow (D230).
+        import('../features/hub.js').then(m => m.onHubPlayerChanged()).catch(() => { /* no hub */ });
         try { updatePortraitBar(); } catch (e) {}
         // Pass-2 perf: catch a just-saved data:URL avatar and migrate it to
         // the on-disk URL in the background. Idempotent + locked.

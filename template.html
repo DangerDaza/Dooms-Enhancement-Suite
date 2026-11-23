@@ -4053,9 +4053,17 @@
                         </div>
                         <div class="rpg-field cw-user-only">
                             <label for="cw-linked-persona">Linked SillyTavern persona</label>
-                            <p class="helper" style="margin-top: -2px; margin-bottom: 6px;">When this persona is active in SillyTavern, this user character is set as the DES active user character.</p>
+                            <p class="helper" style="margin-top: -2px; margin-bottom: 6px;">When this persona is active in SillyTavern, this user character is the one played, unless the chat is on a card tied to a user character below or belongs to a story played as another.</p>
                             <select id="cw-linked-persona" class="rpg-input" style="max-width: 320px;">
                                 <option value="">— None —</option>
+                            </select>
+                        </div>
+                        <div class="rpg-field cw-user-only">
+                            <label for="cw-played-add">Played on these character cards</label>
+                            <p class="helper" style="margin-top: -2px; margin-bottom: 6px;">A chat on one of these cards is played as this user character, whatever persona is active or picked. Scenes follow the card their story began on. A card is played as one user character at a time.</p>
+                            <div class="cw-alias-tags" id="cw-played-tags" style="margin-bottom: 6px;"></div>
+                            <select id="cw-played-add" class="rpg-input" style="max-width: 320px;" aria-label="Add a character card">
+                                <option value="">Add a card&hellip;</option>
                             </select>
                         </div>
                     </div>

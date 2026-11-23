@@ -54,7 +54,7 @@ import { isLiveWorldOn, loadPack, getWorldState, getActivePack, saveWorld, adopt
 import { isCanonOn, updateCanon, onCanonChatChanged, canonContextNow, applyCanonReply } from './canon.js';
 import { dialogueConfig, dialogueOf, dialogueText, DIALOGUE } from '../../utils/exampleDialogue.js';
 import { resolvePersonaName } from './diceRolls.js';
-import { setStoryPlayer } from '../../utils/activeUser.js';
+import { setStoryAnchor, userOfCard } from '../../utils/activeUser.js';
 import { premiseOf, setStoryPremise } from '../../utils/storyPremise.js';
 
 export const HUB_CHANGED_EVENT = 'dooms:hub-changed';
@@ -78,7 +78,7 @@ function log(message, data = null) {
 }
 
 function notify(detail = {}) {
-    refreshStoryPlayer();
+    refreshStoryAnchor();
     refreshStoryBooks();
     try { window.dispatchEvent(new CustomEvent(HUB_CHANGED_EVENT, { detail })); } catch (e) { /* no window (tests) */ }
 }
@@ -260,41 +260,77 @@ export function storyInFront() {
 }
 
 /**
- * The player of the story in front (D226), handed to the one rule of who
- * is being played (src/utils/activeUser.js): the name the story's memory
- * keeps. Asked again whenever the hub says something changed: the chat in
- * front, a chat taken as a story's beginning, an End.
+ * The story the chat in front is anchored to (D230): the story it belongs
+ * to (a scene of it, or the chat it began from), else the story whose
+ * narrator card the chat is on. The character card is the anchor: a chat
+ * opened on a story's card by hand, with one of the card's own greetings,
+ * is read as that story's for who is played, what the story is about and
+ * which continuity book is on. It is not one of the story's scenes: only
+ * Play as scenes and Start make those. '' when it is anchored to none.
  */
-function refreshStoryPlayer() {
+export function anchorStory() {
     try {
         const id = storyInFront();
-        const e = id ? store().worlds[id] : null;
-        setStoryPlayer(e && e.memory && e.memory.player ? e.memory.player : '');
-        setStoryPremise(id ? storyPremiseOf(id) : '');
-    } catch (e) { setStoryPlayer(''); setStoryPremise(''); }
+        if (id) return id;
+        const card = chatCard();
+        return card ? worldOfCard(card.avatar) : '';
+    } catch (e) { return ''; }
 }
 
-/** What a story is about (D228): its narrator card's description, with the player its memory keeps for {{user}}. '' when it has no card, or the card says nothing. */
+/**
+ * What the chat in front is anchored to (D226, D230), handed to the one
+ * rule of who is being played (src/utils/activeUser.js): the narrator card
+ * of its story and the chat's own card, to look for a Workshop tie on,
+ * and the player the story's memory keeps. With it, what the story is
+ * about (D228). Asked again whenever the hub says something changed: the
+ * chat in front, a chat taken as a story's beginning, an End.
+ */
+function refreshStoryAnchor() {
+    try {
+        const id = anchorStory();
+        const e = id ? store().worlds[id] : null;
+        const card = chatCard();
+        setStoryAnchor({ player: e && e.memory && e.memory.player ? e.memory.player : '', cards: [e && e.card ? e.card : '', card ? card.avatar : ''] });
+        setStoryPremise(id ? storyPremiseOf(id) : '');
+    } catch (e) { setStoryAnchor(); setStoryPremise(''); }
+}
+
+/**
+ * Who is played may have changed with nothing of the hub's changing: the
+ * persona in use (SillyTavern's settings were saved), or a card tied to a
+ * user character in the Workshop. The anchor is read again and the
+ * continuity books put right for it (D230).
+ */
+export function onHubPlayerChanged() {
+    refreshStoryAnchor();
+    refreshStoryBooks();
+}
+
+/** What a story is about (D228): its narrator card's description, with its player for {{user}} (the user character tied to the card, else the one its memory keeps). '' when it has no card, or the card says nothing. */
 export function storyPremiseOf(storyId) {
     try {
         const c = cardOf(storyId);
         if (!c) return '';
         const card = bridge().characters()[c.index];
         const e = store().worlds[String(storyId || '')];
-        return premiseOf(card, { player: (e && e.memory && e.memory.player) || playerNames()[0] || '' });
+        return premiseOf(card, { player: userOfCard(extensionSettings.userCharacters, c.avatar) || (e && e.memory && e.memory.player) || playerNames()[0] || '' });
     } catch (e) { return ''; }
 }
 
 /**
  * The continuity books of the campaign's world that are to be off for the
- * chat in front (D227): every story's but the one it belongs to. Nothing
- * is held back with one story, or with no campaign on.
+ * chat in front (D227, D230): with a story in front, every other story's;
+ * with none, those of stories played as another of the player's
+ * characters, and all of them where more than one is left. Nothing is
+ * held back with no campaign on.
  */
 export function storyBooksHeldBack() {
     try {
         const camp = activeCampaign();
         const world = camp ? campaignWorldId(extensionSettings, camp.id) : '';
-        return world ? heldBackBooks(store().worlds, world, storyInFront()) : [];
+        if (!world) return [];
+        const users = extensionSettings.userCharacters && typeof extensionSettings.userCharacters === 'object' ? Object.keys(extensionSettings.userCharacters) : [];
+        return heldBackBooks(store().worlds, world, anchorStory(), { player: resolvePersonaName() || '', users });
     } catch (e) { return []; }
 }
 

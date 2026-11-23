@@ -5,6 +5,7 @@
  * need to triage a report.
  */
 import { extensionSettings } from '../../core/state.js';
+import { getStoryAnchor, userOfCard } from '../../utils/activeUser.js';
 import { extensionVersion, getExtensionVersion, CODE_VERSION } from '../../core/config.js';
 
 /** @type {Array<{timestamp: string, level: string, message: string}>} */
@@ -189,6 +190,12 @@ function buildDiagnosticHeader() {
         lines.push(`doomCounter.enabled: ${s.doomCounter?.enabled}`);
         lines.push(`theme: ${s.theme || '(unset)'}`);
         lines.push(`activeUserCharacter: ${s.activeUserCharacter || '(none)'}`);
+        // Who is played by the card (D230): the anchor the hub set for the chat in front.
+        try {
+            const a = getStoryAnchor();
+            const tied = a.cards.map(c => userOfCard(s.userCharacters, c)).find(Boolean) || '';
+            lines.push(`story anchor: cards=${JSON.stringify(a.cards)}, tied to=${tied || '(no one)'}, story player=${a.player || '(none)'}`);
+        } catch (e) { lines.push('story anchor: (could not be read)'); }
         lines.push(`userCharacters count: ${Object.keys(s.userCharacters || {}).length}`);
         lines.push(`fab: ${JSON.stringify(s.fab || null)}`);
         const fabEl = document.getElementById('dooms-settings-fab');

@@ -1868,23 +1868,44 @@ export function nextStoryId(worlds, packId) {
 }
 
 /**
- * The continuity books held back while a story is played (D227): every
- * story of a world keeps its own book, filed with the world's campaign,
- * and only the book of the story in front is to be on. With one story
- * nothing is held back (as before stories); with the chat in front part of
- * none, every story's book is. Each name once, in the stories' order.
+ * The continuity books held back for the chat in front (D227, D230):
+ * every story of a world keeps its own book, filed with the world's
+ * campaign, and a story's book is to be on only where that story is read.
+ *
+ * With a story in front (the chat is one of its scenes, the chat it began
+ * from, or a chat on its narrator card), every other story's book is held
+ * back, whether or not the story in front has a book of its own yet.
+ *
+ * With none in front, the books of stories played as another of the
+ * player's characters are held back: `player` is who is being played now
+ * and `users` the Workshop's user characters, and only a story whose
+ * remembered player is one of them, and not this one, counts as
+ * another's. Of the books left, one stays on (a world played as one story
+ * is as before stories); more than one are all held back, since nothing
+ * says which the chat should read.
+ *
+ * Each name once, in the stories' order.
  */
-export function heldBackBooks(worlds, packId, storyId = '') {
+export function heldBackBooks(worlds, packId, storyId = '', { player = '', users = [] } = {}) {
     const all = isObj(worlds) ? worlds : {};
     const pack = String(packId || '');
     if (!pack) return [];
     const bookOf = (id) => { const e = all[id]; return e && isObj(e.continuity) && isObj(e.continuity.book) ? clean(e.continuity.book.name, 200) : ''; };
-    const ids = Object.keys(all).filter(id => packOf(id) === pack).sort((a, b) => storyNo(a) - storyNo(b));
-    const named = ids.filter(id => bookOf(id));
-    if (named.length < 2) return [];
-    const keep = storyId && packOf(storyId) === pack ? bookOf(storyId) : '';
+    const playerOf = (id) => { const e = all[id]; return e && isObj(e.memory) ? clean(e.memory.player, 60) : ''; };
+    const named = Object.keys(all).filter(id => packOf(id) === pack && bookOf(id)).sort((a, b) => storyNo(a) - storyNo(b));
+    const mine = storyId && packOf(storyId) === pack ? String(storyId) : '';
+    let held;
+    if (mine) held = named.filter(id => id !== mine);
+    else {
+        const list = Array.isArray(users) ? users : [];
+        const isUser = (n) => !!n && list.some(u => sameName(u, n));
+        const anothers = (id) => isUser(player) && isUser(playerOf(id)) && !sameName(playerOf(id), player);
+        const rest = named.filter(id => !anothers(id));
+        held = named.filter(id => anothers(id) || rest.length > 1);
+    }
+    const keep = mine ? bookOf(mine) : '';
     const out = [];
-    for (const id of named) { const b = bookOf(id); if (b !== keep && !out.includes(b)) out.push(b); }
+    for (const id of held) { const b = bookOf(id); if (b !== keep && !out.includes(b)) out.push(b); }
     return out;
 }
 

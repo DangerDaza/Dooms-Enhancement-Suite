@@ -2272,3 +2272,46 @@ was the text `/\bCash\b/`, which names no one.
 
 Tests: `tools/hub-test.mjs` (D229: a pattern, alternatives, flags, one
 that spells nothing, a plain key, an entry's keys).
+
+## 69. The character card is the anchor (2026-11-23, D230)
+
+The owner, on trying to say how D226 should work: the character card,
+not the persona, is what a chat is anchored to. A card's own greetings
+are to work as SillyTavern has them (a new chat on the Minotaur card,
+opened with any of its ten greetings, is Eli's from its first message),
+and who is played is to be tied to the user character in the Workshop.
+
+D226 put the persona in use first, which is right only while SillyTavern
+has switched to the right persona. And D227 left a gap this made plain:
+a book was held back only where two stories had books, so a new chat on
+Eli's card read Jack's continuity book until Eli's story had made its
+own, and a story just begun read every other story's until its first
+End.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D230 | A card is tied to the user character played on it; the chat in front is anchored to a story by its card; who is played and which continuity book is on follow the anchor | **Held.** **The tie** is kept on the user character (`userCharacters[name].cards`, the cards' file names) and made in the Workshop, Identity, under the linked persona: **Played on these character cards**, the cards as chips with an x, and a list of the others to add from (`renderPlayedCards`, characterWorkshop.js; `cardOptions`, `setCardsOf`, `src/utils/activeUser.js`). A card is played as one user character at a time: a card that is another's says so in the list ("played as Jack"), and saving it here takes it from them. The cards the scenes feature made for single scenes (D209) are not listed. **The anchor** (`anchorStory`, hub.js): the story the chat in front belongs to (a scene of it, or the chat it began from, as before), else the story whose narrator card the chat is on. A chat opened by hand on a story's card is so read as that story's for who is played, what the story is about (D228) and its continuity book; it is not one of the story's scenes, and nothing of the story's memory is written from it: Play as scenes and Start alone make scenes (D216 stands). **Who is played** (`pickActiveUser`; D226's order is changed): the user character tied to the story's narrator card, else to the chat's own card; else the player the story remembers; else the one linked to the persona in use; else the hand pick; else the only one. A scene on a card made for it (D209) is so played as its story's player. The story's premise reads `{{user}}` as the tied user character where there is one. **The continuity books** (`heldBackBooks`; D227's rule is changed): with a story in front, every other story's book is held back, whether or not the story in front has a book yet. With none in front, the book of a story played as another of the player's characters is held back: only where who is played now and the player the story remembers are both user characters of the Workshop, and differ (a persona renamed, or a story from before players were remembered, holds nothing back). Of the books left, one stays on, as before stories; more than one are all held back. **When it is asked again**: on the hub's every change, as before, and now when SillyTavern's settings are saved (the persona in use may be another: `SETTINGS_UPDATED`, `onHubPlayerChanged`) and when a user character is saved in the Workshop. **The card's greetings** are not touched by any of this, and were not before: a new chat on a card opens as SillyTavern opens it, the greetings its swipes, and DES reads it as any chat. |
+
+What it does not do. It does not switch SillyTavern's persona: on a card
+tied to Eli Vega with Jack's persona in use, DES plays Eli Vega (the
+dice, the tracker, the hub's requests, the persona card) while
+SillyTavern still sends Jack's name and persona description; a persona
+connected to the card in SillyTavern, or locked to the chat, keeps the
+two the same. It does not tie a card by itself: a story begun before
+this is played as the player its memory keeps until its card is tied.
+The System Log's settings say what the chat in front is anchored to
+("story anchor").
+
+Tests: `tools/active-user-test.mjs` (the order with a card, the story's
+card before the chat's own, the anchor set by the hub, saving a user
+character's cards, the list the Workshop offers);
+`tools/hub-test.mjs` (D227, D230: the books held back with a story in
+front that has no book yet, with none in front by who is played, only
+the Workshop's user characters counting, two stories of the one
+played); `tools/hub-flow-test.mjs` §37 (two stories of one world on two
+cards: a card's own chat before it is a story's, the persona in use,
+the Workshop tie, Play as scenes on it, the premise, a scene on a card
+of its own, a chat opened by hand on a story's card, the books held
+back at each step). The Workshop's new field was drawn in Chromium at a
+desktop's and a phone's width against the live stylesheets; the Workshop
+itself needs SillyTavern and was not run.

@@ -3226,5 +3226,111 @@ console.log('\n§36 a Start that does not wait for good, as many openings as cho
     hub.__setRecapTransport(null);
 }
 
+console.log('\n§37 the character card is the anchor: who is played, what the story is about and its continuity book follow the card (D226, D227, D228, D230)');
+{
+    const dice = await import(`${DES}/src/systems/features/diceRolls.js`);
+    const au = await import(`${DES}/src/utils/activeUser.js`);
+    const W = 'anchorland';
+    const W2 = 'anchorland~2';
+    const BOOK = 'Anchorland - Scenes Continuity';
+    const cardsWas = extensionSettings.hub.sceneCards;
+    const lbWas = extensionSettings.lorebook;
+    const packWas = extensionSettings.liveWorld.pack;
+    const usersWas = extensionSettings.userCharacters;
+    const pinWas = extensionSettings.activeUserCharacter;
+    extensionSettings.lorebook = { enabled: true, campaigns: {}, campaignOrder: [], activeCampaignId: null };
+    extensionSettings.hub.sceneCards = true;
+    extensionSettings.hub.styleLaw = false;
+    extensionSettings.liveWorld.customPacks[W] = JSON.stringify({ ...example, id: W, name: 'Anchorland' });
+    extensionSettings.liveWorld.pack = W;
+    // Two of the player's characters, the first picked by hand in the Workshop (as the owner's Jack was).
+    extensionSettings.userCharacters = { Jack: { linkedPersona: 'jack.png' }, 'Eli Vega': { linkedPersona: 'eli.png' } };
+    extensionSettings.activeUserCharacter = 'Jack';
+    ctxTarget.user_avatar = '';
+    hub.__setBookApi(shelfApi);
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 9","time":"morning"},"openers":[{"title":"The docks","text":"The docks are wet.","who":[]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}');
+    hub.__setGapTransport(async () => '{"elapsed":"a day","now":{"date":"Day 9","time":"dawn"},"clocks":{},"moved":[],"blurb":"x","heard":[]}');
+    hub.__setRecapTransport(async () => '{"recap":"What happened.","people":[],"threads":{"closed":[],"opened":[]}}');
+    // Two cards that narrate nothing yet.
+    ctxTarget.characters.push({ name: 'Fixer', avatar: 'Fixer.png', chat: 'Fixer - plain' }, { name: 'Minotaur', avatar: 'Minotaur.png', chat: 'Minotaur - plain' });
+    const at = (avatar) => ctxTarget.characters.findIndex(c => c.avatar === avatar);
+    const begin = async (avatar, name, file) => {
+        ctxTarget.characterId = at(avatar);
+        ctxTarget.name2 = name;
+        files.set(file, { header: { chat_metadata: {} }, messages: [], avatar, chName: name });
+        await openPlain(file);
+        chat.push(user(`I am ${name}'s player.`));
+        chat.push({ is_user: false, name, mes: `${name} tells the tale.`, extra: {} });
+        await persistence.saveChatData({ immediate: true });
+        await loaders();
+    };
+    const persona = (file) => { ctxTarget.user_avatar = file; hub.onHubPlayerChanged(); };
+
+    // Jack's story, begun on the first card with nothing tied anywhere: the hand pick says who.
+    await begin('Fixer.png', 'Fixer', 'Fixer - Jack begins');
+    const d1 = await hub.commitAdopt({ recap: 'Jack so far.' });
+    check('the first story is begun as the one picked by hand, and remembers him', d1.ok && d1.worldId === W && hub.worldEntry(W).memory.player === 'Jack' && hub.worldEntry(W).card === 'Fixer.png', JSON.stringify([d1.ok, d1.reason, d1.ok && hub.worldEntry(W).memory.player]));
+    // Its continuity book, as an End would have made it, and the campaign the world is in.
+    extensionSettings.hub.worlds[W].continuity = { ...extensionSettings.hub.worlds[W].continuity, book: { name: BOOK, people: {}, threads: null } };
+    extensionSettings.lorebook = { enabled: true, campaigns: { ca: { id: 'ca', name: 'Anchorland', books: [BOOK] } }, campaignOrder: ['ca'], activeCampaignId: 'ca' };
+    const att = await hub.attachWorld('ca', W);
+    hub.onHubPlayerChanged();
+    check('in the chat the story began from: anchored to it, played as Jack, its own book not held back', att.ok && hub.anchorStory() === W && dice.resolvePersonaName() === 'Jack' && same(hub.storyBooksHeldBack(), []), JSON.stringify([hub.anchorStory(), dice.resolvePersonaName(), hub.storyBooksHeldBack()]));
+
+    // A new chat on another card, opened by hand with the card's own greeting: no story of the world yet.
+    await begin('Minotaur.png', 'Minotaur', 'Minotaur - a greeting of the card');
+    check('a chat on a card that is no story\'s is anchored to none; with nothing else said it is played as the hand pick, and the one story\'s book stays on as before', hub.storyInFront() === '' && hub.anchorStory() === '' && dice.resolvePersonaName() === 'Jack' && same(hub.storyBooksHeldBack(), []), JSON.stringify([hub.anchorStory(), dice.resolvePersonaName(), hub.storyBooksHeldBack()]));
+    persona('eli.png');
+    check('the persona in use comes before the hand pick; played as another of the player\'s characters, Jack\'s book is held back', dice.resolvePersonaName() === 'Eli Vega' && same(hub.storyBooksHeldBack(), [BOOK]), JSON.stringify([dice.resolvePersonaName(), hub.storyBooksHeldBack()]));
+    persona('jack.png');
+    extensionSettings.userCharacters['Eli Vega'].cards = ['Minotaur.png'];
+    hub.onHubPlayerChanged();
+    check('the card tied to a user character in the Workshop decides, whatever persona is in use or picked', same(au.getStoryAnchor().cards, ['Minotaur.png']) && dice.resolvePersonaName() === 'Eli Vega' && same(hub.storyBooksHeldBack(), [BOOK]), JSON.stringify([au.getStoryAnchor(), dice.resolvePersonaName(), hub.storyBooksHeldBack()]));
+
+    // Play as scenes on that chat: Eli's story, a second story of the same world.
+    ctxTarget.characters[at('Minotaur.png')].description = '{{user}} is the Minotaur. {{char}} tells it.';
+    const p2 = hub.scenesPlan();
+    const d2 = await hub.commitAdopt({ recap: 'Eli so far.' });
+    check('the chat begins a second story, remembered as the user character its card is tied to', p2.ok && p2.story.id === W2 && d2.ok && d2.worldId === W2 && hub.worldEntry(W2).memory.player === 'Eli Vega' && hub.worldEntry(W2).card === 'Minotaur.png' && hub.worldEntry(W).memory.player === 'Jack', JSON.stringify([p2.ok && p2.story.id, d2.ok, d2.reason]));
+    check('the second story has no book of its own yet, and the first story\'s is held back in it all the same', hub.anchorStory() === W2 && !hub.continuityBookOf(W2) && same(hub.storyBooksHeldBack(), [BOOK]), JSON.stringify([hub.anchorStory(), hub.continuityBookOf(W2), hub.storyBooksHeldBack()]));
+    check('what the story is about is its card\'s description, with the tied user character for {{user}}', hub.storyPremiseOf(W2) === 'Eli Vega is the Minotaur. Minotaur tells it.', hub.storyPremiseOf(W2));
+
+    // A scene of Eli's story, on a card made for the scene: it follows the card its story began on.
+    const pr = await hub.prepareScene({ worldId: W2, seed: { kind: 'anywhere', text: 'On.' }, place: null, cast: [], gap: { id: 'now' } });
+    const c2 = pr.ok ? await hub.commitScene(pr.token, { choice: 0 }) : pr;
+    const sceneCard = c2.ok ? hub.worldEntry(W2).scenes.find(x => x.status === 'open').card : '';
+    check('a scene on its own card is anchored to its story\'s narrator card: played as Eli Vega under Jack\'s persona and pick', c2.ok && sceneCard && sceneCard !== 'Minotaur.png' && hub.currentScene().worldId === W2 && same(au.getStoryAnchor().cards, ['Minotaur.png', sceneCard]) && dice.resolvePersonaName() === 'Eli Vega' && same(hub.storyBooksHeldBack(), [BOOK]), JSON.stringify([c2.ok, c2.reason, sceneCard, au.getStoryAnchor(), dice.resolvePersonaName()]));
+    const brief = c2.ok ? String(files.get(c2.file).header.chat_metadata.dooms_hub.brief || '') : '';
+    check('and its brief begins with what the story is about, since its card says nothing of it', /^\[SCENE BRIEF: Anchorland, scene 1\.\nThis story: Eli Vega is the Minotaur\. Minotaur tells it\./.test(brief), brief.slice(0, 160));
+
+    // Another chat on Jack's card, opened by hand: not a scene, not the chat the story began from.
+    persona('eli.png');
+    ctxTarget.characterId = at('Fixer.png');
+    ctxTarget.name2 = 'Fixer';
+    files.set('Fixer - another greeting', { header: { chat_metadata: {} }, messages: [], avatar: 'Fixer.png', chName: 'Fixer' });
+    await openPlain('Fixer - another greeting');
+    check('a chat opened by hand on a story\'s narrator card is anchored to that story, though it is none of its scenes', hub.storyInFront() === '' && hub.anchorStory() === W && hub.sceneStartPlan().reason === 'not-scenes');
+    check('it is played as the player the story remembers, under another\'s persona, and reads that story\'s book alone', dice.resolvePersonaName() === 'Jack' && same(hub.storyBooksHeldBack(), []), JSON.stringify([dice.resolvePersonaName(), hub.storyBooksHeldBack()]));
+    extensionSettings.hub.worlds[W2].continuity = { ...extensionSettings.hub.worlds[W2].continuity, book: { name: 'Anchorland (Eli Vega) - Scenes Continuity', people: {}, threads: null } };
+    hub.onHubPlayerChanged();
+    check('once the second story has its book, that one is held back in Jack\'s chats', same(hub.storyBooksHeldBack(), ['Anchorland (Eli Vega) - Scenes Continuity']));
+    extensionSettings.userCharacters.Jack.cards = ['Fixer.png'];
+    extensionSettings.hub.worlds[W].memory.player = 'Someone Renamed';
+    hub.onHubPlayerChanged();
+    check('a tie on the story\'s card comes before the name the story remembers', dice.resolvePersonaName() === 'Jack');
+
+    for (const id of [W, W2]) for (const sc of hub.worldEntry(id).scenes.filter(x => x.status === 'open')) hub.setSceneAside(id, sc.id);
+    extensionSettings.userCharacters = usersWas;
+    extensionSettings.activeUserCharacter = pinWas;
+    ctxTarget.user_avatar = '';
+    extensionSettings.lorebook = lbWas;
+    extensionSettings.liveWorld.pack = packWas;
+    extensionSettings.hub.sceneCards = cardsWas;
+    hub.__setOpenersTransport(null);
+    hub.__setGapTransport(null);
+    hub.__setRecapTransport(null);
+    hub.onHubPlayerChanged();
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);
