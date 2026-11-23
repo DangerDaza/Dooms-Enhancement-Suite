@@ -24,6 +24,7 @@ import { chat, saveChatDebounced, deleteLastMessage } from '../../../../../../..
 import { callGenericPopup, POPUP_TYPE, POPUP_RESULT } from '../../../../../../popup.js';
 import { extensionSettings, committedTrackerData, lastGeneratedData } from '../../core/state.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
+import { pickActiveUser } from '../../utils/activeUser.js';
 import { escapeHtml } from '../../utils/html.js';
 import {
     attributesConfig,
@@ -74,23 +75,15 @@ export const DICE_CHANGED_EVENT = 'dooms:dice-changed';
 
 /**
  * The player's character as attributes see it: the Workshop's active user
- * character when one resolves (manual pick → persona link → the only one),
- * otherwise SillyTavern's persona name. Mirrors portraitBar's resolver so
- * this module stays free of UI imports.
+ * character when one resolves (src/utils/activeUser.js, D226), otherwise
+ * SillyTavern's persona name.
  */
 export function resolvePersonaName() {
     const s = extensionSettings || {};
-    const userMap = s.userCharacters && typeof s.userCharacters === 'object' ? s.userCharacters : {};
-    if (s.activeUserCharacter && userMap[s.activeUserCharacter]) return s.activeUserCharacter;
     let avatar = '';
     try { avatar = getContext().user_avatar || ''; } catch (e) { avatar = ''; }
-    if (avatar) {
-        for (const [name, entry] of Object.entries(userMap)) {
-            if (entry && entry.linkedPersona === avatar) return name;
-        }
-    }
-    const names = Object.keys(userMap);
-    if (names.length === 1) return names[0];
+    const picked = pickActiveUser({ userCharacters: s.userCharacters, avatar, pin: s.activeUserCharacter || '' });
+    if (picked) return picked;
     try {
         const n = String(getContext().name1 || '').trim();
         return n || null;

@@ -36,7 +36,7 @@ import { deletePortraitsIfUnreferenced, takePortraitHistoryValues } from '../../
 // versions the tiles show; tiles with extra versions get a badge; delete
 // removes every version.
 import { countVersions, deleteCharacterEverywhere, removeFromLive, getActiveCampaignId } from '../lorebook/campaignProfiles.js';
-import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portraitBar.js';
+import { clearPortraitCache, updatePortraitBar, getCharacterList, resolveActiveUserName } from './portraitBar.js';
 import { refreshBanPrompt } from './characterWorkshop.js';
 import { power_user } from '../../../../../../power-user.js';
 import { characters } from '../../../../../../../script.js';
@@ -708,7 +708,7 @@ function buildTile(name, isActive) {
         ? (userEntry.color || '')
         : (extensionSettings?.characterColors?.[name] || '');
     const relEmoji = isUserMode ? '' : resolveRelationshipEmoji(name);
-    const isActiveUser = isUserMode && extensionSettings?.activeUserCharacter === name;
+    const isActiveUser = isUserMode && resolveActiveUserName() === name;
     const safeName = escapeHtml(name);
     const safeNameAttr = escapeAttr(name);
     const activeSuffix = isActive ? ' (active in chat)' : '';

@@ -2177,3 +2177,34 @@ front, a connection profile's preset, the profile in use, one with no
 preset, one that is gone, the External API, none to read);
 `tools/atlas-browser-test.mjs` §5h (the line under the choosers, on the
 sheet and beside Ask again; there and empty when they fit).
+
+## 65. A player for each story: who is being played (2026-11-23, D226)
+
+The owner plays two characters in one world: Jack in its first story,
+Eli Vega in its second (D216), the same cast in both. DES asked who the
+player was in five places, each with its own copy of the rule, and every
+copy put the Workshop's hand pick ("Set as active persona") first. Jack
+was picked by hand, so Eli's chats were played as Jack's: his name in
+the dice, the Doom Counter's knives, the persona card, the scene's brief
+and the story's memory. This is the first step of the plan for many
+player characters in one world (A of A, B, C, E, G, D, F: a story knows
+its player; one continuity book a story; the premise from the story's
+card; lorebook keys written as patterns; stats of the player's own
+making; characters' versions a persona; world events shared between
+stories).
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D226 | Who is being played is decided by one rule, and the persona in use comes before the hand pick | **Held.** **The rule** (`pickActiveUser`, `src/utils/activeUser.js`): the user character linked to the SillyTavern persona in use; else the player of the story the chat in front belongs to, the name its memory keeps (`memory.player`), when that is one of the user characters; else the one picked by hand in the Workshop; else the only user character; else nothing (the dice and the hub then fall back to SillyTavern's persona name, as before). Names are matched whole and without regard to case: "Eli" is not "Eli Vega". **Where it is asked**: the persona card and its portrait (`resolveActiveUserName`, portraitBar), the dice and every hub request (`resolvePersonaName`, diceRolls), the Doom Counter's knives (it read the hand pick alone), the persona's dialogue colour (index.js), and the Workshop roster's "active" mark (it showed the hand pick, not who was being played). **The story's player** is handed to the rule by the hub whenever it says something changed (`refreshStoryPlayer` in `notify`): the chat in front, a chat taken as a story's beginning, an End. **Nothing is migrated**: the hand pick is kept and still decides where nothing else does. What changes for a player who picked by hand and switched personas in SillyTavern without telling DES is that the persona they switched to is now who they play. |
+
+What it does not do. It switches no persona in SillyTavern: a scene of
+Jack's story opened while Eli's persona is in use is played as Eli, and
+says nothing (the persona in use is the player's word). The Workshop's
+"Set as active persona" still switches SillyTavern's persona where the
+character is linked to one, so it still does what it says; on a character
+linked to none, while the persona in use is linked to another, it is
+outranked.
+
+Tests: `tools/active-user-test.mjs` (the order, a story player who is no
+user character, a hand pick that is gone, the only one, nothing, a name
+that resembles another); `tools/load-check.mjs`.

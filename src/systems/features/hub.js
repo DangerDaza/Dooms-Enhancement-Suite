@@ -54,6 +54,7 @@ import { isLiveWorldOn, loadPack, getWorldState, getActivePack, saveWorld, adopt
 import { isCanonOn, updateCanon, onCanonChatChanged, canonContextNow, applyCanonReply } from './canon.js';
 import { dialogueConfig, dialogueOf, dialogueText, DIALOGUE } from '../../utils/exampleDialogue.js';
 import { resolvePersonaName } from './diceRolls.js';
+import { setStoryPlayer } from '../../utils/activeUser.js';
 
 export const HUB_CHANGED_EVENT = 'dooms:hub-changed';
 
@@ -76,6 +77,7 @@ function log(message, data = null) {
 }
 
 function notify(detail = {}) {
+    refreshStoryPlayer();
     try { window.dispatchEvent(new CustomEvent(HUB_CHANGED_EVENT, { detail })); } catch (e) { /* no window (tests) */ }
 }
 
@@ -253,6 +255,20 @@ export function storyInFront() {
         const card = chatCard();
         return st && st.pack ? storyOfChat(store().worlds, String(st.pack), chatId(), card ? card.avatar : '') : '';
     } catch (e) { return ''; }
+}
+
+/**
+ * The player of the story in front (D226), handed to the one rule of who
+ * is being played (src/utils/activeUser.js): the name the story's memory
+ * keeps. Asked again whenever the hub says something changed: the chat in
+ * front, a chat taken as a story's beginning, an End.
+ */
+function refreshStoryPlayer() {
+    try {
+        const id = storyInFront();
+        const e = id ? store().worlds[id] : null;
+        setStoryPlayer(e && e.memory && e.memory.player ? e.memory.player : '');
+    } catch (e) { setStoryPlayer(''); }
 }
 
 // ─── The world's one map (D217) ─────────────────────────────────────────
