@@ -854,14 +854,22 @@ console.log('\n§ whether the openings chosen will fit in the answer (D225)');
     check('words counted', wordCount('one two  three\nfour') === 4 && wordCount('') === 0 && wordCount('   ') === 0 && wordCount(null) === 0);
 }
 
-// D227: one continuity book a story
+// D227, D230: one continuity book a story, on only where that story is read
 {
     const H = await import('../src/utils/hub.js');
-    const book = (name) => ({ continuity: { book: { name } } });
-    const worlds = { nc: book('NC - Scenes Continuity'), 'nc~2': { ...book('NC (Eli Vega) - Scenes Continuity'), memory: { player: 'Eli Vega' } }, 'nc~3': {}, other: book('Other - Scenes Continuity') };
-    check('a story in front: every other story\'s book of the world is held back', JSON.stringify(H.heldBackBooks(worlds, 'nc', 'nc~2')) === JSON.stringify(['NC - Scenes Continuity']) && JSON.stringify(H.heldBackBooks(worlds, 'nc', 'nc')) === JSON.stringify(['NC (Eli Vega) - Scenes Continuity']));
-    check('no story in front: every story\'s book is held back; another world\'s story counts as none', H.heldBackBooks(worlds, 'nc', '').length === 2 && H.heldBackBooks(worlds, 'nc', 'other').length === 2);
-    check('one story with a book: nothing is held back, as before stories', H.heldBackBooks({ nc: book('X'), 'nc~2': {} }, 'nc', '').length === 0 && H.heldBackBooks(worlds, '', 'nc').length === 0 && H.heldBackBooks(null, 'nc', 'nc').length === 0);
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const JACK = 'NC - Scenes Continuity', ELI = 'NC (Eli Vega) - Scenes Continuity';
+    const book = (name, player = '') => ({ continuity: { book: { name } }, ...(player ? { memory: { player } } : {}) });
+    const worlds = { nc: book(JACK, 'Jack'), 'nc~2': book(ELI, 'Eli Vega'), 'nc~3': {}, other: book('Other - Scenes Continuity') };
+    const users = ['Jack', 'Eli Vega', 'Eli'];
+    check('a story in front: every other story\'s book of the world is held back', same(H.heldBackBooks(worlds, 'nc', 'nc~2'), [JACK]) && same(H.heldBackBooks(worlds, 'nc', 'nc'), [ELI]));
+    check('a story in front that has no book of its own yet still holds the others back', same(H.heldBackBooks({ nc: book(JACK, 'Jack'), 'nc~2': { memory: { player: 'Eli Vega' } } }, 'nc', 'nc~2'), [JACK]) && same(H.heldBackBooks(worlds, 'nc', 'nc~3'), [JACK, ELI]));
+    check('no story in front, and nothing said of who is played: with several books all are held back; another world\'s story counts as none', same(H.heldBackBooks(worlds, 'nc', ''), [JACK, ELI]) && same(H.heldBackBooks(worlds, 'nc', 'other'), [JACK, ELI]));
+    check('no story in front, one story with a book: it stays on, as before stories', same(H.heldBackBooks({ nc: book('X'), 'nc~2': {} }, 'nc', ''), []) && same(H.heldBackBooks({ nc: book('X', 'Jack') }, 'nc', '', { player: 'Jack', users }), []));
+    check('no story in front: the book of a story played as another of the player\'s characters is held back', same(H.heldBackBooks({ nc: book(JACK, 'Jack') }, 'nc', '', { player: 'Eli Vega', users }), [JACK]) && same(H.heldBackBooks(worlds, 'nc', '', { player: 'eli vega', users }), [JACK]) && same(H.heldBackBooks(worlds, 'nc', '', { player: 'Jack', users }), [ELI]));
+    check('only the Workshop\'s user characters count as another\'s: a persona renamed, or a story that remembers no one, holds nothing back', same(H.heldBackBooks({ nc: book(JACK, 'Dan') }, 'nc', '', { player: 'Daniel', users }), []) && same(H.heldBackBooks({ nc: book(JACK, 'Jack') }, 'nc', '', { player: 'Daniel', users }), []) && same(H.heldBackBooks({ nc: book(JACK) }, 'nc', '', { player: 'Eli Vega', users }), []) && same(H.heldBackBooks({ nc: book(JACK, 'Jack') }, 'nc', '', { player: 'Eli Vega', users: [] }), []));
+    check('no story in front, two stories of the one played: both held back, since nothing says which', same(H.heldBackBooks({ nc: book('A', 'Jack'), 'nc~2': book('B', 'Jack'), 'nc~3': book('C', 'Eli Vega') }, 'nc', '', { player: 'Jack', users }), ['A', 'B', 'C']));
+    check('nothing for no world or no worlds', H.heldBackBooks(worlds, '', 'nc').length === 0 && H.heldBackBooks(null, 'nc', 'nc').length === 0);
     check('a later story\'s book says who it is played as, else its name, else its number; the first story\'s is the campaign\'s alone', H.storyBookBase('Nightcity', 'nc', worlds.nc) === 'Nightcity' && H.storyBookBase('Nightcity', 'nc~2', worlds['nc~2']) === 'Nightcity (Eli Vega)' && H.storyBookBase('Nightcity', 'nc~3', { name: 'The Minotaur' }) === 'Nightcity (The Minotaur)' && H.storyBookBase('Nightcity', 'nc~3', {}) === 'Nightcity (story 3)');
 }
 

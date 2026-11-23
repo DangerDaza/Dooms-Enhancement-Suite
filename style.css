@@ -12698,7 +12698,8 @@ body.dooms-hide-st-topbar .openDrawer {
 }
 
 
-.cw-alias-remove {
+.cw-alias-remove,
+.cw-card-remove {
     background: none;
     border: none;
     color: var(--SmartThemeBodyColor, #aaa);
@@ -12710,7 +12711,8 @@ body.dooms-hide-st-topbar .openDrawer {
 }
 
 
-.cw-alias-remove:hover {
+.cw-alias-remove:hover,
+.cw-card-remove:hover {
     opacity: 1;
     color: #e94560;
 }
