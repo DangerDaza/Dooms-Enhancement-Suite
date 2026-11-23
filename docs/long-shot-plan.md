@@ -2256,3 +2256,19 @@ characters.
 Tests: `tools/hub-test.mjs` (D228: the premise from a card, the macros,
 the description under data, none, a long one cut, the line, the brief
 of a scene on its own card and on the story's, the openings).
+
+## 68. Lorebook keys written as patterns (2026-11-23, D229)
+
+SillyTavern matches a key written between slashes as a regular
+expression. The owner keys Cash's book `/\bCash\b/`, because World Info
+matches without regard to case and a plain "Cash" would wake on every
+"cash". DES reads keys as names in two places: a scene's people's own
+notes (D177) and the new faces from the lorebooks (D223). There the key
+was the text `/\bCash\b/`, which names no one.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D229 | A key written as a pattern is read as the names it plainly spells; one that spells none is no name | **Held.** **The reading** (`keyNames`, `src/utils/hub.js`): a key between slashes, with any flags after, has its word boundaries, anchors, plain groups and escaped punctuation let go, and its alternatives split, one level of grouping deep: `/\bCash\b/` is Cash, `/\b(Nina\|Nina Cho)\b/i` is Nina and Nina Cho, `/Mary(anne\| Anne)/` is Maryanne and Mary Anne. A pattern with a character class, a repeat, a wildcard or deeper groups spells no plain name and stands for none: it is not matched against the story as text. A plain key is itself, as before. **Where**: `loreEntries`, which every reading of a lorebook's entries as people goes through; an entry's keys are the names they stand for, each once. SillyTavern's own matching is not touched. |
+
+Tests: `tools/hub-test.mjs` (D229: a pattern, alternatives, flags, one
+that spells nothing, a plain key, an entry's keys).

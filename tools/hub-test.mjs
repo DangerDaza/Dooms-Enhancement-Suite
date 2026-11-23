@@ -883,5 +883,17 @@ console.log('\n§ whether the openings chosen will fit in the answer (D225)');
     check('the openings are told the premise after the world', /World: Night City\nThis story \([^)]*\): Eli Vega is the Minotaur\./.test(op.user));
 }
 
+// D229: lorebook keys written as patterns
+{
+    const H = await import('../src/utils/hub.js');
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    check('a pattern key is read as the name it spells', same(H.keyNames('/\\bCash\\b/'), ['Cash']) && same(H.keyNames('/^Skip$/'), ['Skip']));
+    check('alternatives are each a name, flags let go', same(H.keyNames('/\\b(Nina|Nina Cho)\\b/i'), ['Nina', 'Nina Cho']) && same(H.keyNames('/Mary(anne| Anne)/'), ['Maryanne', 'Mary Anne']));
+    check('a pattern that spells no plain name stands for none', same(H.keyNames('/c[a-z]+h/'), []) && same(H.keyNames('/\\d+/'), []) && same(H.keyNames('/(a(b))/'), []));
+    check('a plain key is itself', same(H.keyNames('Roxy Dunn'), ['Roxy Dunn']) && same(H.keyNames('  '), []));
+    const list = H.loreEntries('NC - Cash', { entries: { 0: { comment: 'Who she is', key: ['/\\bCash\\b/', 'Cashmere', 'Cash'], content: 'Cash is...' } } });
+    check('an entry\'s keys are the names they stand for, each once', same(list[0].keys, ['Cash', 'Cashmere']));
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

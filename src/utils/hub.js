@@ -706,11 +706,37 @@ export const LORE_BOOKS = 12;            // lorebooks read for one scene at the 
 
 const loreName = (t) => clean(t, 200).toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim();
 
-/** A lorebook's entries as a plain list, the switched-off and the empty left out: { book, title, keys, content, constant, order }. */
+/**
+ * The names a lorebook key stands for (D229). A key is a word or phrase,
+ * or, written between slashes, a pattern SillyTavern matches as a regular
+ * expression ("/\\bCash\\b/", used where case-insensitive matching would
+ * catch "cash"). A pattern is read as the names it plainly spells: word
+ * boundaries, anchors, plain groups and escapes let go, alternatives
+ * split ("/\\b(Nina|Nina Cho)\\b/i" is Nina and Nina Cho). One that
+ * spells no plain name (character classes, repeats, wildcards) stands
+ * for none, so it is not mistaken for one.
+ * @returns {string[]}
+ */
+export function keyNames(key) {
+    const k = clean(key, 200);
+    const m = /^\/(.+)\/([a-z]*)$/s.exec(k);
+    if (!m) return k ? [clean(k, 80)] : [];
+    let body = m[1].replace(/\\[bB]/g, '').replace(/^\^|\$$/g, '').replace(/\(\?:/g, '(').replace(/\\([.\-'’ ])/g, '$1');
+    if (/[\[\]{}*+?\\.]/.test(body)) return [];
+    // One level of grouping: "a(b|c)" is ab and ac; "(a|b)" is a and b.
+    const out = [];
+    const g = /^([^()|]*)\(([^()]*)\)([^()|]*)$/.exec(body);
+    const alts = g ? g[2].split('|').map(x => `${g[1]}${x}${g[3]}`) : (/[()]/.test(body) ? null : body.split('|'));
+    if (!alts) return [];
+    for (const a of alts) { const t = clean(a, 80); if (t && /\p{L}/u.test(t) && !out.includes(t)) out.push(t); }
+    return out;
+}
+
+/** A lorebook's entries as a plain list, the switched-off and the empty left out: { book, title, keys, content, constant, order }. Keys are the names they stand for (D229). */
 export function loreEntries(book, data) {
     const src = isObj(data) && isObj(data.entries) ? Object.values(data.entries) : Array.isArray(data) ? data : [];
     return src.filter(x => isObj(x) && x.disable !== true && typeof x.content === 'string' && x.content.trim())
-        .map(x => ({ book: clean(book, 200), title: clean(x.comment, 200), keys: (Array.isArray(x.key) ? x.key : []).map(k => clean(k, 80)).filter(Boolean), content: String(x.content).trim(), constant: x.constant === true, order: Number.isFinite(x.order) ? x.order : 100 }));
+        .map(x => ({ book: clean(book, 200), title: clean(x.comment, 200), keys: [...new Set((Array.isArray(x.key) ? x.key : []).flatMap(keyNames))], content: String(x.content).trim(), constant: x.constant === true, order: Number.isFinite(x.order) ? x.order : 100 }));
 }
 
 /**
