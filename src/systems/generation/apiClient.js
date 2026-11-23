@@ -30,7 +30,7 @@ import { recordSeparateTrackerPrompt } from './inspector.js';
 import { renderInfoBox } from '../rendering/infoBox.js';
 import { removeLocks } from './lockManager.js';
 import { applyCharacterAliases } from '../features/characterAliases.js';
-import { vitalsOn, playerVitalsOn, vitalDefs, applyVitalsToCharacters, applyVitalsToPlayer } from '../../utils/vitals.js';
+import { vitalsOn, playerVitalsOn, vitalDefs, playerVitalDefs, applyVitalsToCharacters, applyVitalsToPlayer } from '../../utils/vitals.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
 import { i18n } from '../../core/i18n.js';
@@ -466,7 +466,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts, { force = fal
                         parsedData.characterThoughts = applyVitalsToCharacters(parsedData.characterThoughts, committedTrackerData.characterThoughts, defs);
                     }
                     if (playerVitalsOn(extensionSettings)) {
-                        parsedData.player = applyVitalsToPlayer(parsedData.player, committedTrackerData.player, defs);
+                        parsedData.player = applyVitalsToPlayer(parsedData.player, committedTrackerData.player, playerVitalDefs(extensionSettings));
                     }
                 }
                 // Store RPG data for the last assistant message (separate mode)

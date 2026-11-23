@@ -15,8 +15,9 @@
  *     enabled: false,                  // master switch (existing)
  *     customStats: [                   // the sheet (existing key)
  *       { id, name, enabled,           //   existing
- *         color, icon, start, ai },    //   new: bar colour, emoji, value a new
- *     ],                               //   character starts at, "AI updates it"
+ *         color, icon, start, ai,      //   new: bar colour, emoji, value a new
+ *         who, names },                //   character starts at, "AI updates it";
+ *     ],                               //   who the vital is for (D231, below)
  *     player: { enabled: true },       // new: the persona has vitals too
  *     showOnCards: true,               // new: bars on the card front
  *     maxBars: 3,                      // new: how many bars the front shows
@@ -28,6 +29,16 @@
  * its value rides along per swipe like everything else) and the AI is told
  * it is locked, but whatever comes back, the previous value is written over
  * it after parsing. Deterministic, no prompt dependence.
+ *
+ * Who a vital is for (docs/long-shot-plan.md D231). A sheet used to be one
+ * list every character carried, the persona included. `who` scopes a vital:
+ *   'all'     everyone (the persona too, while "Your character too" is on)
+ *   'player'  the character being played, whoever that is
+ *   'others'  everyone but the character being played
+ *   'named'   only the characters in `names` ("Roxy", "Eli Vega"); one of
+ *             them is the player when the name is one the player goes by
+ * so Eli's Edge sits on Eli's card and nobody else's, in whichever story he
+ * is played or met. An entry without `who` is 'all', as before.
  */
 
 /** The sheet a fresh install (or an install that never switched vitals on) gets. */
@@ -50,6 +61,60 @@ export const EXTRA_VITAL_COLORS = Object.freeze([
 
 export const LOW_VITAL_COLOR = '#e5484d';
 export const MAX_VITALS = 24;
+
+/** Who a vital can be for (D231), in the order the settings page lists them. */
+export const VITAL_WHO = Object.freeze(['all', 'player', 'others', 'named']);
+export const MAX_VITAL_NAMES = 12;
+
+// The names the player goes by in the chat in front: the Workshop user
+// character being played and the persona's own name. Handed in once
+// (index.js) so this file stays free of SillyTavern; [] until then.
+let playedNamesSource = () => [];
+
+/** Sets where the names the player goes by come from. */
+export function setPlayedNamesSource(fn) {
+    playedNamesSource = typeof fn === 'function' ? fn : () => [];
+}
+
+/** The names the player goes by, each once; [] when nothing says. */
+export function getPlayedNames() {
+    let raw = [];
+    try { raw = playedNamesSource(); } catch (e) { raw = []; }
+    return cleanNames(raw);
+}
+
+/** A list of names made safe: strings, trimmed, each once (whatever the case), at most MAX_VITAL_NAMES. */
+function cleanNames(list) {
+    const out = [];
+    for (const n of Array.isArray(list) ? list : []) {
+        const t = typeof n === 'string' ? n.trim().slice(0, 60) : '';
+        if (t && !out.some(x => x.toLowerCase() === t.toLowerCase())) out.push(t);
+        if (out.length >= MAX_VITAL_NAMES) break;
+    }
+    return out;
+}
+
+/** "Roxy, Eli Vega" as the names it lists (the settings page's one text box). */
+export function parseVitalNames(text) {
+    return cleanNames(String(text ?? '').split(/[,;\n]+/));
+}
+
+const nameWords = (s) => String(s ?? '').toLowerCase()
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+
+/**
+ * Whether two names are one character: the same words, or every word of
+ * the shorter found in the longer, so the "Roxy" a sheet names is the
+ * "Roxy Vance" the AI lists.
+ */
+export function sameWho(a, b) {
+    const x = nameWords(a);
+    const y = nameWords(b);
+    if (!x.length || !y.length) return false;
+    const [few, many] = x.length <= y.length ? [x, y] : [y, x];
+    return few.every(w => many.includes(w));
+}
 
 const CONFIG_DEFAULTS = Object.freeze({
     enabled: false,
@@ -119,7 +184,66 @@ export function normalizeVitalDef(entry, index = 0) {
         icon: typeof e.icon === 'string' ? e.icon.slice(0, 4) : (preset?.icon || ''),
         start: start === null ? (preset ? preset.start : 100) : start,
         ai: e.ai !== false,
+        who: VITAL_WHO.includes(e.who) ? e.who : 'all',
+        names: cleanNames(e.names),
     };
+}
+
+/**
+ * Whether a vital is one a character carries (D231). `who` says which
+ * character: `{ name }` for one the tracker lists, `{ isPlayer: true }` for
+ * the persona. `shared: false` is "Your character too" switched off: the
+ * vitals for everyone stop at the persona, while one meant for the player
+ * (by 'player', or by name) stays. `playerNames` overrides the names the
+ * player goes by (tests; getPlayedNames() otherwise).
+ * @param {object} def - a normalised sheet entry
+ * @param {{ name?: string, isPlayer?: boolean, shared?: boolean, playerNames?: string[] }} [who]
+ */
+export function vitalAppliesTo(def, who = {}) {
+    const { name = '', isPlayer = false, shared = true } = who || {};
+    const kind = def && VITAL_WHO.includes(def.who) ? def.who : 'all';
+    if (kind === 'player') return !!isPlayer;
+    if (kind === 'others') return !isPlayer;
+    if (kind === 'named') {
+        const list = Array.isArray(def.names) ? def.names : [];
+        if (!isPlayer) return list.some(n => sameWho(n, name));
+        const mine = Array.isArray(who.playerNames) ? who.playerNames : getPlayedNames();
+        return mine.some(m => list.some(n => sameWho(n, m)));
+    }
+    return isPlayer ? shared !== false : true;
+}
+
+/** The vitals of `defs` one character carries, in sheet order (D231). The same array back when all of them are. */
+export function vitalsFor(defs, who) {
+    const list = Array.isArray(defs) ? defs : [];
+    const mine = list.filter(d => vitalAppliesTo(d, who));
+    return mine.length === list.length ? list : mine;
+}
+
+/**
+ * The vitals the tracker's sample character shows (D231): the ones every
+ * listed character carries. A vital for named characters is asked for in a
+ * sentence of its own (namedVitalNotes), one for the player in "player".
+ */
+export function castVitalDefs(defs) {
+    return (defs || []).filter(d => d.who !== 'player' && d.who !== 'named');
+}
+
+/**
+ * The vitals only named characters carry, each with the names the tracker
+ * can list (the player's own left out: theirs rides in "player"): what the
+ * guidance spells out, one sentence a vital. [] when there is none.
+ * @returns {Array<{ name: string, names: string[] }>}
+ */
+export function namedVitalNotes(defs, playerNames) {
+    const mine = Array.isArray(playerNames) ? playerNames : getPlayedNames();
+    const out = [];
+    for (const d of defs || []) {
+        if (d.who !== 'named') continue;
+        const names = (d.names || []).filter(n => !mine.some(m => sameWho(n, m)));
+        if (names.length) out.push({ name: d.name, names });
+    }
+    return out;
 }
 
 /**
@@ -164,9 +288,22 @@ export function vitalsOn(settings) {
     return cfg.enabled && cfg.customStats.some(d => d.enabled);
 }
 
-/** Vitals on AND the persona included. */
-export function playerVitalsOn(settings) {
-    return vitalsOn(settings) && vitalsConfig(settings).player.enabled;
+/**
+ * The vitals the persona carries (D231): the ones for everyone while "Your
+ * character too" is on, and the ones meant for the player either way. []
+ * when vitals are off.
+ */
+export function playerVitalDefs(settings, playerNames) {
+    const cfg = vitalsConfig(settings);
+    if (!cfg.enabled) return [];
+    const who = { isPlayer: true, shared: cfg.player.enabled };
+    if (Array.isArray(playerNames)) who.playerNames = playerNames;
+    return cfg.customStats.filter(d => d.enabled && vitalAppliesTo(d, who));
+}
+
+/** Vitals on AND the persona carries at least one. */
+export function playerVitalsOn(settings, playerNames) {
+    return playerVitalDefs(settings, playerNames).length > 0;
 }
 
 /** Case-insensitive lookup of a sheet entry by the name the AI uses (or its id). */
@@ -398,7 +535,8 @@ function characterList(parsed) {
  * Normalises the vitals in a fresh characters tracker against the one the
  * AI was shown (committed data): fixed vitals keep their value, missing ones
  * are seeded, both shapes become the array shape, and only the sheet's
- * vitals survive. Characters are matched by name, case-insensitively.
+ * vitals survive, each character keeping the ones it carries (D231).
+ * Characters are matched by name, case-insensitively.
  * Returns the new JSON string, or the input untouched when it is not JSON.
  * @param {string|object} nextJson
  * @param {string|object|null} prevJson
@@ -415,7 +553,10 @@ export function applyVitalsToCharacters(nextJson, prevJson, defs) {
     for (const c of chars) {
         if (!c || typeof c !== 'object') continue;
         const prev = typeof c.name === 'string' ? prevByName.get(c.name.trim().toLowerCase()) : null;
-        c.stats = toStatsArray(resolveVitals(readVitals(c.stats, defs), readVitals(prev?.stats, defs), defs), defs);
+        // Only the vitals this character carries (D231); one with none carries no "stats".
+        const mine = vitalsFor(defs, { name: typeof c.name === 'string' ? c.name : '' });
+        if (mine.length) c.stats = toStatsArray(resolveVitals(readVitals(c.stats, mine), readVitals(prev?.stats, mine), mine), mine);
+        else delete c.stats;
     }
     return typeof nextJson === 'string' ? JSON.stringify(parsed) : parsed;
 }
@@ -424,7 +565,8 @@ export function applyVitalsToCharacters(nextJson, prevJson, defs) {
  * The persona's block after a reply, always as a JSON string `{ stats: [...] }`:
  * the AI's values where it gave them, the previous values for fixed vitals,
  * the start values for the rest. A missing or malformed block still yields
- * a seeded one, so the persona's bars never sit empty.
+ * a seeded one, so the persona's bars never sit empty. `defs` are the
+ * persona's own (playerVitalDefs).
  */
 export function applyVitalsToPlayer(nextJson, prevJson, defs) {
     const next = parseLoose(nextJson);

@@ -51,7 +51,7 @@ import { pickActiveUser } from '../../utils/activeUser.js';
 // The editors live in thoughts.js, which reaches this module through
 // characterAliases.js, so they are imported at click time rather than here
 // (a static edge would close a cycle).
-import { vitalsConfig, readVitals, vitalColor, clampVital } from '../../utils/vitals.js';
+import { vitalsConfig, readVitals, vitalColor, clampVital, vitalsFor, playerVitalDefs } from '../../utils/vitals.js';
 import { attributesOn } from '../../utils/d20.js';
 // Inventory (Project Short Fuse, Phase 5): the shelf's pages show while it is on.
 import { isInventoryOn, INVENTORY_CHANGED_EVENT } from '../features/inventory.js';
@@ -744,7 +744,9 @@ function renderPortraitBarNow() {
     // Vitals: read the sheet once per render; each card reads its own values.
     const vitalsCfg = vitalsConfig(extensionSettings);
     const vitalsDefs = vitalsCfg.enabled ? vitalsCfg.customStats.filter(d => d.enabled) : [];
-    const playerVitalsMap = (vitalsDefs.length && vitalsCfg.player.enabled) ? readPlayerVitals(vitalsDefs) : null;
+    // Each card shows the vitals its character carries (D231): the persona's own, an NPC's by name.
+    const playerDefs = vitalsDefs.length ? playerVitalDefs(extensionSettings) : [];
+    const playerVitalsMap = playerDefs.length ? readPlayerVitals(playerDefs) : null;
 
     const cardData = characters.map((char, idx) => {
         const portraitSrc = resolvePortrait(char.name);
@@ -768,16 +770,17 @@ function renderPortraitBarNow() {
 
         // Vitals for this card: the persona reads the player block, an NPC its own record.
         let vitalsMap = null;
-        if (vitalsDefs.length) {
+        const cardDefs = char.isUser ? playerDefs : vitalsFor(vitalsDefs, { name: char.name });
+        if (cardDefs.length) {
             vitalsMap = char.isUser
                 ? playerVitalsMap
-                : readVitals((char.details || getCharacterDetails(char.name))?.stats, vitalsDefs);
+                : readVitals((char.details || getCharacterDetails(char.name))?.stats, cardDefs);
         }
-        const vitalsStrip = (vitalsMap && vitalsCfg.showOnCards) ? buildVitalsStrip(vitalsMap, vitalsDefs, vitalsCfg) : '';
+        const vitalsStrip = (vitalsMap && vitalsCfg.showOnCards) ? buildVitalsStrip(vitalsMap, cardDefs, vitalsCfg) : '';
 
         let backFace = '';
         try {
-            backFace = buildPortraitBackFace(char.name, emoji, char.details, { isUser: !!char.isUser, vitalsMap, vitalsDefs, vitalsCfg });
+            backFace = buildPortraitBackFace(char.name, emoji, char.details, { isUser: !!char.isUser, vitalsMap, vitalsDefs: cardDefs, vitalsCfg });
         } catch (e) {
             console.error(`[Dooms Portrait Bar] Error building back face for ${char.name}:`, e);
         }

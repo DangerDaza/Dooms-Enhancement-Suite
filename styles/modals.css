@@ -1715,6 +1715,69 @@
 .rpg-vital-move:disabled,
 .rpg-attr-move:disabled { opacity: 0.2; cursor: default; }
 
+/* A row's options (who it is for, D231): a button on the row, and under it
+   either the options themselves or, closed, a line saying what they come to. */
+.rpg-vital-more {
+    background: transparent;
+    border: 1px solid var(--rpg-border);
+    border-radius: 4px;
+    color: var(--rpg-text);
+    opacity: 0.6;
+    padding: 4px 7px;
+    cursor: pointer;
+    font-size: 0.75em;
+    flex: 0 0 auto;
+}
+
+.rpg-vital-more:hover,
+.rpg-vital-row.is-open > .rpg-vital-more,
+.rpg-vital-more.has-custom { opacity: 1; border-color: var(--rpg-highlight); color: var(--rpg-highlight); }
+
+.rpg-vital-summary {
+    flex: 1 1 100%;
+    font-size: 0.76em;
+    opacity: 0.7;
+    padding-left: 2px;
+    overflow-wrap: anywhere;
+}
+
+.rpg-vital-details {
+    flex: 1 1 100%;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--rpg-border);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.rpg-vital-detail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.rpg-vital-detail + .rpg-vital-detail { margin-top: 6px; }
+
+.rpg-vital-detail-label {
+    flex: 0 0 76px;
+    font-size: 0.8em;
+    opacity: 0.85;
+}
+
+.rpg-vital-detail select { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.rpg-vital-detail .rpg-vital-names { flex: 1 1 160px; }
+.rpg-vital-detail .is-hidden { display: none; }
+
+.rpg-vital-detail-hint {
+    margin: 6px 0 0;
+    font-size: 0.74em;
+    opacity: 0.65;
+    line-height: 1.35;
+}
+
 .rpg-vitals-add-row {
     display: flex;
     flex-wrap: wrap;

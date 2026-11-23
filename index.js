@@ -203,7 +203,7 @@ import {
 import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
 import { escapeHtml } from './src/utils/html.js';
 // Vitals (Project Short Fuse): the Settings → Stats page edits the sheet
-import { vitalsConfig, defaultVitalsConfig, migrateVitalsConfig, normalizeVitalDef, vitalSlug, clampVital, isHexColor, VITAL_PRESETS, EXTRA_VITAL_COLORS, MAX_VITALS } from './src/utils/vitals.js';
+import { vitalsConfig, defaultVitalsConfig, migrateVitalsConfig, normalizeVitalDef, vitalSlug, clampVital, isHexColor, VITAL_PRESETS, EXTRA_VITAL_COLORS, MAX_VITALS, setPlayedNamesSource, parseVitalNames } from './src/utils/vitals.js';
 import { attributesConfig, migrateAttributesConfig, normalizeAttributeDef, normalizeSkills, pruneProficiencies, clampProficiency, attributeDefs, attributeSlug, ATTRIBUTE_PRESETS, DIFFICULTIES, MAX_ATTRIBUTES } from './src/utils/d20.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
@@ -300,6 +300,40 @@ function uniqueVitalId(cs, base) {
     while (taken.has(id)) { n++; id = `${base || 'vital'}_${n}`; }
     return id;
 }
+// The rows whose options are open (by vital id): which is the page's own
+// business, so it is kept here and survives the re-render an edit causes.
+const _openVitals = new Set();
+
+const VITAL_WHO_LABELS = Object.freeze({
+    all: 'Everyone',
+    player: 'Your character only',
+    others: 'Everyone but your character',
+    named: 'Only these characters',
+});
+
+/** What a row's options come to, in a few words, for the row while they are closed ('' when all are as they come). */
+function vitalSummary(d) {
+    const parts = [];
+    if (d.who === 'player') parts.push('your character only');
+    else if (d.who === 'others') parts.push('everyone but your character');
+    else if (d.who === 'named') parts.push(d.names.length ? `only ${d.names.join(', ')}` : 'nobody yet (no names given)');
+    return parts.join(' · ');
+}
+
+/** The options under a vital's row (D231): who it is for. */
+function vitalDetailsHtml(d) {
+    const whoOptions = Object.entries(VITAL_WHO_LABELS).map(([value, label]) =>
+        `<option value="${value}"${d.who === value ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
+    return `<div class="rpg-vital-details">
+        <div class="rpg-vital-detail">
+            <span class="rpg-vital-detail-label">For</span>
+            <select class="rpg-vital-who rpg-accordion-select" title="Who carries this vital">${whoOptions}</select>
+            <input type="text" class="rpg-vital-names${d.who === 'named' ? '' : ' is-hidden'}" value="${escapeHtml(d.names.join(', '))}" maxlength="400" placeholder="Roxy, Eli Vega" title="Names, separated by commas. A name your character goes by counts as your character." />
+        </div>
+        <p class="rpg-vital-detail-hint">A vital for named characters shows on their cards only, and the AI is asked for it only for them. Use the name the card shows; a first name is enough.</p>
+    </div>`;
+}
+
 function renderVitalsSettings() {
     const $list = $('#rpg-vitals-list');
     if (!$list.length) return;
@@ -320,7 +354,9 @@ function renderVitalsSettings() {
     const rows = list.map((raw, i) => {
         const d = normalizeVitalDef(raw, i);
         const id = escapeHtml(d.id);
-        return `<div class="rpg-vital-row${d.enabled ? '' : ' is-off'}" data-vital="${id}">
+        const open = _openVitals.has(d.id);
+        const summary = vitalSummary(d);
+        return `<div class="rpg-vital-row${d.enabled ? '' : ' is-off'}${open ? ' is-open' : ''}" data-vital="${id}">
             <label class="rpg-toggle-switch rpg-vital-switch" title="On or off">
                 <input type="checkbox" class="rpg-vital-enabled"${d.enabled ? ' checked' : ''} />
                 <span class="rpg-toggle-slider"></span>
@@ -334,7 +370,9 @@ function renderVitalsSettings() {
                 <button type="button" class="rpg-vital-move" data-dir="-1" title="Move up"${i === 0 ? ' disabled' : ''}><i class="fa-solid fa-chevron-up"></i></button>
                 <button type="button" class="rpg-vital-move" data-dir="1" title="Move down"${i === list.length - 1 ? ' disabled' : ''}><i class="fa-solid fa-chevron-down"></i></button>
             </span>
+            <button type="button" class="rpg-vital-more${summary ? ' has-custom' : ''}" title="${open ? 'Close the options' : 'Options: who it is for'}" aria-expanded="${open ? 'true' : 'false'}"><i class="fa-solid fa-sliders"></i></button>
             <button type="button" class="rpg-ws-rel-remove rpg-vital-remove" title="Remove this vital"><i class="fa-solid fa-trash"></i></button>
+            ${open ? vitalDetailsHtml(d) : (summary ? `<div class="rpg-vital-summary">${escapeHtml(summary.charAt(0).toUpperCase() + summary.slice(1))}</div>` : '')}
         </div>`;
     });
     $list.html(rows.join('') || '<p class="rpg-note-text">No vitals yet. Add one, or pick a preset below.</p>');
@@ -881,6 +919,15 @@ function updateGenerationModeUI() {
 function resolveActiveUserCharacterName() {
     return resolveActiveUserName();
 }
+
+// The names the player goes by, for a vital meant for one character (D231):
+// the user character being played and the persona's own name. Asked each
+// time, so a change of chat, card or persona needs no telling.
+setPlayedNamesSource(() => {
+    let persona = '';
+    try { persona = String(getContext().name1 || ''); } catch (e) { persona = ''; }
+    return [resolveActiveUserName(), persona];
+});
 
 /**
  * If "Show User in PCP" is on AND the active user character has a color,
@@ -1885,7 +1932,31 @@ function bindSettingsUI() {
         const { cs, entry } = _vitalFromRow(this);
         if (!entry) return;
         cs.customStats = cs.customStats.filter(e => e !== entry);
+        _openVitals.delete(entry.id);
         _saveVitals();
+    });
+    // The options under a row (D231): who the vital is for.
+    $(document).on('click', '.rpg-vital-more', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        if (_openVitals.has(entry.id)) _openVitals.delete(entry.id); else _openVitals.add(entry.id);
+        renderVitalsSettings();
+    });
+    $(document).on('change', '.rpg-vital-who', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        const who = String($(this).val() || 'all');
+        if (who === 'all') delete entry.who; else entry.who = who;
+        _saveVitals();
+        if (who === 'named') $(`#rpg-vitals-list .rpg-vital-row[data-vital="${entry.id}"] .rpg-vital-names`).trigger('focus');
+    });
+    $(document).on('change', '.rpg-vital-names', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        const names = parseVitalNames($(this).val());
+        if (names.length) entry.names = names; else delete entry.names;
+        $(this).val(names.join(', '));
+        _saveVitals({ rerender: false });
     });
     $(document).on('click', '.rpg-vital-move', function () {
         const { cs, entry } = _vitalFromRow(this);

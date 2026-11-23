@@ -16,7 +16,7 @@ import {
     toFieldKey
 } from './jsonPromptHelpers.js';
 import { applyLocks } from './lockManager.js';
-import { vitalDefs, vitalsOn, playerVitalsOn, hasFixedVitals, markFixedVitals, stripVitals, readVitals, formatVitalsLine } from '../../utils/vitals.js';
+import { vitalDefs, vitalsFor, vitalsOn, playerVitalsOn, playerVitalDefs, hasFixedVitals, markFixedVitals, stripVitals, readVitals, formatVitalsLine } from '../../utils/vitals.js';
 // Attributes (Phase 2): one read-only line, outside the tracker JSON.
 import { buildAttributesLineForPrompt } from '../features/diceRolls.js';
 // NOTE: InventoryV2 type import removed — inventory system removed (see git history)
@@ -542,7 +542,7 @@ function formatTrackerDataForContext(jsonData, trackerType, userName) {
                     // Vitals, in either shape. Off means nothing: stats a chat stored
                     // while vitals were on are not read back to the AI.
                     if (char.stats && typeof char.stats === 'object' && vitalsOn(extensionSettings)) {
-                        const defs = vitalDefs(extensionSettings);
+                        const defs = vitalsFor(vitalDefs(extensionSettings), { name: charName });
                         const line = formatVitalsLine(readVitals(char.stats, defs), defs);
                         if (line) formatted += `  Vitals: ${line}\n`;
                     }
@@ -744,7 +744,7 @@ export function formatHistoricalTrackerData(trackerData, trackerConfig, userName
                 }
                 // Vitals (Settings → Stats → Include in history)
                 if (shouldInclude(charsConfig.characterStats) && char.stats && vitalsOn(extensionSettings)) {
-                    const defs = vitalDefs(extensionSettings);
+                    const defs = vitalsFor(vitalDefs(extensionSettings), { name: getValue(char.name) || '' });
                     const line = formatVitalsLine(readVitals(char.stats, defs), defs);
                     if (line) charFormatted += `Vitals: ${line}, `;
                 }
@@ -759,7 +759,7 @@ export function formatHistoricalTrackerData(trackerData, trackerConfig, userName
             const playerData = typeof trackerData.player === 'string'
                 ? JSON.parse(trackerData.player)
                 : trackerData.player;
-            const defs = vitalDefs(extensionSettings);
+            const defs = playerVitalDefs(extensionSettings);
             const line = formatVitalsLine(readVitals(playerData?.stats, defs), defs);
             if (line) formatted += `${userName}: Vitals: ${line}\n`;
         }
@@ -817,7 +817,7 @@ export function generateContextualSummary() {
     if (playerVitalsOn(extensionSettings) && committedTrackerData.player) {
         try {
             const parsed = JSON.parse(committedTrackerData.player);
-            const defs = vitalDefs(extensionSettings);
+            const defs = playerVitalDefs(extensionSettings);
             const line = formatVitalsLine(readVitals(parsed?.stats, defs), defs);
             if (line) summary += `${userName}'s vitals: ${line}\n`;
         } catch (e) {

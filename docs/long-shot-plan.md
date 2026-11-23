@@ -2315,3 +2315,33 @@ of its own, a chat opened by hand on a story's card, the books held
 back at each step). The Workshop's new field was drawn in Chromium at a
 desktop's and a phone's width against the live stylesheets; the Workshop
 itself needs SillyTavern and was not run.
+
+## 70. A vital for one character (2026-11-23, D231)
+
+The owner's second story has mechanics of its own that so far lived in
+prose: Eli Vega's Edge (how near he is to losing himself), and the
+attention Roxy pays, which climbs a ladder. Asked how they should be
+kept, the owner chose real stats over notes in the tracker, and asked
+that Settings, Stats grow the means: custom vitals with an indicator of
+their own each. This is the first of three steps (D231 to D233): who a
+vital is for. Until now the sheet was one list every character carried,
+the persona included, so an Edge added for Eli would have been asked for
+and drawn on every card in the scene.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D231 | A vital says who it is for: everyone, the character being played, everyone but them, or the characters named | **Held.** **The sheet entry** gains `who` (`all`, `player`, `others`, `named`) and `names` (the names for `named`); an entry without them is for everyone, as before, and nothing stored is rewritten (`normalizeVitalDef`, `src/utils/vitals.js`). **Whose a vital is** is one rule (`vitalAppliesTo`, `vitalsFor`): a vital for the player is the persona's whoever is played; one for named characters is theirs wherever the tracker lists them, and the persona's when a name is one the player goes by (the Workshop user character being played, D230, or the persona's own name; handed in by `setPlayedNamesSource`, index.js). So Edge, named for Eli Vega, is on the persona's card in Eli's story and on Eli's own card if Jack's story meets him, and in neither case on anyone else's. A name matches when its words are all in the other ("Roxy" is the "Roxy Vance" the AI lists; `sameWho`). **"Your character too"** now governs only the vitals for everyone: switched off, a vital meant for the player (by `player`, or by name) stays (`playerVitalDefs`, `playerVitalsOn`). **The prompt** (`jsonPromptHelpers.js`): the sample character shows the vitals every character carries (`castVitalDefs`); the "player" block lists the persona's own; a vital for named characters is asked for in a sentence of its own in the guidance ("Only Roxy has "Attention": ..."), the player's own names left out of it since theirs rides in "player" (`namedVitalNotes`). **A reply** is normalised a character at a time (`applyVitalsToCharacters`): each keeps the vitals it carries, seeded and locked as before, one the AI wrote on the wrong character is dropped, and a character who carries none has no "stats". **The cards** (the shelf's front strip and back face, the Thoughts panel, the persona's card) draw the vitals their character carries; the context lines and History Persistence read the same. **Settings, Stats**: each vital's row has an options button (the sliders); open, **For** with the four choices and, for the named, a box of names separated by commas. Closed, a row whose options are not as they come says what they come to under it ("Only Roxy"). |
+
+What it does not do. It does not move values between stories: a
+character's vitals are in the chat's tracker, as they were, so Roxy's
+Attention in Eli's story and in Jack's are two numbers. It does not
+check a name against the cast: a vital named for someone the tracker
+never lists is simply never drawn or asked for on a card.
+
+Tests: `tools/vitals-test.mjs` §8 (the four choices, names by first name
+and without accents, "Your character too" off, the sample character and
+the named sentence, the persona's block as Eli and as Jack, a reply with
+a vital on the wrong character, the persona's card refusing another's
+vital). The settings rows were drawn in Chromium against the live
+stylesheets (section 72); the page itself needs SillyTavern and was not
+run.

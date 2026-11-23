@@ -37,7 +37,7 @@ import { updateWeatherEffect } from '../ui/weatherEffects.js';
 // Name Ban
 import { applyCharacterAliases } from '../features/characterAliases.js';
 // Vitals (Project Short Fuse)
-import { vitalsOn, playerVitalsOn, vitalDefs, applyVitalsToCharacters, applyVitalsToPlayer } from '../../utils/vitals.js';
+import { vitalsOn, playerVitalsOn, vitalDefs, playerVitalDefs, applyVitalsToCharacters, applyVitalsToPlayer } from '../../utils/vitals.js';
 // Expression classification
 import { classifyAllCharacterExpressions, classifyActiveUserExpression, isExpressionSpritesModeEnabled } from './expressionSync.js';
 import { generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '../features/avatarGenerator.js';
@@ -243,7 +243,7 @@ export async function onMessageReceived(data) {
                     parsedData.characterThoughts = applyVitalsToCharacters(parsedData.characterThoughts, committedTrackerData.characterThoughts, defs);
                 }
                 if (playerVitalsOn(extensionSettings)) {
-                    parsedData.player = applyVitalsToPlayer(parsedData.player, committedTrackerData.player, defs);
+                    parsedData.player = applyVitalsToPlayer(parsedData.player, committedTrackerData.player, playerVitalDefs(extensionSettings));
                 }
             }
             // Update display data with newly parsed response
