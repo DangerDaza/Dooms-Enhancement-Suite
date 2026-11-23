@@ -854,5 +854,16 @@ console.log('\n§ whether the openings chosen will fit in the answer (D225)');
     check('words counted', wordCount('one two  three\nfour') === 4 && wordCount('') === 0 && wordCount('   ') === 0 && wordCount(null) === 0);
 }
 
+// D227: one continuity book a story
+{
+    const H = await import('../src/utils/hub.js');
+    const book = (name) => ({ continuity: { book: { name } } });
+    const worlds = { nc: book('NC - Scenes Continuity'), 'nc~2': { ...book('NC (Eli Vega) - Scenes Continuity'), memory: { player: 'Eli Vega' } }, 'nc~3': {}, other: book('Other - Scenes Continuity') };
+    check('a story in front: every other story\'s book of the world is held back', JSON.stringify(H.heldBackBooks(worlds, 'nc', 'nc~2')) === JSON.stringify(['NC - Scenes Continuity']) && JSON.stringify(H.heldBackBooks(worlds, 'nc', 'nc')) === JSON.stringify(['NC (Eli Vega) - Scenes Continuity']));
+    check('no story in front: every story\'s book is held back; another world\'s story counts as none', H.heldBackBooks(worlds, 'nc', '').length === 2 && H.heldBackBooks(worlds, 'nc', 'other').length === 2);
+    check('one story with a book: nothing is held back, as before stories', H.heldBackBooks({ nc: book('X'), 'nc~2': {} }, 'nc', '').length === 0 && H.heldBackBooks(worlds, '', 'nc').length === 0 && H.heldBackBooks(null, 'nc', 'nc').length === 0);
+    check('a later story\'s book says who it is played as, else its name, else its number; the first story\'s is the campaign\'s alone', H.storyBookBase('Nightcity', 'nc', worlds.nc) === 'Nightcity' && H.storyBookBase('Nightcity', 'nc~2', worlds['nc~2']) === 'Nightcity (Eli Vega)' && H.storyBookBase('Nightcity', 'nc~3', { name: 'The Minotaur' }) === 'Nightcity (The Minotaur)' && H.storyBookBase('Nightcity', 'nc~3', {}) === 'Nightcity (story 3)');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

@@ -283,6 +283,29 @@ await test('auto-link queues behind an in-flight switch instead of interleaving'
     assert.deepEqual(extensionSettings.lorebook.autoLinked, ['C']);
 });
 
+await test('a book the Hub holds back (another story\'s continuity, D227) stays off, and goes off when held back later', async () => {
+    let held = ['B'];
+    cm.setCampaignHoldBack(() => held);
+    try {
+        await cm.setActiveCampaign('c1', { silent: true });
+        assert.deepEqual(extensionSettings.lorebook.campaignActivated, ['A']);
+        assert.ok(active().includes('B'));                // B was on by hand before the campaign, outside the ledger: left alone
+        held = [];
+        await cm.reconcileActiveCampaignBooks();
+        assert.deepEqual(extensionSettings.lorebook.campaignActivated, ['A', 'B']);
+        assert.ok(active().includes('B'));
+        held = ['A'];
+        await cm.reconcileActiveCampaignBooks();
+        assert.deepEqual(extensionSettings.lorebook.campaignActivated, ['B']);
+        assert.ok(!active().includes('A'));                // the story in front changed: the other story's book goes off
+        cm.setCampaignHoldBack(() => { throw new Error('boom'); });
+        await cm.reconcileActiveCampaignBooks();           // a hold-back that fails holds nothing back
+        assert.deepEqual(extensionSettings.lorebook.campaignActivated, ['A', 'B']);
+    } finally {
+        cm.setCampaignHoldBack(null);
+    }
+});
+
 if (failures) {
     console.error(`\n${failures} failed, ${passes} passed`);
     process.exit(1);

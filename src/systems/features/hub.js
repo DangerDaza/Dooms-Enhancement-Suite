@@ -40,7 +40,7 @@ import {
     readConflicts, mergeConflicts, normalizeConflicts, MAX_WRAP, MAX_NOTE, MAX_CAST, MAX_LINE,
     openersCount, untouchedLore, loreSample, freshCount, asksForLore, openerLength, replyWarning, wordCount,
     ownWorlds, campaignWorldId, campaignsOf, activeCampaignOf, worldsByCampaign, loreLibraryOn,
-    packOf, entryUntouched, storyIdsOf, nextStoryId, storyOfChat, lastStoryOf, storiesOf, storyPlayedAt,
+    packOf, entryUntouched, storyIdsOf, heldBackBooks, storyBookBase, nextStoryId, storyOfChat, lastStoryOf, storiesOf, storyPlayedAt,
 } from '../../utils/hub.js';
 import { normalizeBook, bookIsEmpty } from '../../utils/atlas.js';
 import { narratorTexts, countStyle, applyStyle } from '../../utils/styleLaw.js';
@@ -78,6 +78,7 @@ function log(message, data = null) {
 
 function notify(detail = {}) {
     refreshStoryPlayer();
+    refreshStoryBooks();
     try { window.dispatchEvent(new CustomEvent(HUB_CHANGED_EVENT, { detail })); } catch (e) { /* no window (tests) */ }
 }
 
@@ -269,6 +270,33 @@ function refreshStoryPlayer() {
         const e = id ? store().worlds[id] : null;
         setStoryPlayer(e && e.memory && e.memory.player ? e.memory.player : '');
     } catch (e) { setStoryPlayer(''); }
+}
+
+/**
+ * The continuity books of the campaign's world that are to be off for the
+ * chat in front (D227): every story's but the one it belongs to. Nothing
+ * is held back with one story, or with no campaign on.
+ */
+export function storyBooksHeldBack() {
+    try {
+        const camp = activeCampaign();
+        const world = camp ? campaignWorldId(extensionSettings, camp.id) : '';
+        return world ? heldBackBooks(store().worlds, world, storyInFront()) : [];
+    } catch (e) { return []; }
+}
+
+let lastHeld = null;    // the books last held back, joined: the campaign's books are put right only when that changes
+
+/** The campaign's books put right for the chat in front, when the books held back changed (D227). Best effort: a lorebook that cannot be reached leaves them as they were. */
+function refreshStoryBooks() {
+    const key = storyBooksHeldBack().join('\n');
+    const was = lastHeld;
+    lastHeld = key;
+    if (key === was || (was === null && !key)) return;    // nothing held back, and nothing was: the books are left as the campaign set them
+    import('../lorebook/campaignManager.js')
+        .then(m => { m.setCampaignHoldBack(storyBooksHeldBack); return m.reconcileActiveCampaignBooks(); })
+        .then(r => { if (r && (r.turnedOn || r.turnedOff)) log('the continuity books follow the story in front', r); })
+        .catch(e => { lastHeld = null; log('the continuity books could not be switched for the story in front', String(e && e.message || e)); });
 }
 
 // ─── The world's one map (D217) ─────────────────────────────────────────
@@ -825,7 +853,7 @@ async function writeBook(worldId, { force = false } = {}) {
                 const lb = extensionSettings.lorebook;
                 const camp = campaignIdOf(worldId) && lb && lb.campaigns ? lb.campaigns[campaignIdOf(worldId)] : null;
                 const res = camp ? null : await loadPack(packOf(worldId));
-                const wanted = continuityBookName(camp ? camp.name : (res && res.ok ? res.pack.name : worldId));
+                const wanted = continuityBookName(storyBookBase(camp ? camp.name : (res && res.ok ? res.pack.name : packOf(worldId)), worldId, entry));    // a later story's book says whose it is (D227)
                 name = wanted;
                 for (let n = 2; n < 100 && names.includes(name); n++) name = `${wanted} ${n}`;    // a book of that name that is not this world's is left alone
                 if (names.includes(name)) throw new Error(`no free name for the book ("${wanted}")`);
@@ -3457,6 +3485,8 @@ export async function hubStatusLines() {
 
 /** Registers /hub and /endscene. The events are wired by index.js. */
 export function initHub() {
+    // The continuity books of a world's other stories stay off when the campaign is switched on (D227).
+    import('../lorebook/campaignManager.js').then(m => m.setCampaignHoldBack(storyBooksHeldBack)).catch(() => { /* no Lore Library */ });
     try {
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'hub',

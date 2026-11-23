@@ -31,6 +31,23 @@ import {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /**
+ * Books of the active campaign that are to stay off for now (D227): the
+ * continuity books of a world's other stories, which the Hub names
+ * (src/systems/features/hub.js). A function so the Hub can answer for the
+ * chat in front at the moment of asking; null holds nothing back.
+ */
+let holdBack = null;
+
+/** @param {(() => string[])|null} fn */
+export function setCampaignHoldBack(fn) {
+    holdBack = typeof fn === 'function' ? fn : null;
+}
+
+function heldBack() {
+    try { const list = holdBack ? holdBack() : []; return new Set(Array.isArray(list) ? list : []); } catch (e) { return new Set(); }
+}
+
+/**
  * Generates a simple UUID for campaign IDs
  * @returns {string}
  */
@@ -289,7 +306,8 @@ async function doSetActiveCampaign(campaignId, { silent = false } = {}) {
  * even if the user had switched one of them on by hand beforehand — while
  * books outside the campaign (manual picks, imports) are never touched.
  * Safe to call whenever a campaign's book list changes; with nothing active
- * it only releases the ledger.
+ * it only releases the ledger. A book the Hub holds back (another story's
+ * continuity, D227) is not wanted, so the ledger turns it off.
  * @returns {Promise<{turnedOn: number, turnedOff: number}>}
  */
 export async function reconcileActiveCampaignBooks() {
@@ -298,8 +316,9 @@ export async function reconcileActiveCampaignBooks() {
     const active = getActiveCampaignId();
     const existing = new Set(getAllWorldNames());
     const globals = new Set(lb.globalBooks);
+    const held = active ? heldBack() : new Set();
     const wanted = active
-        ? (lb.campaigns[active]?.books || []).filter(b => existing.has(b))
+        ? (lb.campaigns[active]?.books || []).filter(b => existing.has(b) && !held.has(b))
         : [];
     const wantedSet = new Set(wanted);
     // A book auto-link switched on for a character still in the chat's cast

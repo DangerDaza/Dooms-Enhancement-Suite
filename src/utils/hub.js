@@ -1839,6 +1839,36 @@ export function nextStoryId(worlds, packId) {
 }
 
 /**
+ * The continuity books held back while a story is played (D227): every
+ * story of a world keeps its own book, filed with the world's campaign,
+ * and only the book of the story in front is to be on. With one story
+ * nothing is held back (as before stories); with the chat in front part of
+ * none, every story's book is. Each name once, in the stories' order.
+ */
+export function heldBackBooks(worlds, packId, storyId = '') {
+    const all = isObj(worlds) ? worlds : {};
+    const pack = String(packId || '');
+    if (!pack) return [];
+    const bookOf = (id) => { const e = all[id]; return e && isObj(e.continuity) && isObj(e.continuity.book) ? clean(e.continuity.book.name, 200) : ''; };
+    const ids = Object.keys(all).filter(id => packOf(id) === pack).sort((a, b) => storyNo(a) - storyNo(b));
+    const named = ids.filter(id => bookOf(id));
+    if (named.length < 2) return [];
+    const keep = storyId && packOf(storyId) === pack ? bookOf(storyId) : '';
+    const out = [];
+    for (const id of named) { const b = bookOf(id); if (b !== keep && !out.includes(b)) out.push(b); }
+    return out;
+}
+
+/** What a story's continuity book is named after (D227): the campaign's or world's name, and for a story after the world's first, who it is played as (else its own name, else its number). */
+export function storyBookBase(base, storyId, entry) {
+    const name = clean(base, 60);
+    if (!storyId || packOf(storyId) === String(storyId)) return name;
+    const e = isObj(entry) ? entry : {};
+    const who = clean(e.memory && e.memory.player, 40) || clean(e.name, 40) || `story ${storyNo(storyId)}`;
+    return `${name} (${who})`;
+}
+
+/**
  * The story a chat began: the one whose scene 0 is that chat (D172),
  * under that card where both are known. '' when the chat began none.
  */
