@@ -1409,7 +1409,10 @@ console.log('\n§5i ending a scene from the Atlas; the strip above a scene\'s ch
     const scene = { id: 's3', title: 'The gate at dusk' };
     await page.evaluate((sc) => window.__endScene({ prep: { scene: sc }, busy: true }), scene);
     let v = await panel();
-    check('opened, the sheet names the scene and says the record is being written; End waits for it', /End scene 3: The gate at dusk/.test(v.text) && /What happened \(being written…\)/.test(v.text) && v.readonly && v.acts.join() === 'end-rewrap:off,end-go:off,end-next:off,end-continue:off,setup-close', JSON.stringify(v.acts));
+    check('opened, the sheet names the scene and says the record is being written; End waits for it', /End scene 3: The gate at dusk/.test(v.text) && /What happened \(being written…\)/.test(v.text) && v.readonly && v.acts.join() === 'end-rewrap:off,end-stop,end-go:off,end-next:off,end-continue:off,setup-close', JSON.stringify(v.acts));
+    await page.evaluate((sc) => window.__endScene({ prep: { scene: sc }, busy: true, phase: { phase: 'lore', n: 2, of: 5 }, since: Date.now() - 42000 }), scene);
+    const bar = await page.evaluate(() => { const el = document.querySelector('.dooms-atlas-end-progress'); return el ? { text: el.textContent.replace(/\s+/g, ' ').trim(), bar: !!el.querySelector('.dooms-atlas-pass-bar.is-run'), stop: !!el.querySelector('[data-act="end-stop"]:not([disabled])') } : null; });
+    check('while the record is written the sheet has a loading bar: which step, how long, and a Stop', bar && /Reading the lorebooks \(2 of 5\)/.test(bar.text) && /0:4[23]/.test(bar.text) && bar.bar && bar.stop, JSON.stringify(bar));
     await page.evaluate((sc) => window.__endScene({ prep: { scene: sc }, busy: true, passes: ['done', 'run', 'wait'] }), scene);
     const endBars = await page.evaluate(() => [...document.querySelectorAll('.dooms-atlas-setup-card .dooms-atlas-passes .dooms-atlas-pass')].map(li => `${li.className.replace('dooms-atlas-pass is-', '')}:${getComputedStyle(li.querySelector('.dooms-atlas-pass-bar > span')).animationName}`));
     check('a long scene\'s record is written in several requests, and each has its bar (D198)', same(endBars, ['done:none', 'run:dooms-atlas-pass-run', 'wait:none']), JSON.stringify(endBars));

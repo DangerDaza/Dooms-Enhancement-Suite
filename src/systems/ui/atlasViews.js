@@ -730,7 +730,32 @@ export function atlasPassesHtml(states, { noun = 'Request' } = {}) {
  * @param {Object<string,string>} o.states  recap | canon | world | snapshot -> waiting | running | ok | failed | skipped | off | kept
  * @param {object|null} o.result   commitEnd()'s answer once it has run
  */
-export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, result = null, error = '', going = '', canUndo = false, undoing = false, passes = null, wrap = '', wrapIn = '', next = '' } = {}) {
+/** What the End sheet is doing while its record is written, in words: the step prepareEnd() last said it was on. */
+export function endPhaseText(phase) {
+    const p = phase && typeof phase === 'object' ? phase : {};
+    if (p.phase === 'idle') return 'Waiting for the reply being written to finish';
+    if (p.phase === 'book') return 'Reading the continuity book';
+    if (p.phase === 'lore') return p.of > 0 ? `Reading the lorebooks (${Math.min(p.n || 1, p.of)} of ${p.of})` : 'Reading the lorebooks';
+    if (p.phase === 'record') return p.pages > 1 ? `Writing the record, part ${p.page} of ${p.pages}: the model is reading the scene` : 'Writing the record: the model is reading the scene';
+    return 'Getting ready';
+}
+
+/**
+ * The End sheet's loading bar while the record is written: which step it is
+ * on, how long it has been going and a Stop that gives the whole thing up.
+ * Long scenes, several lorebooks and a world shared by several stories can
+ * take minutes; the sheet says so rather than looking frozen.
+ */
+export function endProgressHtml({ phase = null, passes = null, since = 0, now = Date.now(), stopping = false } = {}) {
+    const record = Array.isArray(passes) && passes.length;
+    return `<div class="dooms-atlas-end-progress" role="status" aria-live="polite">
+        <p class="dooms-atlas-end-phase"><span class="dooms-atlas-end-phase-text">${e(stopping ? 'Stopping' : endPhaseText(phase))}…</span> <span class="dooms-atlas-end-elapsed" data-since="${Number(since) || 0}">${since ? elapsedWords(now - since) : ''}</span></p>
+        ${record ? atlasPassesHtml(passes) : '<span class="dooms-atlas-pass-bar is-run" role="progressbar" aria-label="Working" aria-valuemin="0" aria-valuemax="100"><span></span></span>'}
+        <p class="dooms-atlas-end-progress-row"><span class="dooms-atlas-start-note">This can take a few minutes on a long scene. Nothing is ended until you press End scene.</span> <button type="button" class="dooms-atlas-btn" data-act="end-stop"${stopping ? ' disabled' : ''} title="Give up on writing the record; the scene stays open"><i class="fa-solid fa-stop" aria-hidden="true"></i> <span>Stop</span></button></p>
+    </div>`;
+}
+
+export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, result = null, error = '', going = '', canUndo = false, undoing = false, passes = null, phase = null, since = 0, stopping = false, wrap = '', wrapIn = '', next = '' } = {}) {
     const scene = prep && (prep.scene || prep.mark) ? (prep.scene || prep.mark) : null;
     const title = scene ? `scene ${e(sceneNoOf(scene.id || scene.scene))}${scene.title ? `: ${e(scene.title)}` : ''}` : 'this scene';
     const when = prep && (prep.from || prep.to) ? `From ${e(prep.from || '?')} to ${e(prep.to || 'now')}.` : '';
@@ -783,7 +808,7 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
         <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What happened${busy ? ' (being written…)' : ''}</span>
             <textarea class="dooms-atlas-input dooms-atlas-setup-notes dooms-atlas-end-recap" maxlength="1500" placeholder="${busy ? 'The record of the scene is being written…' : 'What happened in this scene, in a few lines. The next scene is told this.'}"${done || busy ? ' readonly' : ''}>${prep && prep.recap ? e(prep.recap) : ''}</textarea></label>
         ${prep && prep.before && !busy ? '<p class="dooms-atlas-start-note dooms-atlas-end-before"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Written knowing what you said had happened before this scene opened. The ledger is told it too.</p>' : ''}
-        ${busy && Array.isArray(passes) && passes.length ? atlasPassesHtml(passes) : ''}
+        ${busy ? endProgressHtml({ phase, passes, since, stopping }) : ''}
         ${prep && prep.error ? `<p class="dooms-atlas-setup-error" role="alert">The record could not be written (${e(prep.error)}). Write it yourself, or end without one.</p>` : ''}
         ${continuityFieldsHtml(prep && prep.continuity, { locked: done || running || busy, book: prep && prep.book ? prep.book : '' })}
         ${conflictsHtml(prep && prep.conflicts, { done, checked: prep && prep.checked })}

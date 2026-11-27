@@ -129,10 +129,11 @@ function factsNow() {
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 /** Waits for the main generation and the background request to finish, up to the timing's limit. */
-async function whenIdle(maxMs = timing.idleMaxMs) {
+async function whenIdle(maxMs = timing.idleMaxMs, isStopped = null) {
     const started = Date.now();
     for (;;) {
         if (ST.is_send_press !== true && !backgroundHolder()) return true;
+        if (typeof isStopped === 'function' && isStopped()) return false;
         if (Date.now() - started >= maxMs) return false;
         await sleep(timing.idleStepMs);
     }
@@ -826,12 +827,14 @@ async function booksOf(worldId) {
  * over, and with none read the openings are written as before.
  * @returns {Promise<{ lore: Array<{ name: string, text: string }>, standing: string, found: string[], missing: string[], books: string[], entries: object[] }>}
  */
-async function sceneLore(worldId, names, players = []) {
+async function sceneLore(worldId, names, players = [], { onBook = null } = {}) {
     const out = { lore: [], standing: '', found: [], missing: [], books: [], entries: [] };
     try {
         const books = await booksOf(worldId);
         const entries = [];
-        for (const book of books) {
+        for (const [at, book] of books.entries()) {
+            // Which book is being read, for a sheet that shows its progress.
+            if (typeof onBook === 'function') { try { onBook(at + 1, books.length, book); } catch (e) { /* the caller's own */ } }
             try {
                 // A book that does not answer is passed over like one that cannot be read (D220).
                 const data = await limited(loreReader ? loreReader(book) : (async () => (await import('../lorebook/lorebookAPI.js')).loadWorldData(book, true))(), { ms: timing.readMaxMs, what: `The lorebook "${book}"` });
@@ -1878,10 +1881,19 @@ function scenePeople(cur, players) {
  * threads it settled and opened (D188). Waits for the main generation and
  * the background line.
  */
-export async function prepareEnd({ onStep = null, wrap = '' } = {}) {
+export async function prepareEnd({ onStep = null, wrap = '', stop = null } = {}) {
     const g = guardEnd();
     if (!g.ok) return g;
-    const idle = await whenIdle();
+    // Stop pressed on the sheet: what is being waited on is let go, and nothing is kept. A request already sent finishes
+    // or not by itself; its answer goes nowhere.
+    let stopped = false;
+    if (stop) Promise.resolve(stop).then(() => { stopped = true; });
+    const halted = () => ({ ok: false, reason: 'stopped' });
+    // What End is doing now, for the sheet's bar: each step before the record's requests can take a while by itself.
+    const say = (phase, more = {}) => { if (typeof onStep === 'function') { try { onStep({ phase, ...more }); } catch (e) { /* the sheet is gone */ } } };
+    if (ST.is_send_press === true || backgroundHolder()) say('idle');
+    const idle = await whenIdle(timing.idleMaxMs, () => stopped);
+    if (stopped) return halted();
     if (!idle) return { ok: false, reason: 'busy' };
     // A record the handover wrote and held back for its contradictions (D190) is the one the sheet shows: nothing is asked again.
     if (!wrap && prepared && prepared.held && prepared.id === chatId() && prepared.reply === lastReplyId() && prepared.result) { prepared.held = false; return prepared.result; }
@@ -1899,12 +1911,17 @@ export async function prepareEnd({ onStep = null, wrap = '' } = {}) {
     // The same request says where the scene's people stand when it ends and which threads it settled and opened (D188):
     // it is told where they stood before and what was open, and a record written in passes carries both from pass to pass.
     const people = scenePeople(g.cur, players);
-    await syncFromBook(g.cur.worldId);    // what the player changed in the continuity book is how things stood (D189)
+    say('book');
+    try { await limited(syncFromBook(g.cur.worldId), { stop }); } catch (e) { if (stopped) return halted(); }    // what the player changed in the continuity book is how things stood (D189)
+    if (stopped) return halted();
     if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
     let draft = continuityDraft(entryOf(g.cur.worldId).continuity, people.cast);
     // What was established before the scene, for the record to check the scene against (D190): the chat's ledger, the
     // scene's people's own lorebook entries and the campaign's standing notes (the continuity book aside: that is the draft).
-    const check = await establishedFor(g.cur.worldId, people.cast, players);
+    say('lore');
+    let check;
+    try { check = await limited(establishedFor(g.cur.worldId, people.cast, players, { onBook: (n, of, name) => say('lore', { n, of, name }) }), { stop }); } catch (e) { if (stopped || (e && e.code === 'stopped')) return halted(); check = { canon: '', lore: [], standing: '' }; }
+    if (stopped) return halted();
     if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
     let conflicts = [];
     let recap = '';
@@ -1917,9 +1934,9 @@ export async function prepareEnd({ onStep = null, wrap = '' } = {}) {
         const count = Math.max(1, pages.length);
         for (let i = 0; i < count; i++) {
             // Which request is being asked for, for the sheet's bars (D198).
-            try { if (typeof onStep === 'function') onStep({ page: i + 1, pages: count, states: Array.from({ length: count }, (x, k) => (k < i ? 'done' : k === i ? 'run' : 'wait')) }); } catch (e) { /* the sheet is gone */ }
+            try { if (typeof onStep === 'function') onStep({ phase: 'record', page: i + 1, pages: count, states: Array.from({ length: count }, (x, k) => (k < i ? 'done' : k === i ? 'run' : 'wait')) }); } catch (e) { /* the sheet is gone */ }
             const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1, continuity: draft, check, lead: i > 0 ? parts[i].lead : '', wrap, before, world: share ? { soFar: events } : null });
-            const r = await request(prompt, { transport: recapTransport, label: 'recap' });
+            const r = await request(prompt, { transport: recapTransport, label: 'recap', stop });
             if (r.busy) { error = 'Another request holds the line.'; break; }
             const p = parseRecapReply(r.text, { maxChars: cfg().recapChars });
             if (!p.ok) { error = p.errors.join(' '); break; }
@@ -1929,7 +1946,8 @@ export async function prepareEnd({ onStep = null, wrap = '' } = {}) {
             conflicts = mergeConflicts(conflicts, readConflicts(p.reply));
             if (share) events = mergeEvents(events, readWorldEvents(p.reply));
         }
-    } catch (e) { error = String(e && e.message || e); }
+    } catch (e) { if (stopped || (e && e.code === 'stopped')) return halted(); error = String(e && e.message || e); }
+    if (stopped) return halted();
     if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
     const facts = factsNow();
     const stale = isStaleScene(g.cur.scene, g.entry.memory);
@@ -1954,10 +1972,10 @@ function otherStories(storyId) {
  * left out; with nothing at all the record is still asked whether the
  * scene contradicts where its people stood.
  */
-async function establishedFor(worldId, cast, players) {
+async function establishedFor(worldId, cast, players, { onBook = null } = {}) {
     const out = { canon: '', lore: [], standing: '' };
     try { const m = meta(); if (isCanonOn() && m && m.dooms_canon) out.canon = buildCanonBlock(normalizeCanon(m.dooms_canon), { maxChars: 2400 }) || ''; } catch (e) { log('the ledger could not be read for the record', String(e && e.message || e)); }
-    try { const notes = await sceneLore(worldId, cast, players); out.lore = notes.lore; out.standing = notes.standing; } catch (e) { log('the lorebooks could not be read for the record', String(e && e.message || e)); }
+    try { const notes = await sceneLore(worldId, cast, players, { onBook }); out.lore = notes.lore; out.standing = notes.standing; } catch (e) { log('the lorebooks could not be read for the record', String(e && e.message || e)); }
     return out;
 }
 

@@ -601,10 +601,20 @@ console.log('\n§9 a chat already played, taken as where a campaign\'s scenes be
     meta.dooms_atlas = { ...meta.dooms_atlas, spots: { ...meta.dooms_atlas.spots, 'pin:redfall-castle': { x: 4, y: 2 } }, made: [...meta.dooms_atlas.made, { id: 'pin:redfall-castle', label: 'Redfall Castle', kind: 'stronghold' }] };
     chat.push(user('We walk to the gate.'));
     chat.push(ai('Kiyoha laughs and shoulders the axe.'));
+    // Stop on the End sheet: a record the model never answers is given up, and nothing is kept.
+    hub.__setRecapTransport(() => new Promise(() => {}));
+    let fireStop = () => {};
+    const stopEnd = new Promise(r => { fireStop = r; });
+    const stopSteps = [];
+    const stopping = hub.prepareEnd({ stop: stopEnd, onStep: (g) => { stopSteps.push(g); if (g.phase === 'record') fireStop(true); } });
+    const halted = await Promise.race([stopping, new Promise(r => setTimeout(() => r({ reason: 'hung' }), 3000))]);
+    check('Stop gives up a record the model never answers: the scene stays open', halted.ok === false && halted.reason === 'stopped' && hub.isScene(), JSON.stringify(halted));
     hub.__setRecapTransport(async () => '{"recap":"They met at the gate in the fog."}');
     const endSteps = [];
     const pe = await hub.prepareEnd({ onStep: (g) => endSteps.push(g) });
-    check('End says which request its record is on, for the sheet\'s bar (D198)', endSteps.length === 1 && endSteps[0].page === 1 && endSteps[0].pages === 1 && same(endSteps[0].states, ['run']), JSON.stringify(endSteps));
+    const recordSteps = endSteps.filter(x => x.phase === 'record');
+    check('End says which request its record is on, for the sheet\'s bar (D198)', recordSteps.length === 1 && recordSteps[0].page === 1 && recordSteps[0].pages === 1 && same(recordSteps[0].states, ['run']), JSON.stringify(endSteps));
+    check('End says each step before the record too, for the sheet\'s loading bar', endSteps.some(x => x.phase === 'book') && endSteps.some(x => x.phase === 'lore') && endSteps.findIndex(x => x.phase === 'lore') < endSteps.findIndex(x => x.phase === 'record'), JSON.stringify(endSteps));
     const ce = await hub.commitEnd({ recap: pe.recap, skipCanon: true, skipWorld: true });
     check('what a scene adds to the map is kept when it ends', pe.ok && ce.ok && Object.keys(hub.worldEntry('first-descent').memory.stores.dooms_atlas.spots).length === 2 && hub.worldEntry('first-descent').memory.stores.dooms_atlas.made.some(x => x.label === 'Redfall Castle'), JSON.stringify([pe.ok, pe.reason, ce.ok, ce.reason]));
 
