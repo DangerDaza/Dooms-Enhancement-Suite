@@ -363,6 +363,12 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-pass.is-retry .dooms-atlas-pass-bar > span { animation-duration: 2.6s; opacity: 0.7; }
 .dooms-atlas-pass.is-failed .dooms-atlas-pass-word { color: #e0524d; }
 .dooms-atlas-passes-line { font-variant-numeric: tabular-nums; }
+.dooms-atlas-end-progress { margin: 10px 0; display: grid; gap: 8px; }
+.dooms-atlas-end-progress > .dooms-atlas-pass-bar { width: 100%; }
+.dooms-atlas-end-progress .dooms-atlas-passes { margin: 0; }
+.dooms-atlas-end-phase { margin: 0; display: flex; justify-content: space-between; gap: 8px; color: var(--atlas-text); }
+.dooms-atlas-end-elapsed { color: var(--atlas-muted); font-variant-numeric: tabular-nums; }
+.dooms-atlas-end-progress-row { margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 @keyframes dooms-atlas-pass-run { from { transform: translateX(-100%); } to { transform: translateX(265%); } }
 @media (prefers-reduced-motion: reduce) { .dooms-atlas-pass.is-run .dooms-atlas-pass-bar > span, .dooms-atlas-pass.is-retry .dooms-atlas-pass-bar > span, .dooms-atlas-pass-bar.is-run > span { animation: none; width: 55%; } }
 .dooms-atlas-setup-card p.dooms-atlas-end-done { color: #5fb878; }

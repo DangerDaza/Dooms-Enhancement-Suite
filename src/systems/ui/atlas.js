@@ -1385,6 +1385,45 @@ async function askOpeningsAgain() {
 
 const endRunning = () => !!(setup && setup.end && (setup.busy || setup.going || Object.values(setup.states || {}).includes('running')));
 
+// The End sheet's loading bar (its record can take minutes): what it is on, how long it has run, and a Stop.
+let endStop = null;         // gives up the record being written: the Stop on the sheet, or Keep playing while it is written
+let endClock = null;        // ticks the time shown beside the step
+
+/** The time beside the step, kept up once a second while the record is written; only that text changes, not the sheet. */
+function tickEndClock() {
+    if (endClock) { clearInterval(endClock); endClock = null; }
+    endClock = setInterval(() => {
+        if (!setup || !setup.end || !setup.busy) { clearInterval(endClock); endClock = null; return; }
+        const $t = $(`${root()} .dooms-atlas-end-elapsed`);
+        const since = Number($t.attr('data-since')) || 0;
+        if (since) $t.text(elapsedWords(Date.now() - since));
+    }, 1000);
+}
+
+/** The record written (prepareEnd) with the sheet's bar kept up as it goes, and Stop able to give it up. */
+async function prepareWithBar({ wrap = '' } = {}) {
+    let fire = () => {};
+    const stop = new Promise(r => { fire = r; });
+    endStop = () => { fire(true); endStop = null; };
+    setup = { ...setup, phase: null, passes: null, since: Date.now(), stopping: false };
+    renderSetup();
+    tickEndClock();
+    try {
+        return await prepareEnd({ wrap, stop, onStep: (g) => { if (setup && setup.end && setup.busy) { setup = { ...setup, phase: g, passes: Array.isArray(g.states) ? g.states : null }; renderSetup(); } } });
+    } finally {
+        endStop = null;
+        if (setup && setup.end) setup = { ...setup, stopping: false };
+    }
+}
+
+/** Stop pressed while the record is written: the requests are let go, and the sheet says so once prepareEnd answers. */
+function stopEndPrep() {
+    if (!endStop || !setup || !setup.end || !setup.busy) return;
+    endStop();
+    setup = { ...setup, stopping: true };
+    renderSetup();
+}
+
 /** The End sheet opened: the record of the scene is written (one to four requests) and shown to be corrected. Nothing is ended yet. */
 async function openEndScene() {
     if (board) board.closeCard();
@@ -1394,8 +1433,9 @@ async function openEndScene() {
     setup = { end: true, prep: { scene: cur.scene, mark: cur.mark }, busy: true, states: {}, result: null, error: '', world: worldKey(), wrap: '', wrapIn: '', next: '' };
     $(`${root()} .dooms-atlas-start`).prop('hidden', true);
     renderSetup();
-    const p = await prepareEnd({ onStep: (g) => { if (setup && setup.end && setup.busy) { setup = { ...setup, passes: g.states }; renderSetup(); } } });
+    const p = await prepareWithBar();
     if (!setup || !setup.end) return;    // the sheet was closed meanwhile
+    if (!p.ok && p.reason === 'stopped') { setup = null; renderSetup(); result = describeEndResult(p); render(); return; }    // Stop: the scene stays open
     if (!p.ok) { setup = { ...setup, prep: null, busy: false, error: describeEndResult(p) }; renderSetup(); return; }
     setup = { ...setup, prep: p, busy: false };
     renderSetup();
@@ -1421,9 +1461,9 @@ async function rewriteRecord() {
     const wrap = String(setup.wrap || '').trim();
     if (!wrap) return true;
     setup = { ...setup, busy: true, error: '', passes: null };
-    renderSetup();
-    const p = await prepareEnd({ wrap, onStep: (g) => { if (setup && setup.end && setup.busy) { setup = { ...setup, passes: g.states }; renderSetup(); } } });
+    const p = await prepareWithBar({ wrap });
     if (!setup || !setup.end) return false;
+    if (!p.ok && p.reason === 'stopped') { setup = { ...setup, busy: false, error: 'Stopped. The record as it was stands; End scene writes your words in first.' }; renderSetup(); return false; }
     if (!p.ok) { setup = { ...setup, busy: false, error: describeEndResult(p) }; renderSetup(); return false; }
     if (p.error) { setup = { ...setup, busy: false, error: `The record could not be written again with it (${p.error}). The record as it was stands; End scene keeps your words with the scene all the same.`, wrapIn: wrap }; renderSetup(); return false; }
     setup = { ...setup, prep: p, busy: false, wrapIn: wrap };
@@ -2074,6 +2114,9 @@ function build() {
             if (act === 'scenes-back') { if (setup && setup.scenes && setup.step === 'paused') { setup = { ...setup, step: 'review', error: '' }; renderSetup(); } return; }
             if (act === 'scenes-drop') { if (setup && setup.scenes && setup.step === 'paused') { dropAdoptRead(); setup = { ...setup, step: 'ask', error: '', progress: null }; renderSetup(); } return; }
 
+            if (act === 'end-stop') { stopEndPrep(); return; }
+            // Keep playing while the record is written gives it up: nothing is left asking the model in the background.
+            if (act === 'setup-close' && setup && setup.end && setup.busy && !setup.going && endStop) { endStop(); setup = null; renderSetup(); render(); return; }
             if (act === 'setup-close') { if (endRunning()) return; if (setup && setup.start) cancelStart(); setup = null; renderSetup(); render(); return; }
             if (act === 'end-scene') { await openEndScene(); return; }
             if (act === 'end-go') { await endSceneGo(); return; }

@@ -2153,6 +2153,7 @@ export function describeEndResult(r) {
         changed: 'The chat changed; end it again from the Scenes panel.',
         busy: 'A generation is running; End waits for it.',
         cancelled: 'The scene stays open.',
+        stopped: 'Stopped. The scene stays open; End scene writes the record again from the start.',
     };
     return why[r.reason] || `The scene stays open: ${r.error || r.reason || 'unknown'}.`;
 }
